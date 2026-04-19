@@ -871,6 +871,19 @@
         "TASK-039"
       ],
       "description": "Add two things to the leaderboard: (1) Percentile rank \u2014 show each user their percentile position (e.g. 'Top 12%') as a small chip or text below their rank number. Calculate as (1 - (rank-1)/totalMembers) * 100, rounded. (2) Bonus points column \u2014 add a 'Bonus' column showing total upset bonus points earned (group stage upset bonuses + knockout upset bonuses combined). This helps users see how much of their score came from bold picks vs safe picks. Both should be included in the leaderboard API response and displayed in the table."
+    },
+    {
+      "id": "TASK-079",
+      "title": "Create user profile page at /profile/[username]",
+      "spec": "specs/code-style.md",
+      "priority": 47,
+      "status": "open",
+      "dependencies": [
+        "TASK-039",
+        "TASK-025",
+        "TASK-032"
+      ],
+      "description": "Create src/app/profile/[username]/page.tsx. Public page (no auth required to view). Shows: username header, member since date, list of groups they belong to, their group predictions (read-only GroupPrediction cards), their knockout bracket (read-only KnockoutBracket), score summary (group stage score, knockout score, total, bonus points, percentile in each group), stats (perfect groups count, contrarian picks, champion pick). Link to profile from leaderboard usernames (clickable). Add a 'View Profile' link in the Navbar dropdown when logged in for your own profile."
     }
   ]
 }

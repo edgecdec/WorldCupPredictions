@@ -16,7 +16,8 @@ app.prepare().then(() => {
       req.on("data", (chunk) => { body += chunk.toString(); });
       req.on("end", () => {
         const signature = req.headers["x-hub-signature-256"];
-        if (!signature) { res.statusCode = 401; res.end("No signature"); return; }
+        if (!signature) { console.log("Webhook: no signature header"); res.statusCode = 401; res.end("No signature"); return; }
+        if (!WEBHOOK_SECRET) { console.log("Webhook: WEBHOOK_SECRET not set"); res.statusCode = 500; res.end("Server misconfigured"); return; }
         const hmac = crypto.createHmac("sha256", WEBHOOK_SECRET);
         const digest = "sha256=" + hmac.update(body).digest("hex");
         if (signature === digest) {

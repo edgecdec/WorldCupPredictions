@@ -171,3 +171,13 @@
 - **Status**: Done
 - **Changes**: Restructured src/app/page.tsx to check auth first. Unauthenticated users always see title + subtitle + AuthForm. Authenticated users see tournament info (if exists) + welcome + navigation. Added Admin Panel button for admin users.
 - **Lessons**: Nova Act `act()` returns `ActResult` with only `metadata` field — no `success` or `response` attribute. A successful act just completes without raising. Use `nova.act()` without asserting on return value. March Madness pattern of `if (!user) return <AuthForm />` is clean and should be the default for all projects.
+
+## TASK-021: Create predictions API - save/load group predictions
+- Date: 2026-04-18
+- Created src/app/api/picks/route.ts with GET and POST handlers
+- GET: returns user's prediction for the active tournament (parses JSON fields)
+- POST action='save_groups': upserts prediction with bracket_name, group_predictions, third_place_picks
+- Enforces lock_time_groups check, rejects saves after lock
+- Follows existing patterns from auth and tournaments routes (getAuthUser, getActiveTournament helper)
+- Build passed first try, deploy verified in ~30s
+- Lessons: Kept the route under 150 lines by extracting saveGroups as a separate function. Reused the tournament fetch pattern from tournaments/route.ts.

@@ -224,7 +224,7 @@
       "title": "Create predictions API - save/load group predictions",
       "spec": "specs/bracket.md",
       "priority": 21,
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "TASK-002",
         "TASK-011"

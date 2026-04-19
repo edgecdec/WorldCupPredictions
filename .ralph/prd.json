@@ -929,6 +929,17 @@
         "TASK-025"
       ],
       "description": "Create src/components/common/OnboardingGuide.tsx \u2014 a step-by-step tutorial overlay that explains the prediction process to new users. Triggered on first visit to /bracket (check localStorage flag). Steps: (1) Welcome \u2014 explain the 2026 World Cup format briefly (48 teams, 12 groups of 4, top 2 advance + 8 best 3rd place teams). (2) Group predictions \u2014 explain they need to predict the finishing order 1-4 for each group. Show which positions mean 'advance' vs 'eliminated'. (3) Third-place picks \u2014 explain that 8 of 12 third-place teams also advance, and they need to pick which 8. Explain this is unique to the 48-team format. (4) Knockout bracket \u2014 explain this opens later after group stage ends, they'll pick winners for 31 matches. (5) Scoring overview \u2014 brief summary of how points work. Use a modal/dialog with Next/Back/Skip buttons. Show progress dots. Can be re-triggered from a '?' help button in the Navbar. Also add contextual help tooltips on the ThirdPlacePicker explaining '8 of 12 third-place teams advance to the Round of 32 \u2014 pick which ones you think will make it!'"
+    },
+    {
+      "id": "TASK-084",
+      "title": "Show scoring rules summary at top of predictions pages",
+      "spec": "specs/scoring.md",
+      "priority": 43,
+      "status": "open",
+      "dependencies": [
+        "TASK-025"
+      ],
+      "description": "Add a collapsible scoring rules panel at the top of both /bracket (group predictions) and /bracket/knockout pages. Create src/components/common/ScoringRulesSummary.tsx \u2014 an MUI Accordion or Paper that shows a concise breakdown of how points are earned. For group stage page: show advance correct (+1), exact position (+1), upset bonus (+1 per place above seed if correct), group bonuses (advancement correct +1, perfect order +2). Explain what 'advance' means (1st/2nd auto-advance, 8 of 12 third-place teams also advance). For knockout page: show points per round (3/5/8/13/13/21), upset bonus formula (ranking diff / 5 \u00d7 multiplier), multipliers per round. Use the group's actual scoring_settings if the user is in a group, otherwise DEFAULT_SCORING. Keep it compact \u2014 use a table or icon+text format. Default collapsed on return visits (localStorage), expanded on first visit."
     }
   ]
 }

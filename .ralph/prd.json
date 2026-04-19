@@ -752,7 +752,7 @@
       "title": "Add autofill buttons (Chalk/Random/Smart) for predictions",
       "spec": "specs/bracket.md",
       "priority": 45,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-025",
         "TASK-032"

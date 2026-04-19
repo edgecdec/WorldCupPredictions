@@ -12,6 +12,8 @@ import CountdownTimer from '@/components/common/CountdownTimer';
 import { useAuth } from '@/hooks/useAuth';
 import type { Tournament, BracketData, TournamentResults, GroupPrediction as GroupPredictionType } from '@/types';
 import PrintExportButtons from '@/components/common/PrintExportButtons';
+import AutofillButtons, { AutofillStrategy } from '@/components/common/AutofillButtons';
+import { chalkGroups, randomGroups, smartGroups, chalkThirdPlace, randomThirdPlace, smartThirdPlace } from '@/lib/autofill';
 
 const REQUIRED_THIRD_PLACE = 8;
 
@@ -84,6 +86,21 @@ export default function BracketPage() {
   }, []);
 
   const bracketData = tournament?.bracket_data as BracketData | undefined;
+
+  const handleAutofill = useCallback((strategy: AutofillStrategy) => {
+    if (!bracketData) return;
+    const fillFn = strategy === 'chalk' ? chalkGroups : strategy === 'random' ? randomGroups : smartGroups;
+    const thirdFn = strategy === 'chalk' ? chalkThirdPlace : strategy === 'random' ? randomThirdPlace : smartThirdPlace;
+    const newOrders = fillFn(bracketData);
+    setGroupOrders((prev) => {
+      const merged = { ...prev };
+      for (const [name, order] of Object.entries(newOrders)) {
+        merged[name] = order;
+      }
+      return merged;
+    });
+    setThirdPlacePicks(thirdFn(bracketData, newOrders));
+  }, [bracketData]);
 
   const thirdPlaceTeams = useMemo(() => {
     if (!bracketData) return [];
@@ -214,6 +231,13 @@ export default function BracketPage() {
             sx={{ mb: 3, maxWidth: 300 }}
             fullWidth
           />
+
+          {!disabled && (
+            <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="body2" color="text.secondary">Autofill:</Typography>
+              <AutofillButtons onAutofill={handleAutofill} disabled={disabled} />
+            </Box>
+          )}
 
           <Box ref={printRef}>
             <Box

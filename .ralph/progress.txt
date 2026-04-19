@@ -568,3 +568,13 @@
 - Added 'Max' sortable column to leaderboard table, ☠️ for eliminated users, 💀 for bracket busted (champion knocked out)
 - Lesson: Nova Act's ActResult uses .metadata not .response for return values — use getattr() with fallback
 - Lesson: The isPickStillAlive function checks if a team has been eliminated in any resolved matchup rather than tracing the bracket path, which is simpler and sufficient
+
+## TASK-068: Add autofill buttons (Chalk/Random/Smart) for predictions
+- Date: 2026-04-19
+- Created src/lib/autofill.ts with three strategies: chalk (by FIFA ranking), random (shuffle), smart (weighted by ranking with noise).
+- Created src/components/common/AutofillButtons.tsx with confirmation dialog.
+- Integrated into both /bracket (group stage) and /bracket/knockout pages.
+- For groups: autofill sets all 12 group orders + selects 8 best third-place teams.
+- For knockout: fills empty matchup picks round-by-round, resolving feeder matchups from earlier picks.
+- Lesson: Variable declaration order matters in React components — useCallback referencing a const must come after the const declaration (block-scoped variable error).
+- Lesson: Nova Act ActResult has no .response or .success attribute — act() raises an exception on failure, otherwise succeeds silently.

@@ -9,8 +9,10 @@ import MobileBracket from '@/components/bracket/MobileBracket';
 import CountdownTimer from '@/components/common/CountdownTimer';
 import { useAuth } from '@/hooks/useAuth';
 import { cascadeClear } from '@/lib/bracketUtils';
-import type { Tournament, TournamentResults, KnockoutMatchup } from '@/types';
+import type { Tournament, TournamentResults, KnockoutMatchup, BracketData } from '@/types';
 import PrintExportButtons from '@/components/common/PrintExportButtons';
+import AutofillButtons, { AutofillStrategy } from '@/components/common/AutofillButtons';
+import { chalkKnockout, randomKnockout, smartKnockout } from '@/lib/autofill';
 
 export default function KnockoutPage() {
   const { user, loading: authLoading } = useAuth();
@@ -72,6 +74,14 @@ export default function KnockoutPage() {
     },
     [matchups],
   );
+
+  const bracketData = tournament?.bracket_data as BracketData | undefined;
+
+  const handleAutofill = useCallback((strategy: AutofillStrategy) => {
+    if (!bracketData || matchups.length === 0) return;
+    const fillFn = strategy === 'chalk' ? chalkKnockout : strategy === 'random' ? randomKnockout : smartKnockout;
+    setPicks((prev) => fillFn(matchups, bracketData, prev));
+  }, [bracketData, matchups]);
 
   const results = tournament?.results_data as TournamentResults | undefined;
   const hasGroupResults = Boolean(results?.groupStage);
@@ -164,6 +174,13 @@ export default function KnockoutPage() {
 
       {error && <Alert severity="error" sx={{ my: 2 }} onClose={() => setError('')}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ my: 2 }} onClose={() => setSuccess('')}>{success}</Alert>}
+
+      {!disabled && (
+        <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="body2" color="text.secondary">Autofill:</Typography>
+          <AutofillButtons onAutofill={handleAutofill} disabled={disabled} />
+        </Box>
+      )}
 
       <Box ref={printRef}>
         {isMobile ? (

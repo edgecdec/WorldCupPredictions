@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { scoreTotalPrediction } from '@/lib/scoring';
+import { calculateMaxPossible } from '@/lib/maxPossible';
 import {
   BracketData,
   DEFAULT_SCORING,
@@ -99,6 +100,19 @@ export async function GET(req: NextRequest) {
       scoringSettings,
     );
 
+    const maxResult = calculateMaxPossible(
+      groupPredictions,
+      thirdPlacePicks,
+      knockoutPicks,
+      groupStageResults,
+      knockoutResults,
+      knockoutMatchups,
+      bracketData,
+      result.groupStageScore,
+      result.knockoutScore,
+      scoringSettings,
+    );
+
     return {
       username: p.username,
       bracket_name: p.bracket_name,
@@ -106,6 +120,8 @@ export async function GET(req: NextRequest) {
       knockoutScore: result.knockoutScore,
       totalScore: result.totalScore,
       tiebreaker: p.tiebreaker,
+      maxPossible: maxResult.maxTotal,
+      championEliminated: maxResult.championEliminated,
       prediction: {
         id: p.id,
         user_id: p.user_id,
@@ -125,6 +141,11 @@ export async function GET(req: NextRequest) {
     if (b.tiebreaker != null) return 1;
     return 0;
   });
+
+  const leaderScore = leaderboard.length > 0 ? leaderboard[0].totalScore : 0;
+  for (const entry of leaderboard) {
+    entry.eliminated = (entry.maxPossible ?? 0) < leaderScore;
+  }
 
   return NextResponse.json({
     leaderboard,

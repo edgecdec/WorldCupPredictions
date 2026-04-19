@@ -124,6 +124,9 @@ export interface LeaderboardEntry {
   knockoutScore: number;
   totalScore: number;
   tiebreaker: number | null;
+  maxPossible?: number;
+  championEliminated?: boolean;
+  eliminated?: boolean;
   prediction?: {
     id: string;
     user_id: string;

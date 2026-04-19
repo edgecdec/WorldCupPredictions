@@ -741,7 +741,7 @@
       "title": "Add max possible remaining score to leaderboard",
       "spec": "specs/scoring.md",
       "priority": 45,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-039"
       ],

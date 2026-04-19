@@ -559,3 +559,12 @@
 - Passed group stage results from tournament data to GroupPrediction on both /bracket page and /bracket/[username] public page.
 - Nova Act test: first two attempts hit maintenance page during deploy. Wait 30+ seconds after push before testing.
 - Nova Act ActResult: use `str(result)` for assertion, not `.matches` or `.response` attributes.
+
+## TASK-067: Add max possible remaining score to leaderboard (2026-04-19)
+- Created src/lib/maxPossible.ts with calculateMaxPossible() function
+- Handles three phases: pre-tournament (theoretical max everything), group stage done (locked group + max knockout), knockout in progress (locked group + current KO + remaining alive picks)
+- Added maxPossible, championEliminated, eliminated fields to LeaderboardEntry type
+- Updated leaderboard API to compute max possible server-side and set eliminated flag based on leader's score
+- Added 'Max' sortable column to leaderboard table, ☠️ for eliminated users, 💀 for bracket busted (champion knocked out)
+- Lesson: Nova Act's ActResult uses .metadata not .response for return values — use getattr() with fallback
+- Lesson: The isPickStillAlive function checks if a team has been eliminated in any resolved matchup rather than tracing the bracket path, which is simpler and sufficient

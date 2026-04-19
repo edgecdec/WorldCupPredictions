@@ -5,6 +5,7 @@ import {
   Container, Typography, Box, CircularProgress, FormControl, InputLabel,
   Select, MenuItem, Table, TableBody, TableCell, TableContainer, TableHead,
   TableRow, TableSortLabel, Paper, Chip, Accordion, AccordionSummary, AccordionDetails,
+  Tooltip,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChatIcon from '@mui/icons-material/Chat';
@@ -21,7 +22,7 @@ interface GroupOption {
   name: string;
 }
 
-type SortKey = 'rank' | 'username' | 'bracket_name' | 'groupStageScore' | 'knockoutScore' | 'totalScore' | 'tiebreaker';
+type SortKey = 'rank' | 'username' | 'bracket_name' | 'groupStageScore' | 'knockoutScore' | 'totalScore' | 'maxPossible' | 'tiebreaker';
 
 const SORTABLE_COLUMNS: { key: SortKey; label: string; align: 'left' | 'right' }[] = [
   { key: 'rank', label: '#', align: 'left' },
@@ -30,6 +31,7 @@ const SORTABLE_COLUMNS: { key: SortKey; label: string; align: 'left' | 'right' }
   { key: 'groupStageScore', label: 'Group', align: 'right' },
   { key: 'knockoutScore', label: 'Knockout', align: 'right' },
   { key: 'totalScore', label: 'Total', align: 'right' },
+  { key: 'maxPossible', label: 'Max', align: 'right' },
   { key: 'tiebreaker', label: 'Tiebreaker', align: 'right' },
 ];
 
@@ -200,6 +202,12 @@ function LeaderboardContent() {
                     <TableCell>
                       {entry.username}
                       {isCurrentUser && <Chip label="You" size="small" sx={{ ml: 1 }} color="primary" variant="outlined" />}
+                      {entry.eliminated && (
+                        <Tooltip title="Eliminated — max possible score is below the leader"><span style={{ marginLeft: 4 }}>☠️</span></Tooltip>
+                      )}
+                      {entry.championEliminated && !entry.eliminated && (
+                        <Tooltip title="Bracket Busted — predicted champion has been knocked out"><span style={{ marginLeft: 4 }}>💀</span></Tooltip>
+                      )}
                     </TableCell>
                     <TableCell>{entry.bracket_name}</TableCell>
                     <TableCell
@@ -222,6 +230,9 @@ function LeaderboardContent() {
                       onClick={() => setBreakdownEntry(entry)}
                     >
                       {entry.totalScore}
+                    </TableCell>
+                    <TableCell align="right" sx={{ color: 'text.secondary' }}>
+                      {entry.maxPossible ?? '—'}
                     </TableCell>
                     <TableCell align="right">{entry.tiebreaker ?? '—'}</TableCell>
                   </TableRow>

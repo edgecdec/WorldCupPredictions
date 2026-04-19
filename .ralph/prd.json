@@ -803,6 +803,17 @@
         "TASK-071"
       ],
       "description": "Ensure SimpleMode is fully optimized for mobile. Team cards should be large touch targets (min 48px height). Swipe gestures: swipe left to skip, swipe right to go back. Progress bar and navigation buttons are thumb-friendly at bottom of screen. Matchup cards stack vertically on narrow screens. Flag images are prominent. Animations: brief highlight (300ms) on pick before advancing. The entire flow should feel like a native app quiz/survey experience."
+    },
+    {
+      "id": "TASK-073",
+      "title": "Add leaderboard emoji indicators (\ud83d\udd25 streak, \ud83d\ude31 contrarian pick)",
+      "spec": "specs/scoring.md",
+      "priority": 46,
+      "status": "open",
+      "dependencies": [
+        "TASK-039"
+      ],
+      "description": "Add emoji indicators to leaderboard entries. \ud83d\udd25N = hot streak (N consecutive correct results \u2014 during groups: consecutive correct team positions across groups; during knockouts: consecutive correct match picks). \ud83d\ude31 = contrarian pick that hit \u2014 shown when a user correctly predicted something that <10% of the group predicted. During group stage: predicting a specific team in a specific position that <10% of group members also predicted (e.g. only 2 of 30 people predicted Saudi Arabia 1st in their group, and it happened). During knockouts: predicting a team to reach a certain round that <10% picked (e.g. only 3 people had Senegal in the QF). Calculate percentages from all predictions in the group. Show emojis as small badges next to the username on the leaderboard. Tooltip on hover explains what the indicator means."
     }
   ]
 }

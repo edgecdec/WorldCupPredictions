@@ -434,7 +434,7 @@
       "title": "Create leaderboard API",
       "spec": "specs/scoring.md",
       "priority": 39,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-019",
         "TASK-036"

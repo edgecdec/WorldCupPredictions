@@ -347,3 +347,11 @@
 - Join flow requires existing prediction (fetched from /api/picks)
 - Nova Act confirmed page renders correctly (shows login form for unauthenticated users)
 - Lessons: NovaAct uses `starting_page` not `starting_url`, and `ActResult` doesn't have a `.response` attribute — print the whole result object instead
+
+## TASK-039: Create leaderboard API (2026-04-19)
+- Created `src/app/api/leaderboard/route.ts` — GET endpoint requiring auth and `group_id` param.
+- Fetches group scoring_settings, tournament bracket_data/results_data, and all predictions in the group via group_members join.
+- Scores each prediction using `scoreTotalPrediction()` from scoring.ts.
+- Returns sorted LeaderboardEntry[] (totalScore desc, tiebreaker asc as secondary).
+- Also returns `scoring_settings` in response for client display.
+- Lessons: The existing `scoreTotalPrediction` function handles all the heavy lifting — the API just needs to parse DB rows, call it, and sort. Keep API routes thin.

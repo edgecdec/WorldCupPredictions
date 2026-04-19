@@ -1,0 +1,8 @@
+
+## TASK-001: Create src/lib/db.ts with SQLite schema
+- Date: 2026-04-18
+- Status: done
+- Created src/lib/db.ts with better-sqlite3, auto-creates data/ directory, WAL mode.
+- Tables: users, tournaments (with lock_time_groups + lock_time_knockout), predictions (group_predictions, third_place_picks, knockout_picks, tiebreaker), groups (scoring_settings, max_brackets, submissions_locked), group_members (group_id + prediction_id PK), messages.
+- Followed March Madness pattern: singleton db instance, lazy init, pragma WAL.
+- Lessons: Keep schema minimal — no migrations needed yet since this is a fresh project. The group_members table uses prediction_id (not user_id) as PK pair, matching the task spec for bracket-level group membership.

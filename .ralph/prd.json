@@ -6,7 +6,7 @@
       "title": "Create src/lib/db.ts with SQLite schema",
       "spec": "specs/tournament-structure.md",
       "priority": 1,
-      "status": "open",
+      "status": "done",
       "dependencies": [],
       "description": "Create src/lib/db.ts using better-sqlite3. Auto-create data/ directory if missing. Initialize tables: users (id TEXT PK, username TEXT UNIQUE, password_hash TEXT, is_admin INTEGER DEFAULT 0, created_at TEXT), tournaments (id TEXT PK, name TEXT, year INTEGER, lock_time_groups TEXT, lock_time_knockout TEXT, bracket_data TEXT, results_data TEXT), predictions (id TEXT PK, user_id TEXT, tournament_id TEXT, bracket_name TEXT, group_predictions TEXT, third_place_picks TEXT, knockout_picks TEXT, tiebreaker INTEGER, submitted_at TEXT), groups (id TEXT PK, name TEXT, invite_code TEXT UNIQUE, created_by TEXT, created_at TEXT, scoring_settings TEXT, max_brackets INTEGER, submissions_locked INTEGER DEFAULT 0), group_members (group_id TEXT, prediction_id TEXT, PRIMARY KEY(group_id, prediction_id)), messages (id TEXT PK, group_id TEXT, user_id TEXT, username TEXT, message TEXT, created_at TEXT). Export getDb(). DB at data/worldcup.db."
     },

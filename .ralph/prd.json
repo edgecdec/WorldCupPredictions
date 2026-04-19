@@ -758,6 +758,17 @@
         "TASK-032"
       ],
       "description": "Add autofill functionality to both the group stage and knockout prediction pages. Create src/lib/autofill.ts with three strategies: (1) Chalk \u2014 higher-ranked team (lower FIFA ranking number) always wins/finishes higher. Groups ordered by FIFA ranking, knockout picks favor the better-ranked team. (2) Random \u2014 random order for groups, coin flip for knockout. (3) Smart \u2014 weighted by FIFA ranking difference (e.g. 70% chance the better team wins, scaled by ranking gap). Add autofill buttons (Chalk/Random/Smart) to the bracket page and knockout page. Only fill empty slots \u2014 don't overwrite existing picks. Show a confirmation dialog before applying. For groups, autofill sets the order. For knockout, autofill picks winners for unfilled matchups. For 3rd-place picks, chalk/smart pick the 8 highest-ranked 3rd-place teams."
+    },
+    {
+      "id": "TASK-069",
+      "title": "Add country flags everywhere teams are displayed",
+      "spec": "specs/code-style.md",
+      "priority": 39,
+      "status": "open",
+      "dependencies": [
+        "TASK-013"
+      ],
+      "description": "Add country flag images next to every team name throughout the app. Use flag CDN (e.g. https://flagcdn.com/w40/{country-code}.png or emoji flags). Add a countryCode field to the Team interface (ISO 3166-1 alpha-2 lowercase, e.g. 'mx' for Mexico, 'br' for Brazil, 'us' for USA). Update WORLD_CUP_2026_DATA with correct country codes for all 48 teams. Create src/components/common/TeamFlag.tsx \u2014 a small reusable component that renders a flag image (20x15px or similar) given a country code. Use it in: GroupPrediction (next to each team name), ThirdPlacePicker (next to each chip), Matchup (next to each team), KnockoutBracket, leaderboard pick breakdowns, compare page, who-picked-whom, and anywhere else a team name appears. Fall back to emoji flag if image fails to load."
     }
   ]
 }

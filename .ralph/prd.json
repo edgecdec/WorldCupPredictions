@@ -527,7 +527,7 @@
       "title": "Create group chat",
       "spec": "specs/groups.md",
       "priority": 48,
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "TASK-036"
       ],

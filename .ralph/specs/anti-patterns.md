@@ -64,3 +64,24 @@ After deploying any UI task, write a temporary Nova Act test script to verify ag
 - Save as `/tmp/test_<feature>.py`, run with `/opt/homebrew/bin/python3.13 /tmp/test_<feature>.py`
 - Use `headless=True`, ONE NovaAct session, `max_steps=5` per act() call
 - Delete the temp script after verification passes
+
+### Nova Act Test Credentials
+- Test credentials are stored in `.ralph/.test-creds` (gitignored). Source this file before running Nova Act tests.
+- Test user: admin account with a test group (invite code in the creds file).
+- To log in during a Nova Act test: navigate to the home page, enter the username and password from .test-creds, click Login.
+- Always log in before testing authenticated pages (bracket, groups, leaderboard, admin).
+- Example pattern:
+```python
+import os
+# Load test creds
+creds = {}
+with open(os.path.expanduser("~/TestProjects/WorldCupPredictions/.ralph/.test-creds")) as f:
+    for line in f:
+        k, v = line.strip().split("=", 1)
+        creds[k] = v
+
+with NovaAct(starting_page="https://worldcup.edgecdec.com", headless=True) as nova:
+    nova.act(f"Type '{creds['TEST_USERNAME']}' into the username field and '{creds['TEST_PASSWORD']}' into the password field, then click Login", max_steps=5)
+    # Now test the feature...
+```
+- Nova Act is NOT blocked by Cloudflare on this site. If a test fails, it's a real bug — fix it.

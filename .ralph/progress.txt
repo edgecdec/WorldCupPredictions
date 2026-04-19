@@ -427,3 +427,14 @@
 - Integrated Monte Carlo results table into the simulator page sidebar (wide screens) and drawer (narrow screens), showing win %, avg place, and avg score.
 - Lessons: Web workers in Next.js work with `new URL('../lib/worker.ts', import.meta.url)` pattern — no special config needed. Workers must be self-contained (no path alias imports). The March Madness monteCarloWorker.ts was a good reference pattern. The Monte Carlo panel only renders when knockout bracket exists, so it won't show until group results are entered.
 - Nova Act test confirmed the simulator page loads correctly on production. The Monte Carlo section will be visible once knockout bracket data exists.
+
+## TASK-048: Create group chat (2026-04-19)
+- Created `src/app/api/groups/messages/route.ts` with GET (list last 50 messages) and POST (send message) endpoints
+- Created `src/components/common/GroupChat.tsx` — message list, input field, send button, 10s polling
+- Added collapsible GroupChat accordion to leaderboard page below the table
+- Membership check joins through predictions table since group_members uses prediction_id not user_id
+- For the Everyone group, membership check returns true for all authenticated users
+- Messages table already existed in db.ts schema; GroupMessage type already in types/index.ts
+- Followed March Madness GroupChat pattern closely, adapted for direct fetch instead of api helper
+- Nova Act test confirmed: accordion visible, expandable, shows messages and input field
+- Lesson: The World Cup project's group_members table uses prediction_id (not user_id like March Madness), so membership checks need a JOIN through predictions

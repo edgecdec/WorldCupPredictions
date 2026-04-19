@@ -5,3 +5,4 @@ data/
 .env
 .ralph/.server-env
 tsconfig.tsbuildinfo
+.ralph/.test-creds

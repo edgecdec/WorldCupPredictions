@@ -4,11 +4,14 @@ import { useSearchParams } from 'next/navigation';
 import {
   Container, Typography, Box, CircularProgress, FormControl, InputLabel,
   Select, MenuItem, Table, TableBody, TableCell, TableContainer, TableHead,
-  TableRow, TableSortLabel, Paper, Chip,
+  TableRow, TableSortLabel, Paper, Chip, Accordion, AccordionSummary, AccordionDetails,
 } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ChatIcon from '@mui/icons-material/Chat';
 import { useAuth } from '@/hooks/useAuth';
 import AuthForm from '@/components/auth/AuthForm';
 import ScoringBreakdownDialog from '@/components/common/ScoringBreakdownDialog';
+import GroupChat from '@/components/common/GroupChat';
 import type {
   LeaderboardEntry, ScoringSettings, BracketData, TournamentResults, UserPrediction,
 } from '@/types';
@@ -227,6 +230,18 @@ function LeaderboardContent() {
             </TableBody>
           </Table>
         </TableContainer>
+      )}
+
+      {selectedGroup && (
+        <Accordion sx={{ mt: 2 }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <ChatIcon sx={{ mr: 1 }} />
+            <Typography>Group Chat</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <GroupChat groupId={selectedGroup} currentUser={user.username} />
+          </AccordionDetails>
+        </Accordion>
       )}
 
       {breakdownEntry && scoringSettings && bracketData && (() => {

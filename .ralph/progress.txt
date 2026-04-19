@@ -588,3 +588,13 @@
 - Added migrateCountryCodes() in db.ts to auto-update existing tournament DB data with countryCode fields
 - Made countryCode optional in Team interface to avoid breaking test fixtures and existing DB data
 - Lessons: When adding a field to a shared type, make it optional if existing data (DB, tests) won't have it. The countryCodeMap pattern works well for components that receive team names as strings rather than full Team objects.
+
+## TASK-070: Simple Mode step-by-step group predictions flow (2026-04-19)
+- Created SimpleMode.tsx as a full-screen Dialog overlay with guided group prediction flow
+- Shows one group at a time, user taps teams in order (1st-4th), auto-advances to next group
+- Progress bar tracks completion across 12 groups + third-place picker step
+- Undo button to remove last pick, back button to revisit previous group
+- After all 12 groups, shows ThirdPlacePicker for selecting 8 advancing 3rd-place teams
+- Added "Fill Step-by-Step" button on /bracket page next to autofill buttons
+- Exit preserves all picks back to the main bracket page
+- Lessons: Keep SimpleMode state self-contained; pass initial values as props and return final values via onClose callback to avoid complex state sync.

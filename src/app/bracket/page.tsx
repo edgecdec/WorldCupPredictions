@@ -13,6 +13,8 @@ import { useAuth } from '@/hooks/useAuth';
 import type { Tournament, BracketData, TournamentResults, GroupPrediction as GroupPredictionType } from '@/types';
 import PrintExportButtons from '@/components/common/PrintExportButtons';
 import AutofillButtons, { AutofillStrategy } from '@/components/common/AutofillButtons';
+import SimpleMode from '@/components/bracket/SimpleMode';
+import TouchAppIcon from '@mui/icons-material/TouchApp';
 import { chalkGroups, randomGroups, smartGroups, chalkThirdPlace, randomThirdPlace, smartThirdPlace } from '@/lib/autofill';
 
 const REQUIRED_THIRD_PLACE = 8;
@@ -29,6 +31,7 @@ export default function BracketPage() {
   const [success, setSuccess] = useState('');
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
+  const [simpleMode, setSimpleMode] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -244,7 +247,10 @@ export default function BracketPage() {
           />
 
           {!disabled && (
-            <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+              <Button variant="outlined" startIcon={<TouchAppIcon />} onClick={() => setSimpleMode(true)}>
+                Fill Step-by-Step
+              </Button>
               <Typography variant="body2" color="text.secondary">Autofill:</Typography>
               <AutofillButtons onAutofill={handleAutofill} disabled={disabled} />
             </Box>
@@ -312,6 +318,21 @@ export default function BracketPage() {
       )}
 
       <Snackbar open={copied} autoHideDuration={2000} onClose={() => setCopied(false)} message="Link copied!" />
+
+      {bracketData && (
+        <SimpleMode
+          open={simpleMode}
+          onClose={(orders, thirds) => {
+            setGroupOrders(orders);
+            setThirdPlacePicks(thirds);
+            setSimpleMode(false);
+          }}
+          bracketData={bracketData}
+          initialGroupOrders={groupOrders}
+          initialThirdPlacePicks={validThirdPicks}
+          countryCodeMap={countryCodeMap}
+        />
+      )}
     </Box>
   );
 }

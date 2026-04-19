@@ -775,7 +775,7 @@
       "title": "Simple Mode: create step-by-step group predictions flow",
       "spec": "specs/bracket.md",
       "priority": 46,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-025"
       ],

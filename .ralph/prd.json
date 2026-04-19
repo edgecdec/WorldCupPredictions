@@ -446,7 +446,7 @@
       "title": "Create ScoringBreakdownDialog",
       "spec": "specs/scoring.md",
       "priority": 40,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-006"
       ],

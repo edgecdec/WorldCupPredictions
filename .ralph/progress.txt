@@ -25,3 +25,10 @@
 - Used named constants for validation limits (MIN_PASSWORD_LENGTH, MAX_USERNAME_LENGTH, MAX_PASSWORD_LENGTH).
 - Leveraged existing auth.ts helpers: signToken, setTokenCookie, hashPassword, verifyPassword.
 - Build and tsc passed first try. Deploy verified on attempt 3 (waited for webhook rebuild).
+
+## TASK-004: Add GET session and DELETE logout handlers to auth API
+- Date: 2026-04-18
+- Added GET handler to /api/auth that reads JWT via getAuthUser and returns {ok, user} or {ok:false, user:null}
+- Added DELETE handler to /api/auth that clears the token cookie with max-age=0
+- Both getAuthUser and clearTokenCookie already existed in auth.ts — just needed to import and use them
+- Lesson: Check existing utilities before writing new code — auth.ts already had everything needed

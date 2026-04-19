@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuid } from "uuid";
 import { getDb } from "@/lib/db";
-import { hashPassword, verifyPassword, signToken, setTokenCookie } from "@/lib/auth";
+import { hashPassword, verifyPassword, signToken, setTokenCookie, getAuthUser, clearTokenCookie } from "@/lib/auth";
 
 const MIN_PASSWORD_LENGTH = 4;
 const MAX_USERNAME_LENGTH = 32;
@@ -58,4 +58,21 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+}
+
+export async function GET(req: NextRequest) {
+  const authUser = getAuthUser(req);
+  if (!authUser) {
+    return NextResponse.json({ ok: false, user: null });
+  }
+  return NextResponse.json({
+    ok: true,
+    user: { id: authUser.userId, username: authUser.username, is_admin: authUser.isAdmin },
+  });
+}
+
+export async function DELETE() {
+  const res = NextResponse.json({ ok: true });
+  res.headers.set("Set-Cookie", clearTokenCookie());
+  return res;
 }

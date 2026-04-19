@@ -37,7 +37,7 @@
       "title": "Create auth API - GET session, DELETE logout",
       "spec": "specs/anti-patterns.md",
       "priority": 4,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-003"
       ],

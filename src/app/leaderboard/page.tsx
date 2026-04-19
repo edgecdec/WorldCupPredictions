@@ -25,7 +25,7 @@ interface GroupOption {
   name: string;
 }
 
-type SortKey = 'rank' | 'username' | 'bracket_name' | 'groupStageScore' | 'knockoutScore' | 'totalScore' | 'maxPossible' | 'tiebreaker';
+type SortKey = 'rank' | 'username' | 'bracket_name' | 'groupStageScore' | 'knockoutScore' | 'totalScore' | 'bonusPoints' | 'maxPossible' | 'tiebreaker';
 
 const SORTABLE_COLUMNS: { key: SortKey; label: string; align: 'left' | 'right' }[] = [
   { key: 'rank', label: '#', align: 'left' },
@@ -34,6 +34,7 @@ const SORTABLE_COLUMNS: { key: SortKey; label: string; align: 'left' | 'right' }
   { key: 'groupStageScore', label: 'Group', align: 'right' },
   { key: 'knockoutScore', label: 'Knockout', align: 'right' },
   { key: 'totalScore', label: 'Total', align: 'right' },
+  { key: 'bonusPoints', label: 'Bonus', align: 'right' },
   { key: 'maxPossible', label: 'Max', align: 'right' },
   { key: 'tiebreaker', label: 'Tiebreaker', align: 'right' },
 ];
@@ -215,7 +216,14 @@ function LeaderboardContent() {
                     key={`${entry.username}-${entry.bracket_name}`}
                     sx={isCurrentUser ? { bgcolor: 'action.hover' } : undefined}
                   >
-                    <TableCell>{entry.rank}</TableCell>
+                    <TableCell>
+                      <Box>
+                        {entry.rank}
+                        <Typography variant="caption" display="block" sx={{ color: 'text.secondary', fontSize: '0.65rem' }}>
+                          Top {entry.percentile ?? 0}%
+                        </Typography>
+                      </Box>
+                    </TableCell>
                     <TableCell>
                       {entry.username}
                       {isCurrentUser && <Chip label="You" size="small" sx={{ ml: 1 }} color="primary" variant="outlined" />}
@@ -257,6 +265,11 @@ function LeaderboardContent() {
                     >
                       {entry.totalScore}
                     </TableCell>
+                    <Tooltip title="Upset bonus points from bold picks">
+                      <TableCell align="right" sx={{ color: 'text.secondary' }}>
+                        {entry.bonusPoints ?? 0}
+                      </TableCell>
+                    </Tooltip>
                     <TableCell align="right" sx={{ color: 'text.secondary' }}>
                       {entry.maxPossible ?? '—'}
                     </TableCell>

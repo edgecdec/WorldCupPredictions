@@ -114,6 +114,13 @@ export async function GET(req: NextRequest) {
       scoringSettings,
     );
 
+    const groupUpsetBonus = result.groupStageDetail.perGroup.reduce(
+      (sum, g) => sum + g.upsetBonusPoints, 0,
+    );
+    const knockoutUpsetBonus = result.knockoutDetail
+      ? result.knockoutDetail.perRound.reduce((sum, r) => sum + r.upsetBonusPoints, 0)
+      : 0;
+
     return {
       username: p.username,
       bracket_name: p.bracket_name,
@@ -123,6 +130,7 @@ export async function GET(req: NextRequest) {
       tiebreaker: p.tiebreaker,
       maxPossible: maxResult.maxTotal,
       championEliminated: maxResult.championEliminated,
+      bonusPoints: groupUpsetBonus + knockoutUpsetBonus,
       prediction: {
         id: p.id,
         user_id: p.user_id,
@@ -144,8 +152,13 @@ export async function GET(req: NextRequest) {
   });
 
   const leaderScore = leaderboard.length > 0 ? leaderboard[0].totalScore : 0;
-  for (const entry of leaderboard) {
+  const totalMembers = leaderboard.length;
+  for (let i = 0; i < leaderboard.length; i++) {
+    const entry = leaderboard[i];
     entry.eliminated = (entry.maxPossible ?? 0) < leaderScore;
+    entry.percentile = totalMembers > 1
+      ? Math.round((1 - i / (totalMembers - 1)) * 100)
+      : 100;
   }
 
   // Calculate emoji indicators

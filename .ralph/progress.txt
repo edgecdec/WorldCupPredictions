@@ -693,3 +693,13 @@
 - "If Current Results Hold" button fetches `/api/scores?type=standings` and auto-fills group orders + best 8 third-place teams from ESPN data.
 - Lesson: Reusing existing GroupPrediction and ThirdPlacePicker components kept the implementation minimal. The key insight was that `generateKnockoutBracket` can be called client-side with hypothetical results to produce a bracket without needing server-side state.
 - Lesson: When 3rd-place team changes due to group reorder, must remove the old 3rd-place team from thirdPlacePicks to avoid stale selections.
+
+## TASK-078: Add percentile rank and bonus points column to leaderboard (2026-04-19)
+- Added `percentile` and `bonusPoints` fields to `LeaderboardEntry` type
+- API calculates bonus points by summing group upset bonus + knockout upset bonus from scoring detail
+- Percentile calculated as position-based: `(1 - index/(total-1)) * 100`, rounded
+- Percentile shown as "Top X%" below rank number in compact typography
+- Bonus column added between Total and Max with tooltip explaining "Upset bonus points from bold picks"
+- Both columns are sortable
+- Lesson: `scoreTotalPrediction` already returns detailed breakdowns with `upsetBonusPoints` per group/round — no need for separate calculation functions
+- Lesson: Nova Act `ActResult` uses `.metadata` not `.response` for return values

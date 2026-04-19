@@ -866,7 +866,7 @@
       "title": "Add percentile rank and bonus points column to leaderboard",
       "spec": "specs/scoring.md",
       "priority": 45,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-039"
       ],

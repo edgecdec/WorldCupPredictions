@@ -5,7 +5,7 @@ const next = require("next");
 
 const dev = process.env.NODE_ENV !== "production";
 const port = process.env.PORT || 3006;
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "worldcup_webhook_secret";
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 const app = next({ dev });
 const handle = app.getRequestHandler();
 

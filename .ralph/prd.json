@@ -837,6 +837,29 @@
         "TASK-036"
       ],
       "description": "Add a 'Group Management' section to the /admin page (site admin only). Show a dropdown of all groups and a user search/select field. Admin can pick a group and a user, then click 'Add to Group' which adds that user's prediction to group_members. Also show a table of all groups with member counts for overview. Add a POST /api/admin endpoint with action 'add_to_group' that accepts {group_id, username}, finds the user's prediction, and inserts into group_members. Verify site admin auth."
+    },
+    {
+      "id": "TASK-076",
+      "title": "Expand simulator to include group stage simulation",
+      "spec": "specs/bracket.md",
+      "priority": 44,
+      "status": "open",
+      "dependencies": [
+        "TASK-046"
+      ],
+      "description": "The current /simulate page only handles knockout bracket simulation. Expand it to support group stage simulation as well. Add a 'Group Stage' tab/section where the user can set hypothetical group finishing orders (reorder teams in each group, pick advancing 3rd-place teams). The leaderboard sidebar should recalculate live as the user changes group results. When group stage sim is complete, auto-generate the knockout bracket from those hypothetical results and allow the user to continue simulating knockouts. The page should detect which phase the tournament is in: if group stage is still in progress, show group sim first; if knockouts are active, show knockout sim. Add an 'If Current Results Hold' button that auto-fills group positions based on current live ESPN standings (uses fetchGroupStandings from espnSync if available)."
+    },
+    {
+      "id": "TASK-077",
+      "title": "Add simulator link to Navbar and make it accessible",
+      "spec": "specs/code-style.md",
+      "priority": 43,
+      "status": "open",
+      "dependencies": [
+        "TASK-046",
+        "TASK-009"
+      ],
+      "description": "Add 'Simulator' to the Navbar navigation links (between Leaderboard and Groups). Ensure the /simulate page is accessible from the main navigation. Currently it may not be linked anywhere visible. Also add a prominent 'What If?' button on the leaderboard page that links to /simulate with the current group pre-selected."
     }
   ]
 }

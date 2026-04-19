@@ -167,7 +167,7 @@
       "title": "Create admin page - tournament creation",
       "spec": "specs/tournament-structure.md",
       "priority": 16,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-015",
         "TASK-013",

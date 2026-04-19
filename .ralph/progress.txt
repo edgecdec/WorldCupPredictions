@@ -123,3 +123,11 @@
 - Validates name and year are required, returns 400 if missing
 - Build and tsc passed first try. Deploy verified on attempt 4.
 - Lesson: Keep API routes minimal — just auth check, validation, DB insert, response. No need for extra abstractions at this stage.
+
+## TASK-016: Create admin page - tournament creation (2026-04-18)
+- Created src/app/admin/page.tsx with admin-only access guard
+- Shows existing tournament details if one exists
+- Create form with name, year, lock times (datetime-local inputs)
+- "Use 2026 World Cup Data" button loads WORLD_CUP_2026_DATA into bracket_data
+- Submits to POST /api/admin
+- Lessons: NovaAct uses `starting_page` not `starting_url`, and `metadata` not `response` on ActResult

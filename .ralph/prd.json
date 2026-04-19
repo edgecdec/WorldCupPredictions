@@ -735,6 +735,17 @@
         "TASK-031"
       ],
       "description": "On the knockout bracket view and group predictions page, after results are entered, color-code the user's picks: green background/border for correct picks, red/dimmed for incorrect picks. In KnockoutBracket/Matchup: if a result exists for a matchup and the user picked the correct winner, highlight their pick in green (success.main). If they picked wrong, show it in red (error.main) with the correct winner indicated. In GroupPrediction: after group results exist, show green for teams in the correct position, amber for correct half but wrong position, red for completely wrong. Apply to both the user's own bracket view and the public/shared bracket view."
+    },
+    {
+      "id": "TASK-067",
+      "title": "Add max possible remaining score to leaderboard",
+      "spec": "specs/scoring.md",
+      "priority": 45,
+      "status": "open",
+      "dependencies": [
+        "TASK-039"
+      ],
+      "description": "Calculate and display each user's maximum possible remaining score on the leaderboard. Create src/lib/maxPossible.ts with calculateMaxPossible(prediction, currentResults, bracketData, settings): for each unresolved knockout match, assume the user's pick wins. Sum current score + all remaining possible points (base + max upset bonus for each remaining correct pick). For group stage, max is already locked in once results are entered. Display as a 'Max' column on the leaderboard table. Compute client-side after leaderboard loads (use requestIdleCallback or setTimeout to avoid blocking render). Show a spinner while computing, then fill in the number. Also add an 'Eliminated from contention' indicator \u2014 if a user's max possible is less than the current leader's actual score, show a skull or X icon."
     }
   ]
 }

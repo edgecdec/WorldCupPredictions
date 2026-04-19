@@ -150,3 +150,9 @@
 - Exported GroupScoreDetail and GroupStageScoreResult interfaces for use by leaderboard/breakdown components
 - Build and tsc passed first try. Deploy verified on attempt 4.
 - Lessons: Keep scoring as pure functions with no DB dependency — easy to test and reuse. The independence of advancement_correct_bonus and perfect_order_bonus is key — perfect order does NOT imply advancement correct due to 3rd-place pick interaction.
+
+## TASK-019: Create knockout scoring function (2026-04-18)
+- Added `scoreKnockout()` and `scoreTotalPrediction()` to `src/lib/scoring.ts`
+- Knockout scoring: base points per round, upset bonus using FIFA rankings with modulus formula, champion bonus for correct Final pick
+- `scoreTotalPrediction()` combines group stage + knockout into a single result
+- Lessons: Keep scoring functions pure — they take data in and return structured results. The `KnockoutMatchup.round` field (0-5) maps directly to the `KNOCKOUT_ROUNDS` array indices, making round lookup straightforward.

@@ -202,7 +202,7 @@
       "title": "Create knockout scoring function",
       "spec": "specs/scoring.md",
       "priority": 19,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-018"
       ],

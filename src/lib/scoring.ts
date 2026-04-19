@@ -2,11 +2,15 @@ import {
   GroupPrediction,
   GroupStageResults,
   GroupStageScoringSettings,
+  KnockoutScoringSettings,
+  KnockoutResults,
+  KnockoutMatchup,
   BracketData,
   DEFAULT_SCORING,
   ScoringSettings,
+  KNOCKOUT_ROUNDS,
 } from '@/types';
-import { getTeamSeed } from '@/lib/bracketData';
+import { getTeamSeed, getTeamRanking } from '@/lib/bracketData';
 
 export interface GroupScoreDetail {
   groupName: string;
@@ -112,5 +116,130 @@ export function scoreGroupStage(
   return {
     total: perGroup.reduce((sum, g) => sum + g.total, 0),
     perGroup,
+  };
+}
+
+export interface KnockoutRoundDetail {
+  round: string;
+  basePoints: number;
+  upsetBonusPoints: number;
+  total: number;
+}
+
+export interface KnockoutScoreResult {
+  total: number;
+  perRound: KnockoutRoundDetail[];
+  championBonus: number;
+}
+
+function getMatchRoundIndex(matchup: KnockoutMatchup): number {
+  return matchup.round;
+}
+
+export function scoreKnockout(
+  picks: Record<string, string>,
+  results: KnockoutResults,
+  matchups: KnockoutMatchup[],
+  bracketData: BracketData,
+  settings: KnockoutScoringSettings = DEFAULT_SCORING.knockout,
+): KnockoutScoreResult {
+  const roundDetails: Map<number, { basePoints: number; upsetBonusPoints: number }> = new Map();
+
+  for (let i = 0; i < KNOCKOUT_ROUNDS.length; i++) {
+    roundDetails.set(i, { basePoints: 0, upsetBonusPoints: 0 });
+  }
+
+  for (const matchup of matchups) {
+    const actualWinner = results[matchup.id];
+    if (!actualWinner) continue;
+
+    const userPick = picks[matchup.id];
+    if (userPick !== actualWinner) continue;
+
+    const roundIdx = getMatchRoundIndex(matchup);
+    const detail = roundDetails.get(roundIdx);
+    if (!detail) continue;
+
+    // Base points
+    detail.basePoints += settings.pointsPerRound[roundIdx] ?? 0;
+
+    // Upset bonus
+    const loser = matchup.teamA === actualWinner ? matchup.teamB : matchup.teamA;
+    if (loser) {
+      const winnerRank = getTeamRanking(bracketData, actualWinner);
+      const loserRank = getTeamRanking(bracketData, loser);
+      if (winnerRank !== undefined && loserRank !== undefined) {
+        const rankDiff = winnerRank - loserRank;
+        if (rankDiff > 0) {
+          const multiplier = settings.upsetMultiplierPerRound[roundIdx] ?? 0;
+          detail.upsetBonusPoints += Math.floor(rankDiff / settings.upsetModulus) * multiplier;
+        }
+      }
+    }
+  }
+
+  // Champion bonus: check if user picked the Final winner correctly
+  let championBonus = 0;
+  const finalMatchup = matchups.find((m) => m.round === 5);
+  if (finalMatchup) {
+    const actualChampion = results[finalMatchup.id];
+    if (actualChampion && picks[finalMatchup.id] === actualChampion) {
+      championBonus = settings.championBonus;
+    }
+  }
+
+  const perRound: KnockoutRoundDetail[] = [];
+  for (let i = 0; i < KNOCKOUT_ROUNDS.length; i++) {
+    const detail = roundDetails.get(i)!;
+    perRound.push({
+      round: KNOCKOUT_ROUNDS[i],
+      basePoints: detail.basePoints,
+      upsetBonusPoints: detail.upsetBonusPoints,
+      total: detail.basePoints + detail.upsetBonusPoints,
+    });
+  }
+
+  const roundTotal = perRound.reduce((sum, r) => sum + r.total, 0);
+
+  return {
+    total: roundTotal + championBonus,
+    perRound,
+    championBonus,
+  };
+}
+
+export interface TotalPredictionScore {
+  groupStageScore: number;
+  knockoutScore: number;
+  totalScore: number;
+  groupStageDetail: GroupStageScoreResult;
+  knockoutDetail: KnockoutScoreResult | null;
+}
+
+export function scoreTotalPrediction(
+  groupPredictions: GroupPrediction[],
+  thirdPlacePicks: string[],
+  knockoutPicks: Record<string, string>,
+  groupStageResults: GroupStageResults | undefined,
+  knockoutResults: KnockoutResults | undefined,
+  knockoutMatchups: KnockoutMatchup[] | undefined,
+  bracketData: BracketData,
+  settings: ScoringSettings = DEFAULT_SCORING,
+): TotalPredictionScore {
+  const groupStageDetail = groupStageResults
+    ? scoreGroupStage(groupPredictions, thirdPlacePicks, groupStageResults, bracketData, settings.groupStage)
+    : { total: 0, perGroup: [] };
+
+  let knockoutDetail: KnockoutScoreResult | null = null;
+  if (knockoutResults && knockoutMatchups) {
+    knockoutDetail = scoreKnockout(knockoutPicks, knockoutResults, knockoutMatchups, bracketData, settings.knockout);
+  }
+
+  return {
+    groupStageScore: groupStageDetail.total,
+    knockoutScore: knockoutDetail?.total ?? 0,
+    totalScore: groupStageDetail.total + (knockoutDetail?.total ?? 0),
+    groupStageDetail,
+    knockoutDetail,
   };
 }

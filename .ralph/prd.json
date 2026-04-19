@@ -650,7 +650,7 @@
       "title": "Create live group standings component with prediction comparison",
       "spec": "specs/bracket.md",
       "priority": 41,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-057",
         "TASK-025"

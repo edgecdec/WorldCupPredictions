@@ -1,12 +1,13 @@
 'use client';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Box, Button, Typography, Alert, CircularProgress, TextField, IconButton, Tooltip, Snackbar } from '@mui/material';
+import { Box, Button, Typography, Alert, CircularProgress, TextField, IconButton, Tooltip, Snackbar, Tabs, Tab } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import ShareIcon from '@mui/icons-material/Share';
 import Link from 'next/link';
 import GroupPrediction from '@/components/bracket/GroupPrediction';
 import ThirdPlacePicker from '@/components/bracket/ThirdPlacePicker';
+import GroupStandings from '@/components/bracket/GroupStandings';
 import CountdownTimer from '@/components/common/CountdownTimer';
 import { useAuth } from '@/hooks/useAuth';
 import type { Tournament, BracketData, TournamentResults, GroupPrediction as GroupPredictionType } from '@/types';
@@ -25,6 +26,7 @@ export default function BracketPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState(0);
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -100,6 +102,7 @@ export default function BracketPage() {
   const isLocked = Boolean(
     tournament?.lock_time_groups && new Date() > new Date(tournament.lock_time_groups),
   );
+  const tournamentStarted = isLocked;
   const disabled = !user || isLocked;
 
   const handleSave = async () => {
@@ -184,70 +187,83 @@ export default function BracketPage() {
       {error && <Alert severity="error" sx={{ my: 2 }} onClose={() => setError('')}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ my: 2 }} onClose={() => setSuccess('')}>{success}</Alert>}
 
-      <TextField
-        label="Bracket Name"
-        value={bracketName}
-        onChange={(e) => setBracketName(e.target.value)}
-        disabled={disabled}
-        size="small"
-        sx={{ mb: 3, maxWidth: 300 }}
-        fullWidth
-      />
+      {tournamentStarted && (
+        <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ mb: 2 }}>
+          <Tab label="My Predictions" />
+          <Tab label="Live Standings" />
+        </Tabs>
+      )}
 
-      <Box ref={printRef}>
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(4, 1fr)' },
-            gap: 2,
-            mb: 4,
-          }}
-        >
-          {bracketData.groups.map((g) => (
-            <GroupPrediction
-              key={g.name}
-              groupName={g.name}
-              teams={g.teams}
-              order={groupOrders[g.name] || g.teams.map((t) => t.name)}
-              onChange={handleGroupChange}
-              disabled={disabled}
-            />
-          ))}
-        </Box>
-
-        <Box sx={{ mb: 4 }}>
-          <ThirdPlacePicker
-            thirdPlaceTeams={thirdPlaceTeams}
-            selected={validThirdPicks}
-            onChange={setThirdPlacePicks}
+      {activeTab === 1 && tournamentStarted ? (
+        <GroupStandings groupOrders={groupOrders} />
+      ) : (
+        <>
+          <TextField
+            label="Bracket Name"
+            value={bracketName}
+            onChange={(e) => setBracketName(e.target.value)}
             disabled={disabled}
+            size="small"
+            sx={{ mb: 3, maxWidth: 300 }}
+            fullWidth
           />
-        </Box>
-      </Box>
 
-      <Box className="no-print" sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-        <Button
-          variant="contained"
-          size="large"
-          startIcon={<SaveIcon />}
-          onClick={handleSave}
-          disabled={disabled || saving}
-        >
-          {saving ? 'Saving…' : 'Save Predictions'}
-        </Button>
+          <Box ref={printRef}>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(4, 1fr)' },
+                gap: 2,
+                mb: 4,
+              }}
+            >
+              {bracketData.groups.map((g) => (
+                <GroupPrediction
+                  key={g.name}
+                  groupName={g.name}
+                  teams={g.teams}
+                  order={groupOrders[g.name] || g.teams.map((t) => t.name)}
+                  onChange={handleGroupChange}
+                  disabled={disabled}
+                />
+              ))}
+            </Box>
 
-        {Boolean((tournament.results_data as TournamentResults)?.knockoutBracket) && (
-          <Button
-            component={Link}
-            href="/bracket/knockout"
-            variant="outlined"
-            size="large"
-            endIcon={<ArrowForwardIcon />}
-          >
-            Knockout Bracket
-          </Button>
-        )}
-      </Box>
+            <Box sx={{ mb: 4 }}>
+              <ThirdPlacePicker
+                thirdPlaceTeams={thirdPlaceTeams}
+                selected={validThirdPicks}
+                onChange={setThirdPlacePicks}
+                disabled={disabled}
+              />
+            </Box>
+          </Box>
+
+          <Box className="no-print" sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+            <Button
+              variant="contained"
+              size="large"
+              startIcon={<SaveIcon />}
+              onClick={handleSave}
+              disabled={disabled || saving}
+            >
+              {saving ? 'Saving…' : 'Save Predictions'}
+            </Button>
+
+            {Boolean((tournament.results_data as TournamentResults)?.knockoutBracket) && (
+              <Button
+                component={Link}
+                href="/bracket/knockout"
+                variant="outlined"
+                size="large"
+                endIcon={<ArrowForwardIcon />}
+              >
+                Knockout Bracket
+              </Button>
+            )}
+          </Box>
+        </>
+      )}
 
       <Snackbar open={copied} autoHideDuration={2000} onClose={() => setCopied(false)} message="Link copied!" />
     </Box>

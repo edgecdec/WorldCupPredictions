@@ -506,3 +506,10 @@
 - Games sorted: live first, then recent (post), then upcoming.
 - Nova Act confirmed: login works, home page renders correctly. LiveScores section correctly hidden when tournament hasn't started yet (lock_time_groups is 2026-06-11).
 - Lesson: Nova Act `ActResult` has no `.response` attribute — the agent's return value is logged in stdout but not accessible as a Python attribute. Use `result.metadata` or just check `result` truthiness.
+
+## TASK-059: Create live group standings component with prediction comparison
+- Created `src/components/bracket/GroupStandings.tsx` — fetches ESPN standings via `/api/scores?type=standings`, displays per-group tables with Pts/W/D/L/GD, and compares against user's predicted order with colored status icons (green check = exact position match, yellow arrow = right half but wrong position, red X = wrong half).
+- Added Tabs to `/bracket` page: "My Predictions" (default) and "Live Standings" tab that only appears when `tournamentStarted` (after lock_time_groups).
+- The existing `/api/scores?type=standings` endpoint already supported this — no API changes needed.
+- Nova Act ActResult only has `.metadata` field — no `.success` or `.response`. Just use `nova.act()` without checking return value for verification steps.
+- Lesson: The ESPN standings API returns group names like "Group A" — the `fetchGroupStandings` already strips "Group " prefix to match our group naming convention (just "A", "B", etc.).

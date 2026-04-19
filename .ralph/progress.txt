@@ -398,3 +398,14 @@
 - Chalk score: weighted sum of FIFA ranking × predicted position — lower = more chalk
 - Nova Act ActResult only has `.metadata` field; use no-throw pattern (act succeeds = no exception) for assertions
 - Test account credentials from previous tasks don't work — use direct URL navigation for page verification
+
+## TASK-061: Create auto-join 'Everyone' group with default scoring (2026-04-19)
+- Added `ensureEveryoneGroup()`, `joinEveryoneGroup()`, `autoAssignPredictionToEveryone()` to db.ts
+- Everyone group created during DB init with id='everyone', DEFAULT_SCORING settings
+- Auto-assigns existing unassigned predictions to Everyone during DB init migration
+- Auth route calls `joinEveryoneGroup` on register and login
+- Picks route calls `autoAssignPredictionToEveryone` after creating a new prediction
+- Groups API prevents leaving the Everyone group
+- Groups list query uses UNION to always include Everyone group even for users with no predictions
+- Groups page shows Everyone at top with globe icon, hides invite code for it
+- Lesson: The group_members table uses prediction_id (not user_id), so "joining" Everyone for a user without predictions is a no-op. The UNION approach in the groups list query ensures Everyone always appears. LEFT JOIN on users table needed since created_by could be "system" if no admin exists yet.

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuid } from "uuid";
-import { getDb } from "@/lib/db";
+import { getDb, autoAssignPredictionToEveryone } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import type { Tournament, GroupPrediction, TournamentResults } from "@/types";
 
@@ -162,6 +162,8 @@ function saveGroups(
     `INSERT INTO predictions (id, user_id, tournament_id, bracket_name, group_predictions, third_place_picks)
      VALUES (?, ?, ?, ?, ?, ?)`
   ).run(id, userId, tournament.id, name, groupPredStr, thirdPlaceStr);
+
+  autoAssignPredictionToEveryone(db, id);
 
   const inserted = db.prepare("SELECT * FROM predictions WHERE id = ?").get(id) as PredictionRow;
   return NextResponse.json({ ok: true, prediction: parsePredictionRow(inserted) });

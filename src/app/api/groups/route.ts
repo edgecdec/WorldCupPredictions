@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuid } from "uuid";
 import crypto from "crypto";
-import { getDb } from "@/lib/db";
+import { getDb, EVERYONE_GROUP_ID } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import { DEFAULT_SCORING } from "@/types";
 import type { ScoringSettings } from "@/types";
@@ -104,19 +104,25 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // List groups the user belongs to (via their predictions)
+  // List groups the user belongs to (via their predictions), always including Everyone
   const groups = db
     .prepare(
-      `SELECT DISTINCT g.*, u.username as creator_name,
+      `SELECT DISTINCT g.*, COALESCE(u.username, 'System') as creator_name,
         (SELECT COUNT(*) FROM group_members gm2 WHERE gm2.group_id = g.id) as member_count
        FROM groups g
        JOIN group_members gm ON g.id = gm.group_id
        JOIN predictions p ON p.id = gm.prediction_id
-       JOIN users u ON g.created_by = u.id
+       LEFT JOIN users u ON g.created_by = u.id
        WHERE p.user_id = ?
-       ORDER BY g.created_at DESC`
+       UNION
+       SELECT g.*, COALESCE(u.username, 'System') as creator_name,
+        (SELECT COUNT(*) FROM group_members gm2 WHERE gm2.group_id = g.id) as member_count
+       FROM groups g
+       LEFT JOIN users u ON g.created_by = u.id
+       WHERE g.id = ?
+       ORDER BY created_at DESC`
     )
-    .all(authUser.userId) as GroupRow[];
+    .all(authUser.userId, EVERYONE_GROUP_ID) as GroupRow[];
 
   return NextResponse.json({
     groups: groups.map((g) => ({
@@ -222,6 +228,9 @@ export async function POST(req: NextRequest) {
     const { group_id } = data;
     if (!group_id) {
       return NextResponse.json({ error: "Group ID required" }, { status: 400 });
+    }
+    if (group_id === EVERYONE_GROUP_ID) {
+      return NextResponse.json({ error: "Cannot leave the Everyone group" }, { status: 400 });
     }
 
     // Remove all of this user's predictions from the group

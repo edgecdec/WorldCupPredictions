@@ -9,6 +9,7 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import GroupIcon from "@mui/icons-material/Group";
 import AddIcon from "@mui/icons-material/Add";
 import LoginIcon from "@mui/icons-material/Login";
+import PublicIcon from "@mui/icons-material/Public";
 import { useAuth } from "@/hooks/useAuth";
 import AuthForm from "@/components/auth/AuthForm";
 import ScoringEditor from "@/components/common/ScoringEditor";
@@ -177,30 +178,40 @@ export default function GroupsPage() {
         </Paper>
       ) : (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          {groups.map((g) => (
+          {[...groups].sort((a, b) => (a.id === "everyone" ? -1 : b.id === "everyone" ? 1 : 0)).map((g) => {
+            const isEveryone = g.id === "everyone";
+            return (
             <Paper key={g.id} sx={{ p: 2 }}>
               <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <Box>
-                  <Typography variant="h6" component="a" href={`/leaderboard?group=${g.id}`}
-                    sx={{ textDecoration: "none", color: "text.primary", "&:hover": { color: "primary.main" } }}>
-                    {g.name}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {g.member_count} member{g.member_count !== 1 ? "s" : ""} · Created by {g.creator_name}
-                  </Typography>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  {isEveryone && <PublicIcon color="primary" />}
+                  <Box>
+                    <Typography variant="h6" component="a" href={`/leaderboard?group=${g.id}`}
+                      sx={{ textDecoration: "none", color: "text.primary", "&:hover": { color: "primary.main" } }}>
+                      {g.name}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {g.member_count} member{g.member_count !== 1 ? "s" : ""}{!isEveryone ? ` · Created by ${g.creator_name}` : ""}
+                    </Typography>
+                  </Box>
                 </Box>
                 <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-                  <Chip label={g.invite_code} size="small" variant="outlined" />
-                  <IconButton size="small" onClick={() => copyInviteCode(g.invite_code)} title="Copy invite code">
-                    <ContentCopyIcon fontSize="small" />
-                  </IconButton>
+                  {!isEveryone && (
+                    <>
+                      <Chip label={g.invite_code} size="small" variant="outlined" />
+                      <IconButton size="small" onClick={() => copyInviteCode(g.invite_code)} title="Copy invite code">
+                        <ContentCopyIcon fontSize="small" />
+                      </IconButton>
+                    </>
+                  )}
                   <Button size="small" variant="outlined" href={`/leaderboard?group=${g.id}`}>
                     Leaderboard
                   </Button>
                 </Box>
               </Box>
             </Paper>
-          ))}
+            );
+          })}
         </Box>
       )}
 

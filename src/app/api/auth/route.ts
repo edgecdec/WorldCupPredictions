@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuid } from "uuid";
-import { getDb } from "@/lib/db";
+import { getDb, joinEveryoneGroup } from "@/lib/db";
 import { hashPassword, verifyPassword, signToken, setTokenCookie, getAuthUser, clearTokenCookie } from "@/lib/auth";
 
 const MIN_PASSWORD_LENGTH = 4;
@@ -38,6 +38,8 @@ export async function POST(req: NextRequest) {
     db.prepare("INSERT INTO users (id, username, password_hash, is_admin) VALUES (?, ?, ?, 0)")
       .run(id, username, hashPassword(password));
 
+    joinEveryoneGroup(db, id);
+
     const token = signToken({ userId: id, username, isAdmin: false });
     const res = NextResponse.json({ ok: true, user: { id, username, is_admin: false } });
     res.headers.set("Set-Cookie", setTokenCookie(token));
@@ -51,6 +53,7 @@ export async function POST(req: NextRequest) {
     }
 
     const isAdmin = !!user.is_admin;
+    joinEveryoneGroup(db, user.id);
     const token = signToken({ userId: user.id, username: user.username, isAdmin });
     const res = NextResponse.json({ ok: true, user: { id: user.id, username: user.username, is_admin: isAdmin } });
     res.headers.set("Set-Cookie", setTokenCookie(token));

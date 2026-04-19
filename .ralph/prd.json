@@ -674,7 +674,7 @@
       "title": "Create auto-join 'Everyone' group with default scoring",
       "spec": "specs/groups.md",
       "priority": 35,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-036"
       ],

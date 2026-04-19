@@ -1,8 +1,11 @@
 import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
+import { DEFAULT_SCORING } from "@/types";
 
 const DB_PATH = path.join(process.cwd(), "data", "worldcup.db");
+export const EVERYONE_GROUP_ID = "everyone";
+const EVERYONE_GROUP_NAME = "Everyone";
 
 let db: Database.Database;
 
@@ -81,4 +84,40 @@ function initDb(db: Database.Database) {
       FOREIGN KEY (user_id) REFERENCES users(id)
     );
   `);
+
+  ensureEveryoneGroup(db);
+
+  // Auto-assign any existing unassigned predictions to Everyone
+  try {
+    const unassigned = db.prepare(
+      `SELECT p.id FROM predictions p
+       WHERE NOT EXISTS (SELECT 1 FROM group_members gm WHERE gm.prediction_id = p.id AND gm.group_id = ?)`
+    ).all(EVERYONE_GROUP_ID) as { id: string }[];
+    const ins = db.prepare("INSERT OR IGNORE INTO group_members (group_id, prediction_id) VALUES (?, ?)");
+    for (const row of unassigned) ins.run(EVERYONE_GROUP_ID, row.id);
+  } catch { /* ignore migration errors */ }
+}
+
+export function ensureEveryoneGroup(db: Database.Database): string {
+  const existing = db.prepare("SELECT id FROM groups WHERE id = ?").get(EVERYONE_GROUP_ID) as { id: string } | undefined;
+  if (!existing) {
+    const admin = db.prepare("SELECT id FROM users WHERE is_admin = 1 LIMIT 1").get() as { id: string } | undefined;
+    const creator = admin?.id || "system";
+    db.prepare(
+      "INSERT OR IGNORE INTO groups (id, name, invite_code, created_by, scoring_settings) VALUES (?, ?, ?, ?, ?)"
+    ).run(EVERYONE_GROUP_ID, EVERYONE_GROUP_NAME, EVERYONE_GROUP_ID, creator, JSON.stringify(DEFAULT_SCORING));
+  }
+  return EVERYONE_GROUP_ID;
+}
+
+export function joinEveryoneGroup(db: Database.Database, userId: string) {
+  // No-op for now — group_members uses prediction_id, not user_id.
+  // Users join Everyone when they create a prediction via autoAssignPredictionToEveryone.
+  ensureEveryoneGroup(db);
+  void userId;
+}
+
+export function autoAssignPredictionToEveryone(db: Database.Database, predictionId: string) {
+  ensureEveryoneGroup(db);
+  db.prepare("INSERT OR IGNORE INTO group_members (group_id, prediction_id) VALUES (?, ?)").run(EVERYONE_GROUP_ID, predictionId);
 }

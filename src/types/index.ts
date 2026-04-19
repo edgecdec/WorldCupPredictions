@@ -6,6 +6,12 @@ export interface User {
   is_admin: boolean;
 }
 
+export interface AuthUser {
+  userId: string;
+  username: string;
+  isAdmin: boolean;
+}
+
 export interface Team {
   name: string;
   logo?: string;

@@ -15,7 +15,7 @@
       "title": "Create src/lib/auth.ts with JWT, hashing, getAuthUser",
       "spec": "specs/anti-patterns.md",
       "priority": 2,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-001"
       ],

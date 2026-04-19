@@ -6,3 +6,13 @@
 - Tables: users, tournaments (with lock_time_groups + lock_time_knockout), predictions (group_predictions, third_place_picks, knockout_picks, tiebreaker), groups (scoring_settings, max_brackets, submissions_locked), group_members (group_id + prediction_id PK), messages.
 - Followed March Madness pattern: singleton db instance, lazy init, pragma WAL.
 - Lessons: Keep schema minimal — no migrations needed yet since this is a fresh project. The group_members table uses prediction_id (not user_id) as PK pair, matching the task spec for bracket-level group membership.
+
+## TASK-002: Create src/lib/auth.ts with JWT, hashing, getAuthUser
+- Date: 2026-04-18
+- Status: done
+- Created src/lib/auth.ts: hashPassword, verifyPassword (bcryptjs), signToken, verifyToken (jsonwebtoken), getAuthUser(request).
+- Added AuthUser interface to src/types/index.ts with {userId, username, isAdmin}.
+- getAuthUser reads 'token' cookie from request headers using the 'cookie' package parse().
+- Followed March Madness pattern but adapted: uses Request object instead of Next.js cookies() for API route compatibility.
+- Helper functions setTokenCookie/clearTokenCookie for Set-Cookie header strings.
+- Lessons: Using named constants (SALT_ROUNDS, TOKEN_EXPIRY, MAX_AGE_SECONDS, TOKEN_NAME) instead of magic values. The 'cookie' package was already in dependencies.

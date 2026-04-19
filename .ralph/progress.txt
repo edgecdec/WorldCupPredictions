@@ -165,3 +165,9 @@
   - Integration: scoreTotalPrediction combining both, handling missing results
 - All tests pass, build clean
 - Lesson: vitest resolves @/ alias via vitest.config.ts resolve.alias, not tsconfig paths
+
+## TASK-052 — Fix home page: show AuthForm when not logged in regardless of tournament state
+- **Date**: 2026-04-18
+- **Status**: Done
+- **Changes**: Restructured src/app/page.tsx to check auth first. Unauthenticated users always see title + subtitle + AuthForm. Authenticated users see tournament info (if exists) + welcome + navigation. Added Admin Panel button for admin users.
+- **Lessons**: Nova Act `act()` returns `ActResult` with only `metadata` field — no `success` or `response` attribute. A successful act just completes without raising. Use `nova.act()` without asserting on return value. March Madness pattern of `if (!user) return <AuthForm />` is clean and should be the default for all projects.

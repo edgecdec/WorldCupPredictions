@@ -584,7 +584,7 @@
       "title": "Fix home page: show AuthForm when not logged in regardless of tournament state",
       "spec": "specs/bracket.md",
       "priority": 19,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-012"
       ],

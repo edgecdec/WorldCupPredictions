@@ -36,22 +36,33 @@ export default function Home() {
     );
   }
 
+  if (!user) {
+    return (
+      <Box sx={{ maxWidth: 600, mx: "auto", py: 4, px: 2, textAlign: "center" }}>
+        <Typography variant="h3" fontWeight="bold" gutterBottom>
+          ⚽ World Cup Predictions
+        </Typography>
+        <Typography variant="h6" color="text.secondary" gutterBottom>
+          Predict the 2026 FIFA World Cup
+        </Typography>
+        <Box sx={{ mt: 4 }}>
+          <AuthForm />
+        </Box>
+      </Box>
+    );
+  }
+
   return (
     <Box sx={{ maxWidth: 600, mx: "auto", py: 4, px: 2, textAlign: "center" }}>
       <Typography variant="h3" fontWeight="bold" gutterBottom>
         ⚽ World Cup Predictions
       </Typography>
 
-      {!tournament ? (
-        <Typography color="text.secondary" sx={{ mt: 4 }}>
-          No tournament has been created yet. Check back soon!
-        </Typography>
-      ) : (
+      {tournament ? (
         <>
           <Typography variant="h5" color="text.secondary" gutterBottom>
             {tournament.name} {tournament.year}
           </Typography>
-
           {tournament.lock_time_groups && (
             <Box sx={{ my: 3 }}>
               <CountdownTimer
@@ -60,29 +71,39 @@ export default function Home() {
               />
             </Box>
           )}
-
-          {user ? (
-            <Box sx={{ mt: 4 }}>
-              <Typography variant="h6" gutterBottom>
-                Welcome back, {user.username}!
-              </Typography>
-              <Button
-                component={Link}
-                href="/bracket"
-                variant="contained"
-                size="large"
-                sx={{ mt: 1 }}
-              >
-                Make Your Predictions
-              </Button>
-            </Box>
-          ) : (
-            <Box sx={{ mt: 4 }}>
-              <AuthForm />
-            </Box>
-          )}
         </>
+      ) : (
+        <Typography color="text.secondary" sx={{ mt: 2 }}>
+          No tournament has been created yet. Check back soon!
+        </Typography>
       )}
+
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h6" gutterBottom>
+          Welcome back, {user.username}!
+        </Typography>
+        <Box sx={{ display: "flex", gap: 2, justifyContent: "center", flexWrap: "wrap" }}>
+          <Button
+            component={Link}
+            href="/bracket"
+            variant="contained"
+            size="large"
+          >
+            Make Your Predictions
+          </Button>
+          {user.is_admin ? (
+            <Button
+              component={Link}
+              href="/admin"
+              variant="outlined"
+              color="warning"
+              size="large"
+            >
+              Admin Panel
+            </Button>
+          ) : null}
+        </Box>
+      </Box>
     </Box>
   );
 }

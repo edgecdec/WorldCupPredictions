@@ -155,7 +155,7 @@
       "title": "Create admin API - POST create tournament",
       "spec": "specs/tournament-structure.md",
       "priority": 15,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-002",
         "TASK-011"

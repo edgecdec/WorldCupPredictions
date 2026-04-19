@@ -114,3 +114,12 @@
 - Placed them before GroupPrediction since TournamentResults references KnockoutMatchup (already defined below)
 - Both tsc --noEmit and next build passed first try
 - Lessons: Pure type additions are low-risk; no runtime impact, just need to verify build passes
+
+## TASK-015: Create admin API - POST create tournament (2026-04-18)
+- Created src/app/api/admin/route.ts with POST handler
+- Verifies admin via getAuthUser, returns 403 if not admin
+- Accepts {name, year, lock_time_groups, lock_time_knockout, bracket_data}, inserts with randomUUID
+- Handles bracket_data as either string or object (JSON.stringify if object)
+- Validates name and year are required, returns 400 if missing
+- Build and tsc passed first try. Deploy verified on attempt 4.
+- Lesson: Keep API routes minimal — just auth check, validation, DB insert, response. No need for extra abstractions at this stage.

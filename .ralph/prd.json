@@ -8,367 +8,576 @@
       "priority": 1,
       "status": "open",
       "dependencies": [],
-      "description": "Create src/lib/db.ts using better-sqlite3. Initialize tables: users (id TEXT PRIMARY KEY, username TEXT UNIQUE, password_hash TEXT, is_admin INTEGER DEFAULT 0, created_at TEXT), tournaments (id, name, year, lock_time_groups, lock_time_knockout, bracket_data JSON, results_data JSON), predictions (id, user_id, tournament_id, bracket_name, group_predictions JSON, third_place_picks JSON, knockout_picks JSON, tiebreaker INTEGER, submitted_at TEXT), groups (id, name, invite_code TEXT UNIQUE, created_by, created_at, scoring_settings JSON, max_brackets INTEGER, submissions_locked INTEGER DEFAULT 0), group_members (group_id, prediction_id, PRIMARY KEY), messages (id, group_id, user_id, username, message, created_at). DB file at data/worldcup.db. Auto-create data/ directory. Export getDb() function."
+      "description": "Create src/lib/db.ts using better-sqlite3. Auto-create data/ directory if missing. Initialize tables: users (id TEXT PK, username TEXT UNIQUE, password_hash TEXT, is_admin INTEGER DEFAULT 0, created_at TEXT), tournaments (id TEXT PK, name TEXT, year INTEGER, lock_time_groups TEXT, lock_time_knockout TEXT, bracket_data TEXT, results_data TEXT), predictions (id TEXT PK, user_id TEXT, tournament_id TEXT, bracket_name TEXT, group_predictions TEXT, third_place_picks TEXT, knockout_picks TEXT, tiebreaker INTEGER, submitted_at TEXT), groups (id TEXT PK, name TEXT, invite_code TEXT UNIQUE, created_by TEXT, created_at TEXT, scoring_settings TEXT, max_brackets INTEGER, submissions_locked INTEGER DEFAULT 0), group_members (group_id TEXT, prediction_id TEXT, PRIMARY KEY(group_id, prediction_id)), messages (id TEXT PK, group_id TEXT, user_id TEXT, username TEXT, message TEXT, created_at TEXT). Export getDb(). DB at data/worldcup.db."
     },
     {
       "id": "TASK-002",
-      "title": "Create src/lib/auth.ts with JWT and password hashing",
+      "title": "Create src/lib/auth.ts with JWT, hashing, getAuthUser",
       "spec": "specs/anti-patterns.md",
       "priority": 2,
       "status": "open",
-      "dependencies": ["TASK-001"],
-      "description": "Create src/lib/auth.ts with functions: hashPassword(password) using bcryptjs, verifyPassword(password, hash), signToken(payload) using jsonwebtoken with a secret from process.env.JWT_SECRET (default fallback for dev), verifyToken(token). Token payload should include {userId, username, isAdmin}. Export all functions. Same pattern as March Madness auth.ts."
+      "dependencies": [
+        "TASK-001"
+      ],
+      "description": "Create src/lib/auth.ts: hashPassword, verifyPassword (bcryptjs), signToken, verifyToken (jsonwebtoken, secret from process.env.JWT_SECRET with 'dev-secret' fallback), getAuthUser(request) that reads 'token' cookie, verifies, returns {userId, username, isAdmin} or null."
     },
     {
       "id": "TASK-003",
-      "title": "Create auth API route (register + login)",
+      "title": "Create auth API - POST register/login",
       "spec": "specs/anti-patterns.md",
       "priority": 3,
       "status": "open",
-      "dependencies": ["TASK-002"],
-      "description": "Create src/app/api/auth/route.ts. POST handler that accepts {action: 'register'|'login', username, password}. Register: validate inputs, hash password, insert into users table, return JWT in Set-Cookie httpOnly cookie. Login: find user, verify password, return JWT cookie. Return appropriate error messages for duplicate username, wrong password, etc."
+      "dependencies": [
+        "TASK-002"
+      ],
+      "description": "Create src/app/api/auth/route.ts POST handler. Accepts {action, username, password}. register: validate, hash, insert user with uuid, return JWT in httpOnly cookie + {ok, user}. login: find user, verify password, return JWT cookie + {ok, user}."
     },
     {
       "id": "TASK-004",
-      "title": "Create useAuth hook and AuthProvider",
-      "spec": "specs/code-style.md",
+      "title": "Create auth API - GET session, DELETE logout",
+      "spec": "specs/anti-patterns.md",
       "priority": 4,
       "status": "open",
-      "dependencies": ["TASK-003"],
-      "description": "Create src/hooks/useAuth.tsx. React context provider that manages auth state. On mount, check for existing JWT cookie by calling a /api/auth GET endpoint (add GET handler to auth route that verifies token and returns user). Expose: user, login(username, password), register(username, password), logout(). Login/register call the POST API and update state. Logout clears the cookie. Wrap the app in AuthProvider in layout.tsx."
+      "dependencies": [
+        "TASK-003"
+      ],
+      "description": "Add GET handler to auth route: read token via getAuthUser, return {ok, user} or {ok:false, user:null}. Add DELETE handler: clear token cookie with max-age=0."
     },
     {
       "id": "TASK-005",
-      "title": "Create ThemeRegistry with dark/light mode",
+      "title": "Create useAuth hook and AuthProvider",
       "spec": "specs/code-style.md",
       "priority": 5,
       "status": "open",
-      "dependencies": [],
-      "description": "Create src/components/common/ThemeRegistry.tsx — MUI ThemeProvider with Emotion cache, dark/light mode support. Create src/hooks/useThemeMode.tsx — hook that reads/writes theme preference to localStorage, defaults to dark. Create src/app/globals.css with minimal resets. Update src/app/layout.tsx to wrap children in ThemeRegistry and AuthProvider (if TASK-004 is done, otherwise just ThemeRegistry)."
+      "dependencies": [
+        "TASK-004"
+      ],
+      "description": "Create src/hooks/useAuth.tsx. AuthProvider context, on mount GET /api/auth for session. Expose: user, loading, login(), register(), logout(). Export useAuth() hook."
     },
     {
       "id": "TASK-006",
-      "title": "Create AuthForm component",
+      "title": "Create ThemeRegistry, useThemeMode, globals.css",
       "spec": "specs/code-style.md",
       "priority": 6,
       "status": "open",
-      "dependencies": ["TASK-004", "TASK-005"],
-      "description": "Create src/components/auth/AuthForm.tsx — MUI-styled login/register form. Toggle between login and register modes. Username and password fields. Submit calls useAuth().login or register. Show error messages. Redirect to home on success."
+      "dependencies": [],
+      "description": "Create src/components/common/ThemeRegistry.tsx (MUI ThemeProvider + Emotion cache, dark/light). Create src/hooks/useThemeMode.tsx (localStorage, default dark). Create src/app/globals.css (resets). Soccer palette: primary green #2e7d32, secondary gold #ffc107."
     },
     {
       "id": "TASK-007",
-      "title": "Create Navbar component",
+      "title": "Wire providers into layout.tsx",
       "spec": "specs/code-style.md",
       "priority": 7,
       "status": "open",
-      "dependencies": ["TASK-005", "TASK-004"],
-      "description": "Create src/components/common/Navbar.tsx — MUI AppBar with navigation links: Home, Predictions, Leaderboard, Groups, Stats. Show Admin link if user.is_admin. Theme toggle button (dark/light). Auth status: show username + logout button if logged in, login button if not. Add Navbar to layout.tsx."
+      "dependencies": [
+        "TASK-005",
+        "TASK-006"
+      ],
+      "description": "Update src/app/layout.tsx: import globals.css, wrap children in ThemeRegistry + AuthProvider via client wrapper component. Verify build passes."
     },
     {
       "id": "TASK-008",
-      "title": "Create CountdownTimer component",
-      "spec": "specs/bracket.md",
+      "title": "Create AuthForm component",
+      "spec": "specs/code-style.md",
       "priority": 8,
       "status": "open",
-      "dependencies": ["TASK-005"],
-      "description": "Create src/components/common/CountdownTimer.tsx — displays countdown to a target date. Shows days, hours, minutes, seconds. Updates every second via setInterval. Accepts targetDate prop (ISO string). Shows 'Locked' when past. Used on home page for group stage lock time."
+      "dependencies": [
+        "TASK-007"
+      ],
+      "description": "Create src/components/auth/AuthForm.tsx. MUI Card, login/register toggle, username+password fields, submit button, error Alert, loading state. Uses useAuth()."
     },
     {
       "id": "TASK-009",
-      "title": "Create home page with tournament info and countdown",
-      "spec": "specs/bracket.md",
+      "title": "Create Navbar and add to layout",
+      "spec": "specs/code-style.md",
       "priority": 9,
       "status": "open",
-      "dependencies": ["TASK-007", "TASK-008"],
-      "description": "Update src/app/page.tsx to be a proper landing page. 'use client'. Fetch active tournament from /api/tournaments (create GET route that returns the latest tournament). Show tournament name, year, countdown to group stage lock time using CountdownTimer. Show login/register CTA if not authenticated (render AuthForm), or welcome message if logged in. Link to predictions page."
+      "dependencies": [
+        "TASK-007"
+      ],
+      "description": "Create src/components/common/Navbar.tsx. MUI AppBar: title linking /, nav links (Predictions, Leaderboard, Groups), Admin if is_admin, theme toggle, auth status. Add to layout.tsx."
     },
     {
       "id": "TASK-010",
-      "title": "Create tournament API routes",
-      "spec": "specs/tournament-structure.md",
+      "title": "Create CountdownTimer component",
+      "spec": "specs/bracket.md",
       "priority": 10,
       "status": "open",
-      "dependencies": ["TASK-001"],
-      "description": "Create src/app/api/tournaments/route.ts — GET returns the latest tournament (most recent by year). Create src/app/api/admin/route.ts — POST creates a new tournament (admin only). Accepts: name, year, lock_time_groups, lock_time_knockout, bracket_data (JSON with 12 groups of 4 teams each). Verify auth token and is_admin before allowing creation."
+      "dependencies": [
+        "TASK-006"
+      ],
+      "description": "Create src/components/common/CountdownTimer.tsx. Props: targetDate (ISO), label. Shows days/hours/min/sec, updates every second, 'Locked' when past. Cleanup on unmount."
     },
     {
       "id": "TASK-011",
-      "title": "Create bracketData utility functions",
+      "title": "Create tournament GET API",
       "spec": "specs/tournament-structure.md",
       "priority": 11,
       "status": "open",
-      "dependencies": ["TASK-010"],
-      "description": "Create src/lib/bracketData.ts — utility functions: parseBracketData(tournament) returns typed BracketData, getTeamByName(bracketData, name) returns Team, getGroupByName(bracketData, name) returns Group, getTeamSeed(team) returns groupSeed, getTeamRanking(team) returns fifaRanking. Also export a placeholder WORLD_CUP_2026 constant with 12 groups of 4 placeholder teams (use real team names if 2026 draw is known, otherwise use representative teams with realistic FIFA rankings and pot assignments)."
+      "dependencies": [
+        "TASK-001"
+      ],
+      "description": "Create src/app/api/tournaments/route.ts. GET returns most recent tournament by year, parsing bracket_data and results_data from JSON strings. Return {ok, tournament} or {ok, tournament:null}."
     },
     {
       "id": "TASK-012",
-      "title": "Create admin page for tournament management",
-      "spec": "specs/tournament-structure.md",
+      "title": "Create home page with countdown and auth",
+      "spec": "specs/bracket.md",
       "priority": 12,
       "status": "open",
-      "dependencies": ["TASK-010", "TASK-006"],
-      "description": "Create src/app/admin/page.tsx — 'use client', admin-only page. Form to create a tournament: name, year, lock times (datetime pickers). For bracket_data: either paste JSON or use the placeholder data from bracketData.ts. Submit calls POST /api/admin. Show existing tournament info. Admin can also update results (group stage results entry will be a separate task)."
+      "dependencies": [
+        "TASK-009",
+        "TASK-010",
+        "TASK-011"
+      ],
+      "description": "Update src/app/page.tsx as 'use client'. Fetch tournament from GET /api/tournaments. Show name, year, CountdownTimer to lock_time_groups. Welcome+link to /bracket if logged in, AuthForm if not. 'No tournament' message if none."
     },
     {
       "id": "TASK-013",
-      "title": "Create group stage scoring function",
-      "spec": "specs/scoring.md",
+      "title": "Create bracketData utilities and seed data",
+      "spec": "specs/tournament-structure.md",
       "priority": 13,
       "status": "open",
       "dependencies": [],
-      "description": "Create src/lib/scoring.ts with scoreGroupStage(predictions, results, settings). For each group: for each team compute advance_correct (boolean match), exact_position (position match), upset_bonus (max(0, seed - predicted_position) only if team finished at or above predicted position). Compute per-group advancement_correct_bonus (all 4 advance/not-advance correct) and perfect_order_bonus (all 4 exact). Return detailed breakdown per team and per group plus total. All point values from ScoringSettings.groupStage. Pure function, no side effects."
+      "description": "Create src/lib/bracketData.ts. Functions: parseBracketData, getTeamByName, getGroupByName, getTeamSeed, getTeamRanking. Export WORLD_CUP_2026_DATA with 12 groups of 4 teams using real team names, FIFA rankings, correct pot assignments."
     },
     {
       "id": "TASK-014",
-      "title": "Create knockout scoring function",
+      "title": "Add result types to index.ts",
       "spec": "specs/scoring.md",
       "priority": 14,
       "status": "open",
-      "dependencies": ["TASK-013"],
-      "description": "Add scoreKnockout(picks, results, teamRankings, settings) to src/lib/scoring.ts. For each knockout match: if user picked the correct winner, award base points for that round. If it was an upset (winner has higher FIFA ranking number than loser), compute floor(ranking_diff / modulus) * round_multiplier. Add champion bonus if user picked the tournament winner. Return breakdown per round plus total. Add scoreTotalPrediction() that combines group + knockout scores."
+      "dependencies": [],
+      "description": "Add to src/types/index.ts: GroupStageResults {groupResults: Array<{groupName:string, order:[string,string,string,string]}>, advancingThirdPlace: string[]}. KnockoutResults = Record<string,string>. TournamentResults {groupStage?: GroupStageResults, knockout?: KnockoutResults, knockoutBracket?: KnockoutMatchup[]}."
     },
     {
       "id": "TASK-015",
-      "title": "Create scoring unit tests",
-      "spec": "specs/scoring.md",
+      "title": "Create admin API - POST create tournament",
+      "spec": "specs/tournament-structure.md",
       "priority": 15,
       "status": "open",
-      "dependencies": ["TASK-014"],
-      "description": "Add vitest to devDependencies. Create vitest.config.ts. Create tests/scoring.test.ts. Test cases: (1) advance_correct for all scenarios (predicted advance + did, predicted not + didn't, predicted advance + didn't, etc), (2) exact_position, (3) upset bonus capping at prediction not actual, (4) upset bonus = 0 when team finishes below prediction, (5) advancement_correct_bonus independent of perfect_order_bonus, (6) 3rd-place advancement interaction, (7) knockout base points per round, (8) knockout upset formula with modulus, (9) champion bonus, (10) full scoreTotalPrediction integration test."
+      "dependencies": [
+        "TASK-002",
+        "TASK-011"
+      ],
+      "description": "Create src/app/api/admin/route.ts. POST: verify admin via getAuthUser, accept {name, year, lock_time_groups, lock_time_knockout, bracket_data}, insert with uuid, return {ok, tournament}. 403 if not admin."
     },
     {
       "id": "TASK-016",
-      "title": "Create predictions API (save/load group predictions)",
-      "spec": "specs/bracket.md",
+      "title": "Create admin page - tournament creation",
+      "spec": "specs/tournament-structure.md",
       "priority": 16,
       "status": "open",
-      "dependencies": ["TASK-001", "TASK-002"],
-      "description": "Create src/app/api/picks/route.ts. POST: save group_predictions (array of 12 group orders) and third_place_picks (array of 8 team names). Requires auth. Check lock_time_groups — reject if past lock time. Upsert: if prediction exists for this user+tournament, update it; otherwise insert. GET: return user's predictions for the active tournament. Include bracket_name support for multiple brackets per user."
+      "dependencies": [
+        "TASK-015",
+        "TASK-013",
+        "TASK-008"
+      ],
+      "description": "Create src/app/admin/page.tsx 'use client'. Admin-only. Show existing tournament. Create form: name, year, lock times. Button to use WORLD_CUP_2026_DATA. Submit calls POST /api/admin."
     },
     {
       "id": "TASK-017",
-      "title": "Create GroupPrediction component (single group reorder)",
-      "spec": "specs/bracket.md",
+      "title": "Add seed test tournament button to admin",
+      "spec": "specs/tournament-structure.md",
       "priority": 17,
       "status": "open",
-      "dependencies": ["TASK-005"],
-      "description": "Create src/components/bracket/GroupPrediction.tsx — displays one group of 4 teams. Each team row shows: position number (1-4), team flag/logo, team name, pot seed badge, FIFA ranking. User can reorder by clicking up/down arrows or drag-and-drop. Emits onChange(groupName, newOrder) when order changes. MUI Card with List inside. Highlight pot seed with a small colored chip."
+      "dependencies": [
+        "TASK-016"
+      ],
+      "description": "Add 'Seed Test Tournament' button to admin page using WORLD_CUP_2026_DATA, lock_time_groups=2026-06-11, lock_time_knockout=2026-06-30. Only show if no tournament exists."
     },
     {
       "id": "TASK-018",
-      "title": "Create group stage predictions page with all 12 groups",
-      "spec": "specs/bracket.md",
+      "title": "Create group stage scoring function",
+      "spec": "specs/scoring.md",
       "priority": 18,
       "status": "open",
-      "dependencies": ["TASK-017", "TASK-016", "TASK-011"],
-      "description": "Create src/app/bracket/page.tsx — 'use client'. Fetch active tournament and user's existing predictions. Display all 12 groups in a responsive grid (3 columns desktop, 2 tablet, 1 mobile) using GroupPrediction components. Below the groups, show a 3rd-place advancement picker: list all 12 predicted 3rd-place teams (derived from group orders), user checks exactly 8. Save button calls POST /api/picks. Disable editing if past lock time. Show CountdownTimer to lock."
+      "dependencies": [
+        "TASK-014"
+      ],
+      "description": "Create src/lib/scoring.ts. scoreGroupStage(predictions, thirdPlacePicks, results: GroupStageResults, bracketData, settings): per-team advance_correct, exact_position, upset_bonus (prediction-gated, capped). Per-group advancement_correct_bonus (independent), perfect_order_bonus (independent). Return {total, perGroup}."
     },
     {
       "id": "TASK-019",
-      "title": "Create knockout bracket generation from group results",
-      "spec": "specs/tournament-structure.md",
+      "title": "Create knockout scoring function",
+      "spec": "specs/scoring.md",
       "priority": 19,
       "status": "open",
-      "dependencies": ["TASK-011"],
-      "description": "Create src/lib/knockoutBracket.ts. Export generateKnockoutBracket(groupResults, advancingThirdPlace) that returns an array of KnockoutMatchup objects for all 31 knockout matches. Follow FIFA's official R32 bracket mapping for the 48-team format (group winners vs advancing 3rd-place teams or runners-up from specific groups). Each matchup has an id encoding round and position (e.g. 'R32-1', 'R16-3', 'QF-2', 'SF-1', '3RD', 'FINAL')."
+      "dependencies": [
+        "TASK-018"
+      ],
+      "description": "Add scoreKnockout(picks, results: KnockoutResults, bracketData, settings) to scoring.ts. Base points per round, upset bonus = floor(rankDiff/modulus)*multiplier. Champion bonus. Add scoreTotalPrediction() combining both. Return {total, perRound}."
     },
     {
       "id": "TASK-020",
-      "title": "Create admin group stage results entry",
-      "spec": "specs/deployment.md",
+      "title": "Create scoring unit tests",
+      "spec": "specs/scoring.md",
       "priority": 20,
       "status": "open",
-      "dependencies": ["TASK-012", "TASK-019"],
-      "description": "Extend src/app/admin/page.tsx: add a section for entering group stage results. For each group, admin selects the finishing order (1-4) and marks which 3rd-place teams advanced. Submit saves to tournament.results_data via a new PUT /api/admin endpoint. On save, auto-generate the knockout bracket using generateKnockoutBracket() and store it in results_data."
+      "dependencies": [
+        "TASK-019"
+      ],
+      "description": "Add vitest to devDeps, create vitest.config.ts. Create tests/scoring.test.ts testing all edge cases: advance_correct scenarios, exact_position, upset bonus capping, 3rd-place interaction, independent group bonuses, knockout formula with modulus, champion bonus, integration test."
     },
     {
       "id": "TASK-021",
-      "title": "Create Matchup component for knockout bracket",
+      "title": "Create predictions API - save/load group predictions",
       "spec": "specs/bracket.md",
       "priority": 21,
       "status": "open",
-      "dependencies": ["TASK-005"],
-      "description": "Create src/components/bracket/Matchup.tsx — displays a single knockout matchup. Two team slots (teamA, teamB) with flag, name, seed/ranking. Click a team to pick the winner (highlighted). If in read-only mode (results entered), show the actual winner highlighted differently. Accepts onPick(matchupId, winner) callback. Show connector lines to next round via CSS. Same visual pattern as March Madness Matchup.tsx."
+      "dependencies": [
+        "TASK-002",
+        "TASK-011"
+      ],
+      "description": "Create src/app/api/picks/route.ts. GET: return user prediction for active tournament. POST {action:'save_groups', bracket_name, group_predictions, third_place_picks}: upsert prediction. Check lock_time_groups, reject if past. Return {ok, prediction}."
     },
     {
       "id": "TASK-022",
-      "title": "Create KnockoutBracket component",
+      "title": "Create predictions API - save/load knockout picks",
       "spec": "specs/bracket.md",
       "priority": 22,
       "status": "open",
-      "dependencies": ["TASK-021", "TASK-019"],
-      "description": "Create src/components/bracket/KnockoutBracket.tsx — full bracket view from R32 to Final including 3rd place match. Renders Matchup components arranged in columns by round with connector lines. Cascade clearing: when user changes a pick in an earlier round, clear all downstream picks that depended on the changed team. Accept picks state and onPick callback. Desktop layout: all rounds visible left-to-right."
+      "dependencies": [
+        "TASK-021"
+      ],
+      "description": "Add to picks route: POST {action:'save_knockout', knockout_picks, tiebreaker}: update prediction with knockout data. Check lock_time_knockout. Only allow if group results exist. GET returns knockout_picks+tiebreaker too."
     },
     {
       "id": "TASK-023",
-      "title": "Create knockout predictions page",
+      "title": "Create GroupPrediction component",
       "spec": "specs/bracket.md",
       "priority": 23,
       "status": "open",
-      "dependencies": ["TASK-022", "TASK-016"],
-      "description": "Create src/app/bracket/knockout/page.tsx — 'use client'. Only accessible after group stage results are entered (check tournament.results_data). Fetch knockout bracket structure and user's existing knockout picks. Render KnockoutBracket component. Tiebreaker input at the bottom (predict total goals in Final). Save button calls POST /api/picks with knockout_picks. Disable if past lock_time_knockout."
+      "dependencies": [
+        "TASK-006"
+      ],
+      "description": "Create src/components/bracket/GroupPrediction.tsx. MUI Card showing one group of 4 teams. Each row: position (1-4), flag placeholder, name, pot seed Chip, FIFA ranking. Up/down arrows to reorder. onChange(groupName, newOrder). disabled prop."
     },
     {
       "id": "TASK-024",
-      "title": "Create responsive bracket layouts (mobile + tablet)",
+      "title": "Create ThirdPlacePicker component",
       "spec": "specs/bracket.md",
       "priority": 24,
       "status": "open",
-      "dependencies": ["TASK-022"],
-      "description": "Create src/components/bracket/MobileBracket.tsx — round tabs for mobile (<768px). User taps tab to switch between R32, R16, QF, SF, Final. Each tab shows that round's matchups vertically. Create src/components/bracket/MediumBracket.tsx — tablet layout (768-1200px) with stacked bracket sections. Add screen width detection in KnockoutBracket to switch between mobile/medium/desktop layouts."
+      "dependencies": [
+        "TASK-006"
+      ],
+      "description": "Create src/components/bracket/ThirdPlacePicker.tsx. Shows 12 third-place teams as toggleable Chips. User selects exactly 8. Count display. onChange(selected). disabled prop."
     },
     {
       "id": "TASK-025",
-      "title": "Create groups API (create, join, leave, list)",
-      "spec": "specs/groups.md",
+      "title": "Create group stage predictions page",
+      "spec": "specs/bracket.md",
       "priority": 25,
       "status": "open",
-      "dependencies": ["TASK-001", "TASK-002"],
-      "description": "Create src/app/api/groups/route.ts. POST with action 'create': create group with name, scoring_settings (JSON), max_brackets. Generate unique invite_code (6-char alphanumeric). POST with action 'join': find group by invite_code, add user's prediction to group_members. DELETE: leave group. GET: list user's groups with member counts."
+      "dependencies": [
+        "TASK-023",
+        "TASK-024",
+        "TASK-021",
+        "TASK-013"
+      ],
+      "description": "Create src/app/bracket/page.tsx 'use client'. Fetch tournament + predictions. 12 groups in responsive grid using GroupPrediction. ThirdPlacePicker below. Save button. CountdownTimer. Disable if locked/not logged in."
     },
     {
       "id": "TASK-026",
-      "title": "Create ScoringEditor component",
-      "spec": "specs/scoring.md",
+      "title": "Create knockout bracket generation",
+      "spec": "specs/tournament-structure.md",
       "priority": 26,
       "status": "open",
-      "dependencies": ["TASK-005"],
-      "description": "Create src/components/common/ScoringEditor.tsx — MUI form to configure all scoring parameters. Group stage section: advanceCorrect, exactPosition, upsetBonusPerPlace, advancementCorrectBonus, perfectOrderBonus (all number inputs). Knockout section: pointsPerRound (6 inputs for each round), upsetMultiplierPerRound (6 inputs), upsetModulus, championBonus. Pre-fill with DEFAULT_SCORING. Emit onChange(settings) with the full ScoringSettings object."
+      "dependencies": [
+        "TASK-013",
+        "TASK-014"
+      ],
+      "description": "Create src/lib/knockoutBracket.ts. generateKnockoutBracket(groupResults, bracketData) returns KnockoutMatchup[] for 31 matches. FIFA R32 mapping for 48-team format. IDs like R32-1, R16-3, QF-2, SF-1, 3RD, FINAL. Export getNextMatchupId() for cascade."
     },
     {
       "id": "TASK-027",
-      "title": "Create groups page UI",
-      "spec": "specs/groups.md",
+      "title": "Create admin API - save group stage results",
+      "spec": "specs/tournament-structure.md",
       "priority": 27,
       "status": "open",
-      "dependencies": ["TASK-025", "TASK-026", "TASK-006"],
-      "description": "Create src/app/groups/page.tsx — 'use client'. List user's groups with member count and invite code. Create group form: name input + ScoringEditor + max_brackets. Join group form: invite code input. Each group card links to the group's leaderboard. Show group scoring settings summary."
+      "dependencies": [
+        "TASK-015",
+        "TASK-026"
+      ],
+      "description": "Add PUT to admin route: {action:'save_group_results', groupResults, advancingThirdPlace}. Verify admin. Validate. Generate knockout bracket. Save to tournament.results_data."
     },
     {
       "id": "TASK-028",
-      "title": "Create leaderboard API",
-      "spec": "specs/scoring.md",
+      "title": "Create admin page - group results entry UI",
+      "spec": "specs/tournament-structure.md",
       "priority": 28,
       "status": "open",
-      "dependencies": ["TASK-014", "TASK-025"],
-      "description": "Create src/app/api/leaderboard/route.ts. GET with group_id param. Fetch all predictions in the group via group_members. Fetch tournament results. For each prediction, run scoreTotalPrediction() with the group's scoring_settings. Return sorted array of LeaderboardEntry objects (sorted by totalScore desc, tiebreaker as secondary)."
+      "dependencies": [
+        "TASK-027",
+        "TASK-016"
+      ],
+      "description": "Extend admin page: Group Stage Results section. Per-group finishing order selection. 3rd-place advancement checkboxes. Submit calls PUT /api/admin. Only visible when tournament exists."
     },
     {
       "id": "TASK-029",
-      "title": "Create leaderboard page",
-      "spec": "specs/scoring.md",
+      "title": "Create Matchup component",
+      "spec": "specs/bracket.md",
       "priority": 29,
       "status": "open",
-      "dependencies": ["TASK-028", "TASK-005"],
-      "description": "Create src/app/leaderboard/page.tsx — 'use client'. Group selector dropdown (user's groups). Fetch leaderboard for selected group. MUI Table with sortable columns: rank, username, bracket name, group stage score, knockout score, total score, tiebreaker. Clickable scores open a ScoringBreakdownDialog showing per-pick detail."
+      "dependencies": [
+        "TASK-006"
+      ],
+      "description": "Create src/components/bracket/Matchup.tsx. Two team slots with flag, name, ranking. Click to pick winner. Read-only mode for results. Props: matchup, userPick, onPick callback, readOnly, disabled."
     },
     {
       "id": "TASK-030",
-      "title": "Create ScoringBreakdownDialog",
-      "spec": "specs/scoring.md",
+      "title": "Create bracketUtils with cascade clearing",
+      "spec": "specs/bracket.md",
       "priority": 30,
       "status": "open",
-      "dependencies": ["TASK-005"],
-      "description": "Create src/components/common/ScoringBreakdownDialog.tsx — MUI Dialog that shows detailed scoring breakdown for a prediction. Group stage tab: per-group table showing each team's advance_correct, exact_position, upset_bonus, and group bonuses. Knockout tab: per-round table showing each pick, whether correct, base points, upset bonus. Totals at bottom."
+      "dependencies": [
+        "TASK-026"
+      ],
+      "description": "Create src/lib/bracketUtils.ts. cascadeClear(picks, changedMatchupId, matchups): clear downstream picks depending on changed team. getMatchupsByRound(matchups). Pattern from March Madness."
     },
     {
       "id": "TASK-031",
-      "title": "Create admin knockout results entry",
-      "spec": "specs/deployment.md",
+      "title": "Create KnockoutBracket desktop component",
+      "spec": "specs/bracket.md",
       "priority": 31,
       "status": "open",
-      "dependencies": ["TASK-020"],
-      "description": "Extend admin page: add knockout results section. Show the generated knockout bracket. Admin clicks to set the winner of each match as results come in. Save updates tournament.results_data. Leaderboard auto-recalculates on next fetch."
+      "dependencies": [
+        "TASK-029",
+        "TASK-030"
+      ],
+      "description": "Create src/components/bracket/KnockoutBracket.tsx. Full R32-to-Final bracket with Matchup components, CSS connector lines. Props: matchups, picks, onPick, readOnly. Uses cascadeClear on pick change. Desktop layout: rounds left-to-right."
     },
     {
       "id": "TASK-032",
-      "title": "Create ESPN live score sync",
-      "spec": "specs/deployment.md",
+      "title": "Create knockout predictions page",
+      "spec": "specs/bracket.md",
       "priority": 32,
       "status": "open",
-      "dependencies": ["TASK-011"],
-      "description": "Create src/lib/espnSync.ts — fetch live World Cup scores from ESPN's soccer scoreboard API. Parse game data into LiveGame objects. Create src/hooks/useLiveScores.ts — hook that polls ESPN every 30 seconds during match days. Create src/components/bracket/LiveScores.tsx — displays in-progress match scores in a compact card format."
+      "dependencies": [
+        "TASK-031",
+        "TASK-022"
+      ],
+      "description": "Create src/app/bracket/knockout/page.tsx 'use client'. Check group results exist. Fetch bracket + picks. KnockoutBracket component. Tiebreaker input. Save button. CountdownTimer to lock_time_knockout. Disable if locked."
     },
     {
       "id": "TASK-033",
-      "title": "Create compare predictions page",
+      "title": "Create MobileBracket with round tabs",
       "spec": "specs/bracket.md",
       "priority": 33,
       "status": "open",
-      "dependencies": ["TASK-018", "TASK-022"],
-      "description": "Create src/app/compare/page.tsx — overlay comparison of multiple users' group predictions and knockout picks. Dropdown to select up to 4 users from the same group. Show one bracket/group view with colored indicators per user (e.g. colored dots or borders). Same pattern as March Madness compare page."
+      "dependencies": [
+        "TASK-031"
+      ],
+      "description": "Create src/components/bracket/MobileBracket.tsx for <768px. MUI Tabs per round. Same props as KnockoutBracket. Add width detection to auto-switch between Mobile and Desktop layouts."
     },
     {
       "id": "TASK-034",
-      "title": "Create Who Picked Whom page",
-      "spec": "specs/groups.md",
+      "title": "Create admin API - save knockout results",
+      "spec": "specs/tournament-structure.md",
       "priority": 34,
       "status": "open",
-      "dependencies": ["TASK-025"],
-      "description": "Create src/app/whopicked/page.tsx — per-match breakdown of group members' picks. Group selector. For group stage: show each group with a table of who predicted which team in which position. For knockout: show each matchup with who picked which team. Highlight correct picks."
+      "dependencies": [
+        "TASK-027"
+      ],
+      "description": "Add to admin PUT: action 'save_knockout_results' with {knockoutResults}. Merge into results_data. Admin enters results match-by-match as tournament progresses."
     },
     {
       "id": "TASK-035",
-      "title": "Create stats dashboard",
-      "spec": "specs/groups.md",
+      "title": "Create admin page - knockout results entry",
+      "spec": "specs/tournament-structure.md",
       "priority": 35,
       "status": "open",
-      "dependencies": ["TASK-028"],
-      "description": "Create src/app/stats/page.tsx — aggregate prediction statistics for a group. Most popular champion pick (bar chart or list). Most contrarian predictions (picks that differ most from the group). Group stage accuracy stats (% of users who got each group right). Most chalk vs most upset-heavy brackets."
+      "dependencies": [
+        "TASK-034",
+        "TASK-031"
+      ],
+      "description": "Extend admin page: Knockout Results section. KnockoutBracket in admin mode (clicks set results). Save button. Only visible when group results exist."
     },
     {
       "id": "TASK-036",
-      "title": "Create What-If simulator page",
-      "spec": "specs/bracket.md",
+      "title": "Create groups API",
+      "spec": "specs/groups.md",
       "priority": 36,
       "status": "open",
-      "dependencies": ["TASK-022", "TASK-028"],
-      "description": "Create src/app/simulate/page.tsx — bracket view where user clicks to set hypothetical results. Live leaderboard sidebar re-sorts as user sets results. Group selector. Reuse KnockoutBracket component in 'simulation mode' where clicks set results instead of picks. Recalculate all group members' scores with the hypothetical results on each change."
+      "dependencies": [
+        "TASK-002"
+      ],
+      "description": "Create src/app/api/groups/route.ts. GET: list user groups with member counts. POST create (name, scoring_settings, max_brackets, auto-gen invite_code). POST join (invite_code, prediction_id). POST leave (group_id). All require auth."
     },
     {
       "id": "TASK-037",
-      "title": "Create Monte Carlo simulation",
-      "spec": "specs/bracket.md",
+      "title": "Create ScoringEditor component",
+      "spec": "specs/scoring.md",
       "priority": 37,
       "status": "open",
-      "dependencies": ["TASK-036"],
-      "description": "Create src/lib/monteCarloWorker.ts — web worker that runs N simulations (default 1000) of remaining knockout matches using historical upset rates or FIFA ranking-based probabilities. For each simulation, score all predictions and track avg score, avg place, win %. Create src/hooks/useMonteCarlo.ts. Integrate into simulator page: show Monte Carlo results table with each user's win probability."
+      "dependencies": [
+        "TASK-006"
+      ],
+      "description": "Create src/components/common/ScoringEditor.tsx. Group stage inputs: advanceCorrect, exactPosition, upsetBonusPerPlace, advancementCorrectBonus, perfectOrderBonus. Knockout: 6 pointsPerRound, 6 upsetMultiplierPerRound, upsetModulus, championBonus. Pre-fill DEFAULT_SCORING. onChange(ScoringSettings)."
     },
     {
       "id": "TASK-038",
-      "title": "Create group chat",
+      "title": "Create groups page UI",
       "spec": "specs/groups.md",
       "priority": 38,
       "status": "open",
-      "dependencies": ["TASK-025"],
-      "description": "Create src/components/common/GroupChat.tsx — simple message thread per group. Text input + send button. Messages show username, timestamp, message text. Fetch messages from /api/groups/messages (create endpoint). Poll for new messages every 10 seconds. Add to groups page or as a collapsible panel on the leaderboard."
+      "dependencies": [
+        "TASK-036",
+        "TASK-037",
+        "TASK-008"
+      ],
+      "description": "Create src/app/groups/page.tsx 'use client'. List groups as Cards (name, members, invite code+copy). Create dialog with ScoringEditor. Join dialog with code input. Group cards link to /leaderboard?group=ID."
     },
     {
       "id": "TASK-039",
-      "title": "Create pick reminder banner",
-      "spec": "specs/bracket.md",
+      "title": "Create leaderboard API",
+      "spec": "specs/scoring.md",
       "priority": 39,
       "status": "open",
-      "dependencies": ["TASK-008"],
-      "description": "Create src/components/common/PickReminderBanner.tsx — shows a warning banner when lock time is approaching and user hasn't completed their predictions. Check: if within 24 hours of lock_time_groups and group predictions are incomplete, show banner. Same for lock_time_knockout. Dismissible but re-appears on page navigation. Add to layout."
+      "dependencies": [
+        "TASK-019",
+        "TASK-036"
+      ],
+      "description": "Create src/app/api/leaderboard/route.ts. GET with group_id. Fetch scoring_settings, predictions, results. Score each prediction. Return sorted LeaderboardEntry[] by totalScore desc, tiebreaker secondary."
     },
     {
       "id": "TASK-040",
-      "title": "Create shareable public bracket links",
-      "spec": "specs/bracket.md",
+      "title": "Create ScoringBreakdownDialog",
+      "spec": "specs/scoring.md",
       "priority": 40,
       "status": "open",
-      "dependencies": ["TASK-018", "TASK-023"],
-      "description": "Create src/app/bracket/[username]/page.tsx — public read-only view of a user's predictions. No auth required. Shows group predictions and knockout bracket (if filled). Share button copies URL to clipboard. Add share button to the predictions page."
+      "dependencies": [
+        "TASK-006"
+      ],
+      "description": "Create src/components/common/ScoringBreakdownDialog.tsx. MUI Dialog, two tabs: Group Stage (per-group per-team breakdown) and Knockout (per-round per-match breakdown). Totals. Props: prediction, results, settings, bracketData, open, onClose."
     },
     {
       "id": "TASK-041",
-      "title": "Create print-friendly bracket view",
-      "spec": "specs/bracket.md",
+      "title": "Create leaderboard page",
+      "spec": "specs/scoring.md",
       "priority": 41,
       "status": "open",
-      "dependencies": ["TASK-022"],
-      "description": "Add @media print CSS to globals.css that hides navbar, sidebars, buttons and formats the bracket for printing. Add a Print button to the bracket page that calls window.print(). Also add bracket export as image using html2canvas (same pattern as March Madness)."
+      "dependencies": [
+        "TASK-039",
+        "TASK-040"
+      ],
+      "description": "Create src/app/leaderboard/page.tsx 'use client'. Group selector. Sortable MUI Table: rank, username, bracket, group score, knockout score, total, tiebreaker. Click score opens ScoringBreakdownDialog. Highlight current user."
+    },
+    {
+      "id": "TASK-042",
+      "title": "Create compare predictions page",
+      "spec": "specs/bracket.md",
+      "priority": 42,
+      "status": "open",
+      "dependencies": [
+        "TASK-025",
+        "TASK-031"
+      ],
+      "description": "Create src/app/compare/page.tsx 'use client'. Group selector, multi-select up to 4 users. Group predictions side-by-side with colored indicators. Knockout overlay with colored dots per user."
+    },
+    {
+      "id": "TASK-043",
+      "title": "Create Who Picked Whom page",
+      "spec": "specs/groups.md",
+      "priority": 43,
+      "status": "open",
+      "dependencies": [
+        "TASK-036",
+        "TASK-025"
+      ],
+      "description": "Create src/app/whopicked/page.tsx 'use client'. Group selector. Per-group table of who predicted what. Per-knockout-match pick distribution. Highlight correct picks. Add GET /api/picks?group_id=X to picks route."
+    },
+    {
+      "id": "TASK-044",
+      "title": "Create stats dashboard",
+      "spec": "specs/groups.md",
+      "priority": 44,
+      "status": "open",
+      "dependencies": [
+        "TASK-039"
+      ],
+      "description": "Create src/app/stats/page.tsx 'use client'. Group selector. Most popular champion, most contrarian picks, group accuracy %, most chalk vs upset-heavy brackets."
+    },
+    {
+      "id": "TASK-045",
+      "title": "Create ESPN live score sync",
+      "spec": "specs/deployment.md",
+      "priority": 45,
+      "status": "open",
+      "dependencies": [
+        "TASK-013"
+      ],
+      "description": "Create src/lib/espnSync.ts (fetch ESPN soccer scoreboard, parse to LiveGame[]). Create src/hooks/useLiveScores.ts (poll 30s). Create src/components/bracket/LiveScores.tsx (compact score cards)."
+    },
+    {
+      "id": "TASK-046",
+      "title": "Create What-If simulator",
+      "spec": "specs/bracket.md",
+      "priority": 46,
+      "status": "open",
+      "dependencies": [
+        "TASK-031",
+        "TASK-039"
+      ],
+      "description": "Create src/app/simulate/page.tsx 'use client'. KnockoutBracket in sim mode (clicks set hypothetical results). Sidebar leaderboard recalculates live. Group selector."
+    },
+    {
+      "id": "TASK-047",
+      "title": "Create Monte Carlo simulation",
+      "spec": "specs/bracket.md",
+      "priority": 47,
+      "status": "open",
+      "dependencies": [
+        "TASK-046"
+      ],
+      "description": "Create src/lib/monteCarloWorker.ts (web worker, 1000 sims, FIFA ranking win probs). src/hooks/useMonteCarlo.ts. Add results table to simulator page."
+    },
+    {
+      "id": "TASK-048",
+      "title": "Create group chat",
+      "spec": "specs/groups.md",
+      "priority": 48,
+      "status": "open",
+      "dependencies": [
+        "TASK-036"
+      ],
+      "description": "Create src/app/api/groups/messages/route.ts (GET/POST). Create src/components/common/GroupChat.tsx (message list, input, send, poll 10s). Add to leaderboard page as collapsible panel."
+    },
+    {
+      "id": "TASK-049",
+      "title": "Create pick reminder banner",
+      "spec": "specs/bracket.md",
+      "priority": 49,
+      "status": "open",
+      "dependencies": [
+        "TASK-010",
+        "TASK-007"
+      ],
+      "description": "Create src/components/common/PickReminderBanner.tsx. MUI Alert when within 24h of lock and predictions incomplete. Dismissible. Add to layout.tsx."
+    },
+    {
+      "id": "TASK-050",
+      "title": "Create shareable public bracket links",
+      "spec": "specs/bracket.md",
+      "priority": 50,
+      "status": "open",
+      "dependencies": [
+        "TASK-025",
+        "TASK-032"
+      ],
+      "description": "Create src/app/bracket/[username]/page.tsx. Public read-only view, no auth. Shows group predictions + knockout bracket. Share button copies URL."
+    },
+    {
+      "id": "TASK-051",
+      "title": "Create print-friendly bracket view",
+      "spec": "specs/bracket.md",
+      "priority": 51,
+      "status": "open",
+      "dependencies": [
+        "TASK-031"
+      ],
+      "description": "Add @media print CSS to globals.css. Print button on bracket pages. Export-as-image via html2canvas."
     }
   ]
 }

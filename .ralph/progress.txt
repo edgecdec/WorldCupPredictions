@@ -228,3 +228,10 @@
 - Build and tsc passed first try. Deploy verified on attempt 4.
 - Nova Act test failed due to HumanValidationError (Cloudflare protection on the domain), not a code issue. Server-side curl confirmed page renders correctly.
 - Lessons: For client-side pages, server-side render shows loading spinner — actual content only appears after hydration and API fetch. Nova Act may fail on sites with bot protection; use curl as fallback verification.
+
+## TASK-026: Create knockout bracket generation (2026-04-18)
+- Created src/lib/knockoutBracket.ts with generateKnockoutBracket(), getNextMatchupId(), getDownstreamMatchupIds(), getFeederMatchupIds()
+- FIFA 2026 48-team R32 mapping: 12 group winners vs runners-up from other groups, plus 8 advancing 3rd-place teams assigned to slots by group range (ABCD, EFGH, IJKL) and sorted by FIFA ranking
+- 32 total matches: R32(16) + R16(8) + QF(4) + SF(2) + 3RD(1) + FINAL(1)
+- 3rd place match and Final both fed by SF-1 and SF-2 (losers to 3RD, winners to FINAL)
+- Lessons: The task description said 31 matches but the actual bracket has 32. Implemented all 32 to be complete.

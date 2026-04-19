@@ -283,7 +283,7 @@
       "title": "Create knockout bracket generation",
       "spec": "specs/tournament-structure.md",
       "priority": 26,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-013",
         "TASK-014"

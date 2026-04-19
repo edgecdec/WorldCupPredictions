@@ -376,7 +376,7 @@
       "title": "Create admin API - save knockout results",
       "spec": "specs/tournament-structure.md",
       "priority": 34,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-027"
       ],

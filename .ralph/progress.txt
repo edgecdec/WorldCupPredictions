@@ -306,3 +306,11 @@
 - Added `useMediaQuery` + `useTheme` to knockout page to auto-switch between Desktop (<md) and Mobile layouts
 - Nova Act doesn't support mobile viewport sizes (min ~1280x650) — can't directly test mobile layout via Nova Act. Verified page loads without crash at desktop size.
 - Lesson: Nova Act has strict viewport requirements (~1600x813 ±20%). For mobile UI testing, need a different approach or manual verification.
+
+## TASK-034: Create admin API - save knockout results (2026-04-18)
+- Added `save_knockout_results` action to PUT /api/admin
+- Accepts `knockoutResults: Record<string, string>` (matchup_id → winning team name)
+- Validates knockoutResults is present and group stage results exist before allowing save
+- Merges knockout results into existing results_data, preserving groupStage and knockoutBracket
+- Minimal change: ~40 lines added to route.ts, no new files needed
+- Lesson: The existing pattern of action-based routing in the PUT handler made this straightforward to extend

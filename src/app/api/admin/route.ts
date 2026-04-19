@@ -4,7 +4,7 @@ import { getAuthUser } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { parseBracketData } from "@/lib/bracketData";
 import { generateKnockoutBracket } from "@/lib/knockoutBracket";
-import { GroupStageResults, TournamentResults } from "@/types";
+import { GroupStageResults, KnockoutResults, TournamentResults } from "@/types";
 
 export async function POST(request: Request) {
   const user = getAuthUser(request);
@@ -61,6 +61,10 @@ export async function PUT(request: Request) {
 
   if (action === "save_group_results") {
     return saveGroupResults(body);
+  }
+
+  if (action === "save_knockout_results") {
+    return saveKnockoutResults(body);
   }
 
   if (action === "update_bracket_data") {
@@ -150,6 +154,49 @@ function saveGroupResults(body: {
     ...existingResults,
     groupStage: gsResults,
     knockoutBracket,
+  };
+
+  db.prepare("UPDATE tournaments SET results_data = ? WHERE id = ?").run(
+    JSON.stringify(updatedResults),
+    row.id,
+  );
+
+  return NextResponse.json({ ok: true, results: updatedResults });
+}
+
+function saveKnockoutResults(body: { knockoutResults: KnockoutResults }) {
+  const { knockoutResults } = body;
+
+  if (!knockoutResults || typeof knockoutResults !== "object") {
+    return NextResponse.json(
+      { ok: false, error: "knockoutResults is required" },
+      { status: 400 },
+    );
+  }
+
+  const db = getDb();
+  const row = db.prepare("SELECT * FROM tournaments ORDER BY year DESC LIMIT 1").get() as
+    | { id: string; results_data: string | null }
+    | undefined;
+
+  if (!row) {
+    return NextResponse.json({ ok: false, error: "No tournament found" }, { status: 404 });
+  }
+
+  const existingResults: TournamentResults = row.results_data
+    ? JSON.parse(row.results_data)
+    : {};
+
+  if (!existingResults.groupStage) {
+    return NextResponse.json(
+      { ok: false, error: "Group stage results must be saved first" },
+      { status: 400 },
+    );
+  }
+
+  const updatedResults: TournamentResults = {
+    ...existingResults,
+    knockout: knockoutResults,
   };
 
   db.prepare("UPDATE tournaments SET results_data = ? WHERE id = ?").run(

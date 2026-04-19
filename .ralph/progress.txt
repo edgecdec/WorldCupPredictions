@@ -409,3 +409,14 @@
 - Groups list query uses UNION to always include Everyone group even for users with no predictions
 - Groups page shows Everyone at top with globe icon, hides invite code for it
 - Lesson: The group_members table uses prediction_id (not user_id), so "joining" Everyone for a user without predictions is a no-op. The UNION approach in the groups list query ensures Everyone always appears. LEFT JOIN on users table needed since created_by could be "system" if no admin exists yet.
+
+## TASK-046: Create What-If simulator (2026-04-19)
+- Created `/api/simulate` endpoint that returns group scoring settings, bracket data, tournament results, and all predictions for a group
+- Created `/simulate` page with KnockoutBracket in sim mode — clicks set hypothetical winners, leaderboard recalculates live
+- Sidebar leaderboard on wide screens, drawer on narrow screens
+- Shows rank changes (Δ) and score deltas when hypothetical results differ from baseline
+- Reuses existing `scoreTotalPrediction` for scoring, `cascadeClear` for pick propagation
+- Toggle-off behavior: clicking same team again removes the hypothetical pick
+- Actual results (from admin) cannot be overridden — only undecided matchups are clickable
+- Lesson: The existing KnockoutBracket/MobileBracket components work well in sim mode by passing `mergedKnockout` as `picks` and `actualKnockout` as `results`. The `results` prop controls the green highlight for actual results while `picks` controls the blue highlight for hypothetical.
+- Lesson: Nova Act `ActResult` has only a `metadata` attribute, not `response`. The act() output is logged to console but not returned as a string field.

@@ -504,7 +504,7 @@
       "title": "Create What-If simulator",
       "spec": "specs/bracket.md",
       "priority": 46,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-031",
         "TASK-039"

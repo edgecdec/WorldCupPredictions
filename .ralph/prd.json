@@ -730,7 +730,7 @@
       "title": "Add correct/incorrect color coding to bracket picks after results",
       "spec": "specs/bracket.md",
       "priority": 44,
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "TASK-031"
       ],
@@ -974,6 +974,17 @@
         "TASK-012"
       ],
       "description": "Create src/components/common/TournamentTimeline.tsx \u2014 a visual timeline showing the key dates and phases of the tournament. Display on the home page below the countdown. Phases: (1) 'Predictions Open' (now until lock_time_groups) \u2014 'Fill out your group predictions before June 11', (2) 'Group Stage' (June 11-27) \u2014 'Watch matches, track your predictions vs live results', (3) 'Knockout Predictions Open' (June 27-30) \u2014 'Come back to fill out your knockout bracket', (4) 'Knockout Stage' (June 30 - July 19) \u2014 'Watch the bracket unfold'. Highlight the current phase. Show dates for each. Use MUI Stepper or a custom vertical timeline with icons. Make it clear users need to return for the knockout phase."
+    },
+    {
+      "id": "TASK-088",
+      "title": "Add ESPN match page links to live score cards",
+      "spec": "specs/bracket.md",
+      "priority": 44,
+      "status": "open",
+      "dependencies": [
+        "TASK-058"
+      ],
+      "description": "In src/components/bracket/LiveScores.tsx, make each live score card clickable \u2014 link to the ESPN match page at https://www.espn.com/soccer/match/_/gameId/{espnGameId}. The game ID is available from the ESPN scoreboard API response (event.id). Open in a new tab. Add a small external link icon to indicate it's a link out. If the game ID isn't available, fall back to linking to https://www.espn.com/soccer/scoreboard/_/league/fifa.world."
     }
   ]
 }

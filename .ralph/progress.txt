@@ -549,3 +549,13 @@
 - touchAction: 'none' prevents scroll interference during drag on mobile
 - Nova Act verified: drag handles visible, arrow buttons functional, reordering works
 - Lesson: Nova Act ActResult doesn't have .response attribute — just print the object directly
+
+## TASK-066: Add correct/incorrect color coding to bracket picks after results
+- Date: 2026-04-19
+- Knockout bracket Matchup component already had result-based color coding (green/red) from prior implementation. No changes needed there.
+- Added `actualOrder` and `actualAdvancingThird` props to GroupPrediction component to enable results-mode color coding.
+- Updated `getRowBgColor` to compare predicted position vs actual: green for exact match, amber for correct advancement status but wrong position, red for completely wrong.
+- Added result indicator icons (✓/~/✗) next to team names when results exist.
+- Passed group stage results from tournament data to GroupPrediction on both /bracket page and /bracket/[username] public page.
+- Nova Act test: first two attempts hit maintenance page during deploy. Wait 30+ seconds after push before testing.
+- Nova Act ActResult: use `str(result)` for assertion, not `.matches` or `.response` attributes.

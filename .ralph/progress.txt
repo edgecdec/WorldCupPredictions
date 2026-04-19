@@ -89,3 +89,12 @@
 - Returns {ok: true, tournament: null} when no tournament exists
 - Build and tsc pass clean. Deployed and verified 200.
 - Lesson: Simple API routes are straightforward — just parse the JSON string columns from SQLite before returning.
+
+## TASK-012: Create home page with countdown and auth (2026-04-18)
+- Implemented home page as 'use client' component fetching tournament from /api/tournaments
+- Shows tournament name, year, CountdownTimer to lock_time_groups when tournament exists
+- Shows AuthForm when not logged in, welcome message + "Make Your Predictions" link when logged in
+- Shows "No tournament" message when no tournament exists
+- Loading spinner while fetching auth state and tournament data
+- Nova Act verified: page loads correctly showing heading and no-tournament message
+- Lesson: Nova Act's ActResult only has `metadata` attribute — success is determined by no exception being thrown, not by checking a response attribute

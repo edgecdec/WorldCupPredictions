@@ -124,7 +124,7 @@
       "title": "Create home page with countdown and auth",
       "spec": "specs/bracket.md",
       "priority": 12,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-009",
         "TASK-010",

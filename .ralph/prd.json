@@ -628,7 +628,7 @@
       "title": "Create ESPN live scores sync service",
       "spec": "specs/deployment.md",
       "priority": 39,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-056"
       ],

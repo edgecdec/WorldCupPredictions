@@ -489,3 +489,12 @@
 - html2canvas was already in package.json dependencies.
 - Nova Act confirmed both Print and Save Image buttons visible on deployed site.
 - Lesson: Nova Act ActResult doesn't have .response or .metadata.success — the return value is in the think/return logs. Use result.metadata for timing info only.
+
+## TASK-057: Create ESPN live scores sync service (2026-04-19)
+- Created `src/lib/espnSync.ts` with `fetchLiveScores(bracketData)` and `fetchGroupStandings(bracketData)`.
+- `fetchLiveScores` hits ESPN scoreboard API, parses events into LiveGame objects, resolves team names via ESPN ID using `getTeamByEspnId`.
+- `fetchGroupStandings` hits ESPN standings API, returns GroupTable[] with points/W/D/L/GD per team per group.
+- Created `src/app/api/scores/route.ts` as GET endpoint — `?type=scores` (default) returns live games, `?type=standings` returns group tables.
+- Both functions use `next: { revalidate: N }` for caching (30s scores, 60s standings).
+- Lesson: ESPN API uses `homeAway` field to distinguish home/away competitors, and stats are in a flat array with `name` keys — need to search by stat name.
+- Lesson: Keep ESPN sync minimal — just data fetching and mapping. UI components (TASK-058/059) will consume via the API route.

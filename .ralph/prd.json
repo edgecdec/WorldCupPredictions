@@ -68,7 +68,7 @@
       "title": "Wire providers into layout.tsx",
       "spec": "specs/code-style.md",
       "priority": 7,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-005",
         "TASK-006"

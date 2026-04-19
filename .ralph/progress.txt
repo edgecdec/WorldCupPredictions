@@ -49,3 +49,9 @@
   - Soccer palette: primary #2e7d32 (green), secondary #ffc107 (gold). Named constants, no inline hex.
   - globals.css kept minimal: box-sizing reset, body height, font smoothing, link reset.
   - No Emotion cache setup needed — MUI 7 handles it automatically with ThemeProvider.
+
+## TASK-007: Wire providers into layout.tsx (2026-04-18)
+- Created `src/components/common/Providers.tsx` as a 'use client' wrapper combining ThemeRegistry + AuthProvider.
+- Updated `src/app/layout.tsx` to import globals.css and wrap children in Providers.
+- Pattern: Server component layout delegates to a single client wrapper for all providers. This keeps layout.tsx as a server component (needed for metadata export) while enabling client-side context.
+- Build passed first try. Deploy verified after ~40s.

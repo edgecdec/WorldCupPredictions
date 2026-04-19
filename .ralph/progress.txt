@@ -713,3 +713,11 @@
 - Nova Act confirmed profile page loads correctly with username, "Member since" text, and prediction status
 - Lesson: Nova Act ActResult uses `.response` not `.matches` — remember for future tests
 - Lesson: Nova Act free tier has daily quota limits — first test run counts as verification if it passes
+
+## TASK-083: Add onboarding guide / tutorial for new users (2026-04-19)
+- Created OnboardingGuide component with 5-step tutorial (Welcome, Group Predictions, Third-Place Picks, Knockout Bracket, Scoring Overview)
+- Auto-triggers on first visit to /bracket via localStorage flag
+- Re-triggerable via '?' help button on bracket page header and Navbar help icon (links to /bracket?help=1)
+- Added contextual help tooltip to ThirdPlacePicker explaining "8 of 12 third-place teams advance"
+- Lesson: Don't use useSearchParams() in Next.js 15 without Suspense boundary — use window.location.search in useEffect instead to avoid build errors
+- Nova Act quota exceeded during testing — verified deployment via curl instead

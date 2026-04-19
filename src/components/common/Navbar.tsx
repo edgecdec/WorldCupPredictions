@@ -4,7 +4,7 @@ import {
   AppBar, Toolbar, Typography, Button, Box, IconButton, Tooltip,
   Drawer, List, ListItemButton, ListItemText, Divider,
 } from "@mui/material";
-import { DarkMode, LightMode, Menu as MenuIcon } from "@mui/icons-material";
+import { DarkMode, LightMode, Menu as MenuIcon, HelpOutline } from "@mui/icons-material";
 import { useAuth } from "@/hooks/useAuth";
 import { useThemeMode } from "@/hooks/useThemeMode";
 import { getPhase, isPageRestricted, getUnlockMessage, type TournamentPhase } from "@/lib/tournamentPhase";
@@ -84,6 +84,9 @@ export default function Navbar() {
               return btn;
             })}
             {user?.is_admin && <Button color="warning" href="/admin">Admin</Button>}
+            <Tooltip title="How it works">
+              <IconButton color="inherit" href="/bracket?help=1" size="small"><HelpOutline /></IconButton>
+            </Tooltip>
             <Tooltip title={themeTooltip}>
               <IconButton color="inherit" onClick={toggle} size="small">{themeIcon}</IconButton>
             </Tooltip>

@@ -1,5 +1,6 @@
 'use client';
-import { Box, Chip, Typography } from '@mui/material';
+import { Box, Chip, Typography, Tooltip } from '@mui/material';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import TeamFlag from '@/components/common/TeamFlag';
 
 const REQUIRED_COUNT = 8;
@@ -25,9 +26,14 @@ export default function ThirdPlacePicker({ thirdPlaceTeams, selected, onChange, 
 
   return (
     <Box>
-      <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-        Advancing 3rd-Place Teams ({selected.length}/{REQUIRED_COUNT})
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+          Advancing 3rd-Place Teams ({selected.length}/{REQUIRED_COUNT})
+        </Typography>
+        <Tooltip title="8 of 12 third-place teams advance to the Round of 32 — pick which ones you think will make it!">
+          <HelpOutlineIcon fontSize="small" color="action" sx={{ mb: 0.5, cursor: 'help' }} />
+        </Tooltip>
+      </Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
         Select exactly {REQUIRED_COUNT} of {TOTAL_THIRD_PLACE} third-place teams to advance to the knockout round.
       </Typography>

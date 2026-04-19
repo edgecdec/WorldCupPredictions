@@ -17,6 +17,8 @@ import SimpleMode from '@/components/bracket/SimpleMode';
 import TouchAppIcon from '@mui/icons-material/TouchApp';
 import { chalkGroups, randomGroups, smartGroups, chalkThirdPlace, randomThirdPlace, smartThirdPlace } from '@/lib/autofill';
 import ScoringRulesSummary from '@/components/common/ScoringRulesSummary';
+import OnboardingGuide, { ONBOARDING_STORAGE_KEY } from '@/components/common/OnboardingGuide';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 
 const REQUIRED_THIRD_PLACE = 8;
 
@@ -33,7 +35,15 @@ export default function BracketPage() {
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
   const [simpleMode, setSimpleMode] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('help') === '1' || !localStorage.getItem(ONBOARDING_STORAGE_KEY)) {
+      setShowOnboarding(true);
+    }
+  }, []);
 
   useEffect(() => {
     async function load() {
@@ -200,6 +210,11 @@ export default function BracketPage() {
         <Typography variant="h4" fontWeight="bold" sx={{ flex: 1 }}>
           Group Stage Predictions
         </Typography>
+        <Tooltip title="How it works">
+          <IconButton onClick={() => setShowOnboarding(true)} size="small">
+            <HelpOutlineIcon />
+          </IconButton>
+        </Tooltip>
         <PrintExportButtons targetRef={printRef} filename="group-predictions" />
         {user && (
           <Tooltip title="Share bracket">
@@ -336,6 +351,8 @@ export default function BracketPage() {
           countryCodeMap={countryCodeMap}
         />
       )}
+
+      <OnboardingGuide open={showOnboarding} onClose={() => setShowOnboarding(false)} />
     </Box>
   );
 }

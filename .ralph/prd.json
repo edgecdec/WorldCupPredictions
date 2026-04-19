@@ -924,7 +924,7 @@
       "title": "Add onboarding guide / tutorial for new users",
       "spec": "specs/bracket.md",
       "priority": 44,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-025"
       ],

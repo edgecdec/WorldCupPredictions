@@ -951,6 +951,29 @@
         "TASK-039"
       ],
       "description": "When a user selects a group on any page (leaderboard, simulator, stats, who-picked-whom, compare), persist that selection to localStorage under a key like 'selectedGroupId'. On any page that has a group selector, read the initial value from localStorage instead of defaulting to the first group or 'everyone'. When the user changes the selection, update localStorage. This way navigating between leaderboard, simulator, stats etc. keeps the same group selected. Create a shared hook src/hooks/useSelectedGroup.ts that encapsulates this: returns {selectedGroupId, setSelectedGroupId} with localStorage persistence. Use this hook in all pages that have group selectors."
+    },
+    {
+      "id": "TASK-086",
+      "title": "Hide pages based on tournament phase, admin bypass",
+      "spec": "specs/tournament-structure.md",
+      "priority": 42,
+      "status": "open",
+      "dependencies": [
+        "TASK-009",
+        "TASK-011"
+      ],
+      "description": "Restrict page visibility based on tournament phase. Before group stage starts (before lock_time_groups): hide Stats, Who Picked Whom, Compare, Leaderboard scores (show 'Available once the tournament begins'). Users can only see their own predictions and the predictions page. After group stage starts but before knockout: show group-stage-related pages (leaderboard with group scores, stats, who-picked-whom for groups, compare group predictions). Hide knockout bracket data. After knockout starts (after lock_time_knockout): show everything. Site admins (is_admin=true) bypass all restrictions and can see every page at any time for debugging. Implement as a shared utility src/lib/tournamentPhase.ts with getPhase(tournament): 'pre-tournament' | 'group-stage' | 'knockout' | 'complete'. Use in each restricted page to show/hide content or redirect. Also hide nav links for pages that aren't accessible yet (grey them out with a tooltip showing when they unlock)."
+    },
+    {
+      "id": "TASK-087",
+      "title": "Create tournament timeline component on home page",
+      "spec": "specs/bracket.md",
+      "priority": 43,
+      "status": "open",
+      "dependencies": [
+        "TASK-012"
+      ],
+      "description": "Create src/components/common/TournamentTimeline.tsx \u2014 a visual timeline showing the key dates and phases of the tournament. Display on the home page below the countdown. Phases: (1) 'Predictions Open' (now until lock_time_groups) \u2014 'Fill out your group predictions before June 11', (2) 'Group Stage' (June 11-27) \u2014 'Watch matches, track your predictions vs live results', (3) 'Knockout Predictions Open' (June 27-30) \u2014 'Come back to fill out your knockout bracket', (4) 'Knockout Stage' (June 30 - July 19) \u2014 'Watch the bracket unfold'. Highlight the current phase. Show dates for each. Use MUI Stepper or a custom vertical timeline with icons. Make it clear users need to return for the knockout phase."
     }
   ]
 }

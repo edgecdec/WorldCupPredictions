@@ -670,3 +670,10 @@
 - Accepts optional ScoringSettings prop, defaults to DEFAULT_SCORING
 - Nova Act confirmed: scoring rules visible and expanded on group predictions page
 - Lesson: Nova Act ActResult has no `response` or `parsed_response` attribute — only `metadata`. Use the agent's think/return logs for verification, not programmatic assertions on response text.
+
+## TASK-085: Persist selected group across pages via localStorage (2026-04-19)
+- Created `src/hooks/useSelectedGroup.ts` — returns `[selectedGroupId, setSelectedGroupId]` with localStorage persistence under key `selectedGroupId`.
+- URL search param `?group=` takes priority over stored value (so direct links still work).
+- Updated 5 pages: leaderboard, stats, compare, whopicked, simulate — all now use `useSelectedGroup` instead of raw `useState`.
+- The simulate page used `groupId`/`setGroupId` naming instead of `selectedGroup`/`setSelectedGroup` — the hook works with either naming since it returns a tuple.
+- Lesson: The pattern was identical across all 5 pages (searchParams → useState fallback), making it a clean extraction. No behavioral changes needed beyond swapping the state hook.

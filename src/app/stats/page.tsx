@@ -11,6 +11,7 @@ import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import PercentIcon from '@mui/icons-material/Percent';
 import BalanceIcon from '@mui/icons-material/Balance';
 import { useAuth } from '@/hooks/useAuth';
+import { useSelectedGroup } from '@/hooks/useSelectedGroup';
 import AuthForm from '@/components/auth/AuthForm';
 import PhaseGate from '@/components/common/PhaseGate';
 import type { StatsResponse } from '@/app/api/stats/route';
@@ -33,7 +34,7 @@ function StatsContent() {
   const initialGroupId = searchParams.get('group') ?? '';
 
   const [groups, setGroups] = useState<GroupOption[]>([]);
-  const [selectedGroup, setSelectedGroup] = useState(initialGroupId);
+  const [selectedGroup, setSelectedGroup] = useSelectedGroup(initialGroupId || undefined);
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [loading, setLoading] = useState(false);
 

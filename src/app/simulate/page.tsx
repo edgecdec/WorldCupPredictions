@@ -16,6 +16,7 @@ import CasinoIcon from '@mui/icons-material/Casino';
 import KnockoutBracket from '@/components/bracket/KnockoutBracket';
 import MobileBracket from '@/components/bracket/MobileBracket';
 import { useAuth } from '@/hooks/useAuth';
+import { useSelectedGroup } from '@/hooks/useSelectedGroup';
 import AuthForm from '@/components/auth/AuthForm';
 import { scoreTotalPrediction } from '@/lib/scoring';
 import { cascadeClear } from '@/lib/bracketUtils';
@@ -87,7 +88,7 @@ function SimulateContent() {
   const initialGroupId = searchParams.get('group') ?? '';
   const { user, loading: authLoading } = useAuth();
   const [groups, setGroups] = useState<GroupOption[]>([]);
-  const [groupId, setGroupId] = useState(initialGroupId);
+  const [groupId, setGroupId] = useSelectedGroup(initialGroupId || undefined);
   const [loading, setLoading] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
 

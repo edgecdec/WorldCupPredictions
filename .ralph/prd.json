@@ -946,7 +946,7 @@
       "title": "Persist selected group across pages via localStorage",
       "spec": "specs/code-style.md",
       "priority": 43,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-039"
       ],

@@ -6,6 +6,7 @@ import {
   Select, MenuItem, Chip, Paper, OutlinedInput, Card, CardContent, Stack,
 } from '@mui/material';
 import { useAuth } from '@/hooks/useAuth';
+import { useSelectedGroup } from '@/hooks/useSelectedGroup';
 import AuthForm from '@/components/auth/AuthForm';
 import PhaseGate from '@/components/common/PhaseGate';
 import type {
@@ -33,7 +34,7 @@ function CompareContent() {
   const initialGroupId = searchParams.get('group') ?? '';
 
   const [groups, setGroups] = useState<GroupOption[]>([]);
-  const [selectedGroup, setSelectedGroup] = useState(initialGroupId);
+  const [selectedGroup, setSelectedGroup] = useSelectedGroup(initialGroupId || undefined);
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [bracketData, setBracketData] = useState<BracketData | null>(null);
   const [results, setResults] = useState<TournamentResults | null>(null);

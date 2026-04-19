@@ -11,6 +11,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import CasinoIcon from '@mui/icons-material/Casino';
 import ChatIcon from '@mui/icons-material/Chat';
 import { useAuth } from '@/hooks/useAuth';
+import { useSelectedGroup } from '@/hooks/useSelectedGroup';
 import AuthForm from '@/components/auth/AuthForm';
 import ScoringBreakdownDialog from '@/components/common/ScoringBreakdownDialog';
 import GroupChat from '@/components/common/GroupChat';
@@ -53,7 +54,7 @@ function LeaderboardContent() {
   const initialGroupId = searchParams.get('group') ?? '';
 
   const [groups, setGroups] = useState<GroupOption[]>([]);
-  const [selectedGroup, setSelectedGroup] = useState(initialGroupId);
+  const [selectedGroup, setSelectedGroup] = useSelectedGroup(initialGroupId || undefined);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [scoringSettings, setScoringSettings] = useState<ScoringSettings | null>(null);
   const [results, setResults] = useState<TournamentResults | null>(null);

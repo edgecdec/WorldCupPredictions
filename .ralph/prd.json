@@ -814,6 +814,29 @@
         "TASK-039"
       ],
       "description": "Add emoji indicators to leaderboard entries. During GROUP STAGE: \ud83c\udfafN = number of perfect groups (all 4 positions exactly correct in a group). Show as '\ud83c\udfaf3' if user nailed 3 groups perfectly. During KNOCKOUT: \ud83d\udd25N = hot streak (N consecutive correct knockout picks in a row). \ud83d\ude31N = number of contrarian picks that hit \u2014 shown when a user correctly predicted N things that <10% of the group predicted. During group stage: predicting a specific team in a specific position that <10% of group members also predicted (e.g. only 2 of 30 people predicted Saudi Arabia 1st, and it happened). During knockouts: predicting a team to reach a certain round that <10% picked (e.g. only 3 people had Senegal in the QF). Calculate percentages from all predictions in the group. Show emojis as small badges next to the username on the leaderboard. Tooltip on hover explains what the indicator means."
+    },
+    {
+      "id": "TASK-074",
+      "title": "Allow group admins to remove members from their group",
+      "spec": "specs/groups.md",
+      "priority": 47,
+      "status": "open",
+      "dependencies": [
+        "TASK-038"
+      ],
+      "description": "Add a member management section to each group on the groups page (only visible to the group creator). Show list of members with a remove button (X icon) next to each. Clicking remove calls DELETE /api/groups with {action: 'remove_member', group_id, prediction_id}. API verifies the requester is the group creator before allowing removal. Cannot remove from the Everyone group. Show confirmation dialog before removing."
+    },
+    {
+      "id": "TASK-075",
+      "title": "Site admin: add any user to any group from admin page",
+      "spec": "specs/groups.md",
+      "priority": 47,
+      "status": "open",
+      "dependencies": [
+        "TASK-016",
+        "TASK-036"
+      ],
+      "description": "Add a 'Group Management' section to the /admin page (site admin only). Show a dropdown of all groups and a user search/select field. Admin can pick a group and a user, then click 'Add to Group' which adds that user's prediction to group_members. Also show a table of all groups with member counts for overview. Add a POST /api/admin endpoint with action 'add_to_group' that accepts {group_id, username}, finds the user's prediction, and inserts into group_members. Verify site admin auth."
     }
   ]
 }

@@ -271,3 +271,10 @@
 - Followed March Madness Matchup pattern but simplified for World Cup (string team names, no logos yet).
 - No Nova Act test needed — component not rendered on any page yet (will be used by KnockoutBracket in TASK-031).
 - Build and tsc pass clean. Deployment verified 200.
+
+## TASK-030: Create bracketUtils with cascade clearing (2026-04-18)
+- Created `src/lib/bracketUtils.ts` with `cascadeClear()` and `getMatchupsByRound()`.
+- `cascadeClear` leverages existing `getDownstreamMatchupIds` from knockoutBracket.ts — finds all downstream matchups and removes picks where the old winner was selected.
+- `getMatchupsByRound` groups KnockoutMatchup[] into a Map keyed by round number.
+- Exported round constants (ROUND_R32 through ROUND_FINAL) and ROUND_LABELS for use by bracket UI components.
+- Lesson: knockoutBracket.ts already had the heavy lifting (getDownstreamMatchupIds, getFeederMatchupIds), so bracketUtils just needed to wrap the cascade logic for the picks Record and provide round grouping.

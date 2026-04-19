@@ -330,7 +330,7 @@
       "title": "Create bracketUtils with cascade clearing",
       "spec": "specs/bracket.md",
       "priority": 30,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-026"
       ],

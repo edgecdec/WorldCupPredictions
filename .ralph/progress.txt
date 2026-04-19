@@ -181,3 +181,11 @@
 - Follows existing patterns from auth and tournaments routes (getAuthUser, getActiveTournament helper)
 - Build passed first try, deploy verified in ~30s
 - Lessons: Kept the route under 150 lines by extracting saveGroups as a separate function. Reused the tournament fetch pattern from tournaments/route.ts.
+
+## TASK-053: Fix WORLD_CUP_2026_DATA with real draw results and FIFA rankings
+- Date: 2026-04-18
+- Replaced all 12 groups with actual 2026 FIFA World Cup draw results
+- Updated all 48 team names, FIFA rankings, and pot assignments
+- No other files referenced old team names — clean replacement
+- All 28 scoring tests still pass (they use inline test data, not WORLD_CUP_2026_DATA)
+- Lessons: The old data was placeholder; always verify seed data against official sources before shipping

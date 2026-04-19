@@ -595,7 +595,7 @@
       "title": "Fix WORLD_CUP_2026_DATA with real draw results and FIFA rankings",
       "spec": "specs/tournament-structure.md",
       "priority": 18,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-013"
       ],

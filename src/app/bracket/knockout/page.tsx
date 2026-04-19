@@ -15,6 +15,7 @@ import AutofillButtons, { AutofillStrategy } from '@/components/common/AutofillB
 import { chalkKnockout, randomKnockout, smartKnockout } from '@/lib/autofill';
 import TouchAppIcon from '@mui/icons-material/TouchApp';
 import SimpleKnockoutMode from '@/components/bracket/SimpleKnockoutMode';
+import ScoringRulesSummary from '@/components/common/ScoringRulesSummary';
 
 export default function KnockoutPage() {
   const { user, loading: authLoading } = useAuth();
@@ -188,6 +189,8 @@ export default function KnockoutPage() {
 
       {error && <Alert severity="error" sx={{ my: 2 }} onClose={() => setError('')}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ my: 2 }} onClose={() => setSuccess('')}>{success}</Alert>}
+
+      <ScoringRulesSummary mode="knockout" />
 
       {!disabled && (
         <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>

@@ -16,6 +16,7 @@ import AutofillButtons, { AutofillStrategy } from '@/components/common/AutofillB
 import SimpleMode from '@/components/bracket/SimpleMode';
 import TouchAppIcon from '@mui/icons-material/TouchApp';
 import { chalkGroups, randomGroups, smartGroups, chalkThirdPlace, randomThirdPlace, smartThirdPlace } from '@/lib/autofill';
+import ScoringRulesSummary from '@/components/common/ScoringRulesSummary';
 
 const REQUIRED_THIRD_PLACE = 8;
 
@@ -224,6 +225,8 @@ export default function BracketPage() {
 
       {error && <Alert severity="error" sx={{ my: 2 }} onClose={() => setError('')}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ my: 2 }} onClose={() => setSuccess('')}>{success}</Alert>}
+
+      <ScoringRulesSummary mode="group" />
 
       {tournamentStarted && (
         <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ mb: 2 }}>

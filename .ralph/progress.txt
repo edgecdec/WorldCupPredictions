@@ -662,3 +662,11 @@
 - Updated simulate page to read `group` query param via useSearchParams + Suspense wrapper
 - Added /simulate to PRE_TOURNAMENT_RESTRICTED in tournamentPhase.ts (greyed out before tournament starts)
 - Lessons: Nova Act ActResult has no `response` or `matches_intent` attributes — use action-based tests (click, navigate) and verify via page state rather than assertion-based checks. Use `metadata.num_steps_executed` for basic verification.
+
+## TASK-084: Show scoring rules summary at top of predictions pages (2026-04-19)
+- Created ScoringRulesSummary.tsx — MUI Accordion with group/knockout mode
+- Added to /bracket (group stage) and /bracket/knockout pages
+- Uses localStorage to remember expanded/collapsed state (expanded on first visit)
+- Accepts optional ScoringSettings prop, defaults to DEFAULT_SCORING
+- Nova Act confirmed: scoring rules visible and expanded on group predictions page
+- Lesson: Nova Act ActResult has no `response` or `parsed_response` attribute — only `metadata`. Use the agent's think/return logs for verification, not programmatic assertions on response text.

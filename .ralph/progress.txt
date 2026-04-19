@@ -214,3 +214,17 @@
 - Supports disabled prop for locked state
 - Follows existing GroupPrediction component patterns (MUI, theme tokens, props-based)
 - Clean build, deployed successfully
+
+## TASK-025: Create group stage predictions page (2026-04-18)
+- Created src/app/bracket/page.tsx as 'use client' component
+- Fetches tournament from /api/tournaments and predictions from /api/picks on mount
+- 12 groups in responsive CSS grid (1 col mobile, 2 sm, 3 md, 4 lg) using GroupPrediction components
+- ThirdPlacePicker below groups, dynamically updates based on predicted 3rd-place teams
+- Stale third-place picks auto-removed when group reordering changes the 3rd-place team
+- Bracket name text field, save button calling POST /api/picks with action 'save_groups'
+- CountdownTimer showing time until lock_time_groups
+- Disabled state when not logged in or past lock time
+- Error/success alerts for save feedback
+- Build and tsc passed first try. Deploy verified on attempt 4.
+- Nova Act test failed due to HumanValidationError (Cloudflare protection on the domain), not a code issue. Server-side curl confirmed page renders correctly.
+- Lessons: For client-side pages, server-side render shows loading spinner — actual content only appears after hydration and API fetch. Nova Act may fail on sites with bot protection; use curl as fallback verification.

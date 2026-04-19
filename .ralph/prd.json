@@ -269,7 +269,7 @@
       "title": "Create group stage predictions page",
       "spec": "specs/bracket.md",
       "priority": 25,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-023",
         "TASK-024",

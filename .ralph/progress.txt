@@ -289,3 +289,13 @@
 - ConnectorColumn creates merge lines between pairs of matchups feeding into next round
 - Lesson: The `display: 'contents'` CSS trick is useful for keeping flex layout flat while grouping round columns with their connectors
 - Lesson: Keep onPick callback simple — cascade logic should be handled by the parent page that manages picks state
+
+## TASK-032: Create knockout predictions page (2026-04-18)
+- Created `src/app/bracket/knockout/page.tsx` with full knockout prediction UI
+- Page checks for group stage results and shows informative message if not yet available
+- Includes KnockoutBracket component, tiebreaker input, save button, countdown timer
+- Uses cascadeClear for proper pick cascade when changing earlier-round picks
+- Added "Knockout Bracket" link button on group stage bracket page (only shows when knockout bracket exists)
+- Added ArrowForwardIcon import and TournamentResults type to bracket page
+- Nova Act verified: page loads correctly on production, shows "group stage results not entered" message
+- Lesson: Nova Act `act()` returns `ActResult` with only `metadata` field; use schema parameter for structured responses

@@ -2,11 +2,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Box, Button, Typography, Alert, CircularProgress, TextField } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import Link from 'next/link';
 import GroupPrediction from '@/components/bracket/GroupPrediction';
 import ThirdPlacePicker from '@/components/bracket/ThirdPlacePicker';
 import CountdownTimer from '@/components/common/CountdownTimer';
 import { useAuth } from '@/hooks/useAuth';
-import type { Tournament, BracketData, GroupPrediction as GroupPredictionType } from '@/types';
+import type { Tournament, BracketData, TournamentResults, GroupPrediction as GroupPredictionType } from '@/types';
 
 const REQUIRED_THIRD_PLACE = 8;
 
@@ -204,15 +206,29 @@ export default function BracketPage() {
         />
       </Box>
 
-      <Button
-        variant="contained"
-        size="large"
-        startIcon={<SaveIcon />}
-        onClick={handleSave}
-        disabled={disabled || saving}
-      >
-        {saving ? 'Saving…' : 'Save Predictions'}
-      </Button>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+        <Button
+          variant="contained"
+          size="large"
+          startIcon={<SaveIcon />}
+          onClick={handleSave}
+          disabled={disabled || saving}
+        >
+          {saving ? 'Saving…' : 'Save Predictions'}
+        </Button>
+
+        {Boolean((tournament.results_data as TournamentResults)?.knockoutBracket) && (
+          <Button
+            component={Link}
+            href="/bracket/knockout"
+            variant="outlined"
+            size="large"
+            endIcon={<ArrowForwardIcon />}
+          >
+            Knockout Bracket
+          </Button>
+        )}
+      </Box>
     </Box>
   );
 }

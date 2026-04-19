@@ -353,7 +353,7 @@
       "title": "Create knockout predictions page",
       "spec": "specs/bracket.md",
       "priority": 32,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-031",
         "TASK-022"

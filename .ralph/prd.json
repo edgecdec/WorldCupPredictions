@@ -319,7 +319,7 @@
       "title": "Create Matchup component",
       "spec": "specs/bracket.md",
       "priority": 29,
-      "status": "open",
+      "status": "in_progress",
       "dependencies": [
         "TASK-006"
       ],
@@ -611,6 +611,17 @@
         "TASK-025"
       ],
       "description": "Bug: The /bracket page crashes with 'Application error: a client-side exception has occurred'. This was confirmed via Nova Act browser testing. Debug by checking the browser console error. Likely causes: accessing a property on null/undefined tournament data, bracket_data being an empty object {} instead of having groups array, or a type mismatch. The tournament in the DB was seeded with empty bracket_data '{}' \u2014 the page needs to handle this gracefully (show a message like 'Tournament data not yet available') OR the bracket_data needs to be populated with WORLD_CUP_2026_DATA. Fix the crash and verify with a Nova Act test against https://worldcup.edgecdec.com/bracket."
+    },
+    {
+      "id": "TASK-055",
+      "title": "Add drag-and-drop reordering to GroupPrediction component",
+      "spec": "specs/bracket.md",
+      "priority": 28,
+      "status": "open",
+      "dependencies": [
+        "TASK-025"
+      ],
+      "description": "The GroupPrediction component currently uses up/down arrow buttons to reorder teams. Add drag-and-drop support so users can drag teams to reorder them within a group. Use HTML5 drag-and-drop API (no extra dependencies) or a lightweight approach with onDragStart/onDragOver/onDrop on each team row. Keep the up/down arrows as a fallback for accessibility. Each team row should show a drag handle icon (DragIndicator from MUI icons) on the left. While dragging, show a visual indicator of where the team will be dropped. Touch support is important for mobile \u2014 ensure drag works on touch devices or fall back to the arrow buttons on mobile. Test with Nova Act on https://worldcup.edgecdec.com/bracket to verify drag reordering works."
     }
   ]
 }

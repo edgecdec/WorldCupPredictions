@@ -341,7 +341,7 @@
       "title": "Create KnockoutBracket desktop component",
       "spec": "specs/bracket.md",
       "priority": 31,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-029",
         "TASK-030"

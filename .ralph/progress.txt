@@ -278,3 +278,14 @@
 - `getMatchupsByRound` groups KnockoutMatchup[] into a Map keyed by round number.
 - Exported round constants (ROUND_R32 through ROUND_FINAL) and ROUND_LABELS for use by bracket UI components.
 - Lesson: knockoutBracket.ts already had the heavy lifting (getDownstreamMatchupIds, getFeederMatchupIds), so bracketUtils just needed to wrap the cascade logic for the picks Record and provide round grouping.
+
+## TASK-031: Create KnockoutBracket desktop component (2026-04-18)
+- Created src/components/bracket/KnockoutBracket.tsx with full R32-to-Final bracket layout
+- Left half (R32-1..8 → R16-1..4 → QF-1..2 → SF-1) flows left-to-right, right half mirrors
+- Center section shows Final (🏆) and 3rd Place (🥉) matchups
+- CSS connector lines between rounds using MUI border styling (same pattern as March Madness RegionBracket)
+- Uses cascadeClear from bracketUtils on pick changes
+- RoundColumn renders matchups with flex space-around for automatic vertical alignment
+- ConnectorColumn creates merge lines between pairs of matchups feeding into next round
+- Lesson: The `display: 'contents'` CSS trick is useful for keeping flex layout flat while grouping round columns with their connectors
+- Lesson: Keep onPick callback simple — cascade logic should be handled by the parent page that manages picks state

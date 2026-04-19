@@ -210,6 +210,15 @@ export default function SimulatePage() {
 
   const hypoCount = Object.keys(hypo).length;
 
+  const countryCodeMap: Record<string, string> = {};
+  if (bracketData?.groups) {
+    for (const g of bracketData.groups) {
+      for (const t of g.teams) {
+        if (t.countryCode) countryCodeMap[t.name] = t.countryCode;
+      }
+    }
+  }
+
   // Monte Carlo entries for the hook
   const mcEntries = useMemo(
     () => entries.map((e) => ({
@@ -443,6 +452,7 @@ export default function SimulatePage() {
                 picks={mergedKnockout}
                 onPick={handlePick}
                 results={actualKnockout}
+                countryCodeMap={countryCodeMap}
               />
             ) : (
               <KnockoutBracket
@@ -450,6 +460,7 @@ export default function SimulatePage() {
                 picks={mergedKnockout}
                 onPick={handlePick}
                 results={actualKnockout}
+                countryCodeMap={countryCodeMap}
               />
             )}
           </Box>

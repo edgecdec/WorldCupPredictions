@@ -1,6 +1,7 @@
 'use client';
 import { Box, Paper, Typography } from '@mui/material';
 import type { KnockoutMatchup } from '@/types';
+import TeamFlag from '@/components/common/TeamFlag';
 
 interface MatchupProps {
   matchup: KnockoutMatchup;
@@ -9,6 +10,7 @@ interface MatchupProps {
   readOnly?: boolean;
   disabled?: boolean;
   result?: string;
+  countryCodeMap?: Record<string, string>;
 }
 
 function TeamSlot({
@@ -19,6 +21,7 @@ function TeamSlot({
   clickable,
   onClick,
   position,
+  countryCode,
 }: {
   team: string | null;
   isPicked: boolean;
@@ -27,6 +30,7 @@ function TeamSlot({
   clickable: boolean;
   onClick: () => void;
   position: 'top' | 'bottom';
+  countryCode?: string;
 }) {
   const bg = isCorrect
     ? 'rgba(76, 175, 80, 0.3)'
@@ -60,6 +64,7 @@ function TeamSlot({
     >
       {team ? (
         <>
+          {countryCode && <TeamFlag countryCode={countryCode} size={16} />}
           <Typography
             variant="body2"
             noWrap
@@ -91,7 +96,7 @@ function TeamSlot({
   );
 }
 
-export default function Matchup({ matchup, userPick, onPick, readOnly, disabled, result }: MatchupProps) {
+export default function Matchup({ matchup, userPick, onPick, readOnly, disabled, result, countryCodeMap = {} }: MatchupProps) {
   const clickable = !readOnly && !disabled && !!onPick;
   const pickA = userPick === matchup.teamA;
   const pickB = userPick === matchup.teamB;
@@ -111,6 +116,7 @@ export default function Matchup({ matchup, userPick, onPick, readOnly, disabled,
         clickable={clickable}
         onClick={() => matchup.teamA && onPick?.(matchup.id, matchup.teamA)}
         position="top"
+        countryCode={matchup.teamA ? countryCodeMap[matchup.teamA] : undefined}
       />
       <TeamSlot
         team={matchup.teamB}
@@ -120,6 +126,7 @@ export default function Matchup({ matchup, userPick, onPick, readOnly, disabled,
         clickable={clickable}
         onClick={() => matchup.teamB && onPick?.(matchup.id, matchup.teamB)}
         position="bottom"
+        countryCode={matchup.teamB ? countryCodeMap[matchup.teamB] : undefined}
       />
     </Paper>
   );

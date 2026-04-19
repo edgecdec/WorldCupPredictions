@@ -110,6 +110,17 @@ export default function BracketPage() {
     });
   }, [bracketData, groupOrders]);
 
+  const countryCodeMap = useMemo(() => {
+    if (!bracketData) return {};
+    const map: Record<string, string> = {};
+    for (const g of bracketData.groups) {
+      for (const t of g.teams) {
+        if (t.countryCode) map[t.name] = t.countryCode;
+      }
+    }
+    return map;
+  }, [bracketData]);
+
   // Remove stale third-place picks when teams change
   const validThirdPicks = useMemo(
     () => thirdPlacePicks.filter((t) => thirdPlaceTeams.includes(t)),
@@ -219,7 +230,7 @@ export default function BracketPage() {
       )}
 
       {activeTab === 1 && tournamentStarted ? (
-        <GroupStandings groupOrders={groupOrders} />
+        <GroupStandings groupOrders={groupOrders} countryCodeMap={countryCodeMap} />
       ) : (
         <>
           <TextField
@@ -269,6 +280,7 @@ export default function BracketPage() {
                 selected={validThirdPicks}
                 onChange={setThirdPlacePicks}
                 disabled={disabled}
+                countryCodeMap={countryCodeMap}
               />
             </Box>
           </Box>

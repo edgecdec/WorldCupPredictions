@@ -77,6 +77,15 @@ export default function KnockoutPage() {
 
   const bracketData = tournament?.bracket_data as BracketData | undefined;
 
+  const countryCodeMap: Record<string, string> = {};
+  if (bracketData?.groups) {
+    for (const g of bracketData.groups) {
+      for (const t of g.teams) {
+        if (t.countryCode) countryCodeMap[t.name] = t.countryCode;
+      }
+    }
+  }
+
   const handleAutofill = useCallback((strategy: AutofillStrategy) => {
     if (!bracketData || matchups.length === 0) return;
     const fillFn = strategy === 'chalk' ? chalkKnockout : strategy === 'random' ? randomKnockout : smartKnockout;
@@ -190,6 +199,7 @@ export default function KnockoutPage() {
             onPick={disabled ? undefined : handlePick}
             readOnly={disabled}
             results={results?.knockout}
+            countryCodeMap={countryCodeMap}
           />
         ) : (
           <KnockoutBracket
@@ -198,6 +208,7 @@ export default function KnockoutPage() {
             onPick={disabled ? undefined : handlePick}
             readOnly={disabled}
             results={results?.knockout}
+            countryCodeMap={countryCodeMap}
           />
         )}
       </Box>

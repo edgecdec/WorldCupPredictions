@@ -27,6 +27,15 @@ export default function Home() {
   );
   const { games, loading: scoresLoading } = useLiveScores(tournamentStarted && Boolean(user));
 
+  const countryCodeMap: Record<string, string> = {};
+  if (tournament?.bracket_data?.groups) {
+    for (const g of tournament.bracket_data.groups) {
+      for (const t of g.teams) {
+        if (t.countryCode) countryCodeMap[t.name] = t.countryCode;
+      }
+    }
+  }
+
   useEffect(() => {
     fetch("/api/tournaments")
       .then((r) => r.json())
@@ -114,7 +123,7 @@ export default function Home() {
 
       {tournamentStarted && (
         <Box sx={{ mt: 4, textAlign: "left" }}>
-          <LiveScores games={games} loading={scoresLoading} />
+          <LiveScores games={games} loading={scoresLoading} countryCodeMap={countryCodeMap} />
         </Box>
       )}
     </Box>

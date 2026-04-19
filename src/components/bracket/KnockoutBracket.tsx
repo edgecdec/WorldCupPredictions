@@ -11,6 +11,7 @@ interface KnockoutBracketProps {
   onPick?: (matchupId: string, team: string) => void;
   readOnly?: boolean;
   results?: Record<string, string>;
+  countryCodeMap?: Record<string, string>;
 }
 
 // Left half: R32-1..R32-8, R16-1..R16-4, QF-1..QF-2, SF-1
@@ -37,6 +38,7 @@ function RoundColumn({
   onPick,
   readOnly,
   results,
+  countryCodeMap,
 }: {
   matchups: KnockoutMatchup[];
   ids: string[];
@@ -44,6 +46,7 @@ function RoundColumn({
   onPick?: (matchupId: string, team: string) => void;
   readOnly?: boolean;
   results?: Record<string, string>;
+  countryCodeMap?: Record<string, string>;
 }) {
   const matchupMap = new Map(matchups.map((m) => [m.id, m]));
   return (
@@ -53,7 +56,7 @@ function RoundColumn({
         if (!m) return <Box key={id} sx={{ flex: 1 }} />;
         return (
           <Box key={id} sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <Matchup matchup={m} userPick={picks[id]} onPick={onPick} readOnly={readOnly} result={results?.[id]} />
+            <Matchup matchup={m} userPick={picks[id]} onPick={onPick} readOnly={readOnly} result={results?.[id]} countryCodeMap={countryCodeMap} />
           </Box>
         );
       })}
@@ -83,7 +86,7 @@ function RoundLabel({ label }: { label: string }) {
   );
 }
 
-export default function KnockoutBracket({ matchups, picks, onPick, readOnly, results }: KnockoutBracketProps) {
+export default function KnockoutBracket({ matchups, picks, onPick, readOnly, results, countryCodeMap }: KnockoutBracketProps) {
   const byRound = getMatchupsByRound(matchups);
   const allMatchups = matchups;
 
@@ -131,6 +134,7 @@ export default function KnockoutBracket({ matchups, picks, onPick, readOnly, res
               onPick={handlePick}
               readOnly={readOnly}
               results={results}
+              countryCodeMap={countryCodeMap}
             />
             {i < leftRounds.length - 1 && (
               <ConnectorColumn pairCount={LEFT_IDS[round].length / 2} direction="left" />
@@ -145,7 +149,7 @@ export default function KnockoutBracket({ matchups, picks, onPick, readOnly, res
               <Typography variant="caption" sx={{ fontWeight: 700, color: 'warning.main' }}>
                 🏆 Final
               </Typography>
-              <Matchup matchup={finalMatchup} userPick={picks[finalMatchup.id]} onPick={handlePick} readOnly={readOnly} result={results?.[finalMatchup.id]} />
+              <Matchup matchup={finalMatchup} userPick={picks[finalMatchup.id]} onPick={handlePick} readOnly={readOnly} result={results?.[finalMatchup.id]} countryCodeMap={countryCodeMap} />
             </Box>
           )}
           {thirdMatchup && (
@@ -153,7 +157,7 @@ export default function KnockoutBracket({ matchups, picks, onPick, readOnly, res
               <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary' }}>
                 🥉 3rd Place
               </Typography>
-              <Matchup matchup={thirdMatchup} userPick={picks[thirdMatchup.id]} onPick={handlePick} readOnly={readOnly} result={results?.[thirdMatchup.id]} />
+              <Matchup matchup={thirdMatchup} userPick={picks[thirdMatchup.id]} onPick={handlePick} readOnly={readOnly} result={results?.[thirdMatchup.id]} countryCodeMap={countryCodeMap} />
             </Box>
           )}
         </Box>
@@ -171,6 +175,7 @@ export default function KnockoutBracket({ matchups, picks, onPick, readOnly, res
               onPick={handlePick}
               readOnly={readOnly}
               results={results}
+              countryCodeMap={countryCodeMap}
             />
           </Box>
         ))}

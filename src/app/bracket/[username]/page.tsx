@@ -129,6 +129,14 @@ export default function PublicBracketPage() {
     (results?.groupStage?.groupResults ?? []).map((gr) => [gr.groupName, gr.order]),
   );
   const actualAdvancingThird = results?.groupStage?.advancingThirdPlace;
+  const countryCodeMap: Record<string, string> = {};
+  if (bracketData?.groups) {
+    for (const g of bracketData.groups) {
+      for (const t of g.teams) {
+        if (t.countryCode) countryCodeMap[t.name] = t.countryCode;
+      }
+    }
+  }
 
   return (
     <Box sx={{ maxWidth: 1600, mx: 'auto', px: 2, py: 3 }}>
@@ -186,6 +194,7 @@ export default function PublicBracketPage() {
                   selected={thirdPlacePicks}
                   onChange={() => {}}
                   disabled
+                  countryCodeMap={countryCodeMap}
                 />
               </Box>
             )}
@@ -196,9 +205,9 @@ export default function PublicBracketPage() {
           <>
             <Typography variant="h5" fontWeight="bold" sx={{ mb: 2 }}>Knockout Bracket</Typography>
             {isMobile ? (
-              <MobileBracket matchups={matchups} picks={knockoutPicks} readOnly results={results?.knockout} />
+              <MobileBracket matchups={matchups} picks={knockoutPicks} readOnly results={results?.knockout} countryCodeMap={countryCodeMap} />
             ) : (
-              <KnockoutBracket matchups={matchups} picks={knockoutPicks} readOnly results={results?.knockout} />
+              <KnockoutBracket matchups={matchups} picks={knockoutPicks} readOnly results={results?.knockout} countryCodeMap={countryCodeMap} />
             )}
           </>
         )}

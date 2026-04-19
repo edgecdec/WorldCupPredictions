@@ -11,11 +11,12 @@ interface MobileBracketProps {
   onPick?: (matchupId: string, team: string) => void;
   readOnly?: boolean;
   results?: Record<string, string>;
+  countryCodeMap?: Record<string, string>;
 }
 
 const ROUND_ORDER = [ROUND_R32, ROUND_R16, ROUND_QF, ROUND_SF, ROUND_3RD, ROUND_FINAL];
 
-export default function MobileBracket({ matchups, picks, onPick, readOnly, results }: MobileBracketProps) {
+export default function MobileBracket({ matchups, picks, onPick, readOnly, results, countryCodeMap }: MobileBracketProps) {
   const [tab, setTab] = useState(0);
   const byRound = getMatchupsByRound(matchups);
   const currentRound = ROUND_ORDER[tab];
@@ -45,7 +46,7 @@ export default function MobileBracket({ matchups, picks, onPick, readOnly, resul
               <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mb: 0.25, display: 'block' }}>
                 {m.id}
               </Typography>
-              <Matchup matchup={m} userPick={picks[m.id]} onPick={onPick} readOnly={readOnly} result={results?.[m.id]} />
+              <Matchup matchup={m} userPick={picks[m.id]} onPick={onPick} readOnly={readOnly} result={results?.[m.id]} countryCodeMap={countryCodeMap} />
             </Box>
           ))
         )}

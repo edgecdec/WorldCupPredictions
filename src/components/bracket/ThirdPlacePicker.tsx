@@ -1,5 +1,6 @@
 'use client';
 import { Box, Chip, Typography } from '@mui/material';
+import TeamFlag from '@/components/common/TeamFlag';
 
 const REQUIRED_COUNT = 8;
 const TOTAL_THIRD_PLACE = 12;
@@ -9,9 +10,10 @@ interface ThirdPlacePickerProps {
   selected: string[];
   onChange: (selected: string[]) => void;
   disabled?: boolean;
+  countryCodeMap?: Record<string, string>;
 }
 
-export default function ThirdPlacePicker({ thirdPlaceTeams, selected, onChange, disabled }: ThirdPlacePickerProps) {
+export default function ThirdPlacePicker({ thirdPlaceTeams, selected, onChange, disabled, countryCodeMap = {} }: ThirdPlacePickerProps) {
   const handleToggle = (team: string) => {
     if (disabled) return;
     if (selected.includes(team)) {
@@ -32,9 +34,11 @@ export default function ThirdPlacePicker({ thirdPlaceTeams, selected, onChange, 
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
         {thirdPlaceTeams.map((team) => {
           const isSelected = selected.includes(team);
+          const code = countryCodeMap[team];
           return (
             <Chip
               key={team}
+              icon={code ? <TeamFlag countryCode={code} size={16} /> : undefined}
               label={team}
               color={isSelected ? 'primary' : 'default'}
               variant={isSelected ? 'filled' : 'outlined'}

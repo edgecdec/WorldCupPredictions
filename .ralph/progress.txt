@@ -578,3 +578,13 @@
 - For knockout: fills empty matchup picks round-by-round, resolving feeder matchups from earlier picks.
 - Lesson: Variable declaration order matters in React components — useCallback referencing a const must come after the const declaration (block-scoped variable error).
 - Lesson: Nova Act ActResult has no .response or .success attribute — act() raises an exception on failure, otherwise succeeds silently.
+
+## TASK-069: Add country flags everywhere teams are displayed (2026-04-19)
+- Added `countryCode` (optional) field to Team interface in types/index.ts
+- Updated WORLD_CUP_2026_DATA with ISO 3166-1 alpha-2 codes for all 48 teams (including gb-sct for Scotland, gb-eng for England)
+- Created TeamFlag component using flagcdn.com CDN with emoji fallback on load error
+- Added flags to: GroupPrediction, ThirdPlacePicker (via countryCodeMap prop), Matchup, KnockoutBracket, MobileBracket, LiveScores, GroupStandings
+- Used countryCodeMap pattern (Record<string, string>) to pass team→code mapping from pages to components that receive team names as strings
+- Added migrateCountryCodes() in db.ts to auto-update existing tournament DB data with countryCode fields
+- Made countryCode optional in Team interface to avoid breaking test fixtures and existing DB data
+- Lessons: When adding a field to a shared type, make it optional if existing data (DB, tests) won't have it. The countryCodeMap pattern works well for components that receive team names as strings rather than full Team objects.

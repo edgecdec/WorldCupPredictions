@@ -8,9 +8,11 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import SwapVertIcon from '@mui/icons-material/SwapVert';
 import CloseIcon from '@mui/icons-material/Close';
 import type { GroupTable } from '@/lib/espnSync';
+import TeamFlag from '@/components/common/TeamFlag';
 
 interface GroupStandingsProps {
   groupOrders: Record<string, string[]>;
+  countryCodeMap?: Record<string, string>;
 }
 
 type MatchStatus = 'exact' | 'half' | 'wrong';
@@ -36,7 +38,7 @@ function StatusIcon({ status }: { status: MatchStatus }) {
   return <CloseIcon fontSize="small" color="error" />;
 }
 
-export default function GroupStandings({ groupOrders }: GroupStandingsProps) {
+export default function GroupStandings({ groupOrders, countryCodeMap = {} }: GroupStandingsProps) {
   const [tables, setTables] = useState<GroupTable[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -105,15 +107,18 @@ export default function GroupStandings({ groupOrders }: GroupStandingsProps) {
                       <TableRow key={s.espnId}>
                         <TableCell sx={{ px: 0.5 }}>{i + 1}</TableCell>
                         <TableCell sx={{ px: 0.5, whiteSpace: 'nowrap' }}>
-                          {s.team}
-                          {predicted && (
-                            <Chip
-                              label={predicted.indexOf(s.team) + 1 || '?'}
-                              size="small"
-                              sx={{ ml: 0.5, height: 18, fontSize: '0.7rem' }}
-                              variant="outlined"
-                            />
-                          )}
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            {countryCodeMap[s.team] && <TeamFlag countryCode={countryCodeMap[s.team]} size={16} />}
+                            {s.team}
+                            {predicted && (
+                              <Chip
+                                label={predicted.indexOf(s.team) + 1 || '?'}
+                                size="small"
+                                sx={{ ml: 0.5, height: 18, fontSize: '0.7rem' }}
+                                variant="outlined"
+                              />
+                            )}
+                          </Box>
                         </TableCell>
                         <TableCell align="center" sx={{ px: 0.5, fontWeight: 'bold' }}>{s.points}</TableCell>
                         <TableCell align="center" sx={{ px: 0.5 }}>{s.wins}</TableCell>

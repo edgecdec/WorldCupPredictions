@@ -6,6 +6,7 @@ import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import type { Theme } from '@mui/material/styles';
 import type { Team } from '@/types';
+import TeamFlag from '@/components/common/TeamFlag';
 
 const POSITION_LABELS = ['1st', '2nd', '3rd', '4th'] as const;
 const HIGHLIGHT_ALPHA = 0.12;
@@ -160,6 +161,7 @@ export default function GroupPrediction({ groupName, teams, order, onChange, dis
                 <Typography variant="body2" sx={{ minWidth: 24, fontWeight: 'bold', color: 'text.secondary' }}>
                   {POSITION_LABELS[i]}
                 </Typography>
+                {team.countryCode && <TeamFlag countryCode={team.countryCode} />}
                 <Typography variant="body2" sx={{ flex: 1 }}>
                   {team.name}
                 </Typography>

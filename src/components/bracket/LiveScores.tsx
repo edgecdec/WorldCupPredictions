@@ -1,6 +1,7 @@
 'use client';
 import { Box, Card, CardContent, Typography, Chip, CircularProgress } from '@mui/material';
 import type { LiveGame } from '@/types';
+import TeamFlag from '@/components/common/TeamFlag';
 
 const STATE_IN = 'in';
 const STATE_POST = 'post';
@@ -17,9 +18,10 @@ function statusLabel(game: LiveGame): string {
   return game.detail || 'Scheduled';
 }
 
-function TeamRow({ name, score, isLive }: { name: string; score: string; isLive: boolean }) {
+function TeamRow({ name, score, isLive, countryCode }: { name: string; score: string; isLive: boolean; countryCode?: string }) {
   return (
-    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.5 }}>
+    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.5, gap: 0.5 }}>
+      {countryCode && <TeamFlag countryCode={countryCode} size={16} />}
       <Typography variant="body2" noWrap sx={{ flex: 1, fontWeight: isLive ? 600 : 400 }}>
         {name}
       </Typography>
@@ -33,9 +35,10 @@ function TeamRow({ name, score, isLive }: { name: string; score: string; isLive:
 interface LiveScoresProps {
   games: LiveGame[];
   loading: boolean;
+  countryCodeMap?: Record<string, string>;
 }
 
-export default function LiveScores({ games, loading }: LiveScoresProps) {
+export default function LiveScores({ games, loading, countryCodeMap = {} }: LiveScoresProps) {
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
@@ -86,8 +89,8 @@ export default function LiveScores({ games, loading }: LiveScoresProps) {
                     variant={isLive ? 'filled' : 'outlined'}
                   />
                 </Box>
-                <TeamRow name={game.home.name} score={game.home.score} isLive={isLive} />
-                <TeamRow name={game.away.name} score={game.away.score} isLive={isLive} />
+                <TeamRow name={game.home.name} score={game.home.score} isLive={isLive} countryCode={countryCodeMap[game.home.name]} />
+                <TeamRow name={game.away.name} score={game.away.score} isLive={isLive} countryCode={countryCodeMap[game.away.name]} />
               </CardContent>
             </Card>
           );

@@ -19,6 +19,7 @@ export interface Team {
   pot: 1 | 2 | 3 | 4;
   groupSeed: 1 | 2 | 3 | 4;
   espnId: number;
+  countryCode?: string; // ISO 3166-1 alpha-2 lowercase, e.g. 'mx' for Mexico
 }
 
 export interface Group {

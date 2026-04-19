@@ -88,6 +88,7 @@ function initDb(db: Database.Database) {
 
   ensureEveryoneGroup(db);
   migrateEspnIds(db);
+  migrateCountryCodes(db);
   migrateCreatorsToOwnGroups(db);
 
   // Auto-assign any existing unassigned predictions to Everyone
@@ -112,6 +113,22 @@ function migrateEspnIds(db: Database.Database) {
     // Check if first team already has espnId
     if (data.groups[0].teams[0]?.espnId) return;
     // Update with current WORLD_CUP_2026_DATA which includes espnIds
+    db.prepare("UPDATE tournaments SET bracket_data = ? WHERE id = ?").run(
+      JSON.stringify(WORLD_CUP_2026_DATA),
+      row.id,
+    );
+  } catch { /* ignore migration errors */ }
+}
+
+function migrateCountryCodes(db: Database.Database) {
+  try {
+    const row = db.prepare("SELECT id, bracket_data FROM tournaments ORDER BY year DESC LIMIT 1").get() as
+      | { id: string; bracket_data: string }
+      | undefined;
+    if (!row) return;
+    const data = JSON.parse(row.bracket_data);
+    if (!data.groups?.length) return;
+    if (data.groups[0].teams[0]?.countryCode) return;
     db.prepare("UPDATE tournaments SET bracket_data = ? WHERE id = ?").run(
       JSON.stringify(WORLD_CUP_2026_DATA),
       row.id,

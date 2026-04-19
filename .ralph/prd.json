@@ -685,7 +685,7 @@
       "title": "Create join-via-link page at /join/[code]",
       "spec": "specs/groups.md",
       "priority": 38,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-036",
         "TASK-008"

@@ -461,3 +461,13 @@
 - Added `migrateCreatorsToOwnGroups()` in db.ts initDb() to fix existing orphaned groups (Testing, Test, Test2)
 - Updated groups GET query to include groups where user is creator (UNION clause) so groups show even before prediction exists
 - Lesson: Task was already implemented and committed in a previous iteration but status wasn't updated to done — always verify git log before re-implementing
+
+## TASK-062: Create join-via-link page at /join/[code] (2026-04-19)
+- Created src/app/join/[code]/page.tsx with group lookup by invite_code
+- Shows AuthForm for unauthenticated users with "Log in or register to join" message
+- For authenticated users: shows group info, Join button, or "already a member" state
+- After joining, redirects to /leaderboard?group=ID
+- Invalid codes show error alert
+- Updated groups page copy button to copy full URL (origin/join/CODE) instead of just the code
+- Nova Act verified: invalid code error, groups page loads, /join/everyone shows group info
+- Lesson: Nova Act ActResult has no .matches() method — use page.content() for assertions

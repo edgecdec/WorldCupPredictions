@@ -136,9 +136,10 @@ export default function GroupsPage() {
     }
   };
 
-  const copyInviteCode = (code: string) => {
-    navigator.clipboard.writeText(code);
-    showSnack("Invite code copied!");
+  const copyInviteLink = (code: string) => {
+    const url = `${window.location.origin}/join/${code}`;
+    navigator.clipboard.writeText(url);
+    showSnack("Invite link copied!");
   };
 
   if (authLoading) return null;
@@ -199,7 +200,7 @@ export default function GroupsPage() {
                   {!isEveryone && (
                     <>
                       <Chip label={g.invite_code} size="small" variant="outlined" />
-                      <IconButton size="small" onClick={() => copyInviteCode(g.invite_code)} title="Copy invite code">
+                      <IconButton size="small" onClick={() => copyInviteLink(g.invite_code)} title="Copy invite link">
                         <ContentCopyIcon fontSize="small" />
                       </IconButton>
                     </>

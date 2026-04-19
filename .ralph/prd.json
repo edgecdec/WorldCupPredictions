@@ -860,6 +860,17 @@
         "TASK-009"
       ],
       "description": "Add 'Simulator' to the Navbar navigation links (between Leaderboard and Groups). Ensure the /simulate page is accessible from the main navigation. Currently it may not be linked anywhere visible. Also add a prominent 'What If?' button on the leaderboard page that links to /simulate with the current group pre-selected."
+    },
+    {
+      "id": "TASK-078",
+      "title": "Add percentile rank and bonus points column to leaderboard",
+      "spec": "specs/scoring.md",
+      "priority": 45,
+      "status": "open",
+      "dependencies": [
+        "TASK-039"
+      ],
+      "description": "Add two things to the leaderboard: (1) Percentile rank \u2014 show each user their percentile position (e.g. 'Top 12%') as a small chip or text below their rank number. Calculate as (1 - (rank-1)/totalMembers) * 100, rounded. (2) Bonus points column \u2014 add a 'Bonus' column showing total upset bonus points earned (group stage upset bonuses + knockout upset bonuses combined). This helps users see how much of their score came from bold picks vs safe picks. Both should be included in the leaderboard API response and displayed in the table."
     }
   ]
 }

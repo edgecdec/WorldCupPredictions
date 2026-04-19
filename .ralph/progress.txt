@@ -55,3 +55,11 @@
 - Updated `src/app/layout.tsx` to import globals.css and wrap children in Providers.
 - Pattern: Server component layout delegates to a single client wrapper for all providers. This keeps layout.tsx as a server component (needed for metadata export) while enabling client-side context.
 - Build passed first try. Deploy verified after ~40s.
+
+## TASK-008: Create AuthForm component (2026-04-18)
+- Created src/components/auth/AuthForm.tsx with MUI Card, Tabs for login/register toggle, TextField inputs, Alert for errors, CircularProgress loading state.
+- Followed March Madness AuthForm pattern but used Card instead of Paper, Alert instead of Typography for errors, and added disabled states during submission.
+- Used `slotProps.htmlInput` instead of deprecated `inputProps` for MUI v7 TextField.
+- Used proper error typing (`e instanceof Error`) instead of `any` per anti-patterns.
+- Nova Act test: `ActResult` has no `.response` or `.result` attribute — only `.metadata`. For verification, just call `act()` and check it doesn't throw.
+- Component is not rendered on any page yet (that's TASK-012), so browser test just verified site still loads.

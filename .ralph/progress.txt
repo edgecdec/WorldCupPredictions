@@ -263,3 +263,11 @@
 - Added "Load World Cup Data" button on admin page when tournament exists but has no groups.
 - Lesson: Always guard against partial/empty data from the DB, especially when the schema allows empty JSON objects.
 - Nova Act confirmed: /bracket page loads successfully with group prediction cards visible.
+
+## TASK-029: Create Matchup component (2026-04-19)
+- Created src/components/bracket/Matchup.tsx for knockout bracket matchups.
+- Two TeamSlot sub-components: click to pick winner, visual feedback for picked/correct/wrong.
+- Props: matchup (KnockoutMatchup), userPick, onPick, readOnly, disabled, result.
+- Followed March Madness Matchup pattern but simplified for World Cup (string team names, no logos yet).
+- No Nova Act test needed — component not rendered on any page yet (will be used by KnockoutBracket in TASK-031).
+- Build and tsc pass clean. Deployment verified 200.

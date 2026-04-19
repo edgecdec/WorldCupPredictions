@@ -319,7 +319,7 @@
       "title": "Create Matchup component",
       "spec": "specs/bracket.md",
       "priority": 29,
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "TASK-006"
       ],
@@ -616,7 +616,7 @@
       "id": "TASK-055",
       "title": "Add drag-and-drop reordering to GroupPrediction component",
       "spec": "specs/bracket.md",
-      "priority": 28,
+      "priority": 48,
       "status": "open",
       "dependencies": [
         "TASK-025"

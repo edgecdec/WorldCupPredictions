@@ -388,3 +388,13 @@
 - Correct picks highlighted green, incorrect red when results exist
 - Nova Act verified: heading and auth form render correctly for unauthenticated users
 - Lesson: Nova Act's ActResult has no `response` or `matches_intent` attribute — just `metadata`. Use the think log and completion status to verify.
+
+## TASK-044: Create stats dashboard (2026-04-19)
+- Created `/api/stats` API endpoint returning: popular champions, contrarian picks, accuracy %, chalk vs upset scores
+- Created `/stats` page with group selector and 4 stat cards (ChampionCard, ContrarianCard, AccuracyCard, ChalkCard)
+- Added "Stats" link to Navbar between "Who Picked" and "Groups"
+- Followed existing patterns from leaderboard/whopicked pages (Suspense wrapper, group selector, auth gate)
+- Contrarian metric: picks made by <25% of brackets count as "unique"
+- Chalk score: weighted sum of FIFA ranking × predicted position — lower = more chalk
+- Nova Act ActResult only has `.metadata` field; use no-throw pattern (act succeeds = no exception) for assertions
+- Test account credentials from previous tasks don't work — use direct URL navigation for page verification

@@ -493,7 +493,7 @@
       "title": "Create stats dashboard",
       "spec": "specs/groups.md",
       "priority": 44,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-039"
       ],

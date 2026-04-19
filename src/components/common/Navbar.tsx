@@ -12,6 +12,7 @@ const NAV_LINKS = [
   { label: "Predictions", href: "/bracket" },
   { label: "Leaderboard", href: "/leaderboard" },
   { label: "Who Picked", href: "/whopicked" },
+  { label: "Stats", href: "/stats" },
   { label: "Groups", href: "/groups" },
 ] as const;
 

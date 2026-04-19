@@ -63,7 +63,30 @@ export async function PUT(request: Request) {
     return saveGroupResults(body);
   }
 
+  if (action === "update_bracket_data") {
+    return updateBracketData(body);
+  }
+
   return NextResponse.json({ ok: false, error: "Unknown action" }, { status: 400 });
+}
+
+function updateBracketData(body: { bracket_data: unknown }) {
+  const { bracket_data } = body;
+  if (!bracket_data || typeof bracket_data !== "object") {
+    return NextResponse.json({ ok: false, error: "bracket_data required" }, { status: 400 });
+  }
+  const db = getDb();
+  const row = db.prepare("SELECT id FROM tournaments ORDER BY year DESC LIMIT 1").get() as
+    | { id: string }
+    | undefined;
+  if (!row) {
+    return NextResponse.json({ ok: false, error: "No tournament found" }, { status: 404 });
+  }
+  db.prepare("UPDATE tournaments SET bracket_data = ? WHERE id = ?").run(
+    JSON.stringify(bracket_data),
+    row.id,
+  );
+  return NextResponse.json({ ok: true });
 }
 
 function saveGroupResults(body: {

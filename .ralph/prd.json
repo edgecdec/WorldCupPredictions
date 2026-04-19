@@ -606,7 +606,7 @@
       "title": "Fix /bracket page client-side crash",
       "spec": "specs/anti-patterns.md",
       "priority": 17,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-025"
       ],

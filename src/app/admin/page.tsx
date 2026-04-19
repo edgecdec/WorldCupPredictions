@@ -89,6 +89,27 @@ export default function AdminPage() {
     setSuccess("Loaded 2026 World Cup data (48 teams, 12 groups)");
   };
 
+  const handleFixBracketData = async () => {
+    setError("");
+    setSuccess("");
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/admin", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update_bracket_data", bracket_data: WORLD_CUP_2026_DATA }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "Failed to update bracket data");
+      setSuccess("Bracket data updated with 2026 World Cup data!");
+      fetchTournament();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleSubmit = async () => {
     setError("");
     setSuccess("");
@@ -171,7 +192,7 @@ export default function AdminPage() {
                 Knockout locks: {new Date(tournament.lock_time_knockout).toLocaleString()}
               </Typography>
             )}
-            {tournament.bracket_data && (
+            {tournament.bracket_data?.groups && (
               <Chip
                 label={`${tournament.bracket_data.groups.length} groups loaded`}
                 size="small"
@@ -183,12 +204,32 @@ export default function AdminPage() {
         </Card>
       )}
 
-      {tournament?.bracket_data && (
+      {tournament?.bracket_data?.groups && (
         <GroupResultsEditor
           bracketData={tournament.bracket_data}
           existingResults={tournament.results_data?.groupStage ?? null}
           onSaved={fetchTournament}
         />
+      )}
+
+      {tournament && !tournament.bracket_data?.groups && (
+        <Card sx={{ mb: 4 }}>
+          <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "center" }}>
+            <Typography variant="h6">Missing Bracket Data</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Tournament exists but has no bracket data. Load 2026 World Cup groups.
+            </Typography>
+            <Button
+              variant="contained"
+              color="warning"
+              onClick={handleFixBracketData}
+              disabled={submitting}
+              startIcon={submitting ? <CircularProgress size={20} color="inherit" /> : null}
+            >
+              Load World Cup Data
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
       {!tournament && (

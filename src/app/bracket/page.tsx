@@ -34,6 +34,10 @@ export default function BracketPage() {
         setTournament(t);
 
         const bd = t.bracket_data as BracketData;
+        if (!bd?.groups?.length) {
+          setLoading(false);
+          return;
+        }
         const defaults: Record<string, string[]> = {};
         for (const g of bd.groups) {
           defaults[g.name] = g.teams.map((team) => team.name);

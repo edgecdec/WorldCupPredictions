@@ -254,3 +254,12 @@
 - Widened admin page max-width from 700px to 900px to accommodate 3-column group grid
 - Build and tsc passed first try. Deploy verified (200 response).
 - Lesson: Previous agent had already committed the implementation under a different commit message but didn't update prd.json status. Always verify git state before assuming changes need to be made.
+
+## TASK-054: Fix /bracket page client-side crash (2026-04-18)
+- Root cause: `useEffect` iterated over `bd.groups` without checking if `groups` existed. When `bracket_data` was `{}`, this threw a TypeError.
+- Fix: Added guard `if (!bd?.groups?.length)` in the useEffect before iterating, returning early to show "No tournament available" message.
+- Also fixed admin page which accessed `tournament.bracket_data.groups.length` without null check.
+- Added `update_bracket_data` admin PUT action so admins can fix existing tournaments with empty bracket_data.
+- Added "Load World Cup Data" button on admin page when tournament exists but has no groups.
+- Lesson: Always guard against partial/empty data from the DB, especially when the schema allows empty JSON objects.
+- Nova Act confirmed: /bracket page loads successfully with group prediction cards visible.

@@ -189,3 +189,12 @@
 - No other files referenced old team names — clean replacement
 - All 28 scoring tests still pass (they use inline test data, not WORLD_CUP_2026_DATA)
 - Lessons: The old data was placeholder; always verify seed data against official sources before shipping
+
+## TASK-022: Add save/load knockout picks to predictions API (2026-04-18)
+- Added `save_knockout` action to POST /api/picks
+- Checks lock_time_knockout before allowing saves
+- Validates group stage results exist before allowing knockout picks
+- Requires existing group predictions (can't submit knockout without groups first)
+- Tiebreaker is sanitized (rounded, non-negative)
+- GET already returned knockout_picks and tiebreaker — no changes needed
+- Lessons: The existing route was well-structured, just needed the new action handler appended. Kept the same pattern as saveGroups for consistency.

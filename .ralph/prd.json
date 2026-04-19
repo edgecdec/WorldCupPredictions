@@ -236,7 +236,7 @@
       "title": "Create predictions API - save/load knockout picks",
       "spec": "specs/bracket.md",
       "priority": 22,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-021"
       ],

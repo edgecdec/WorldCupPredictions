@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuid } from "uuid";
 import { getDb } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
-import type { Tournament, GroupPrediction } from "@/types";
+import type { Tournament, GroupPrediction, TournamentResults } from "@/types";
 
 interface PredictionRow {
   id: string;
@@ -78,6 +78,10 @@ export async function POST(req: NextRequest) {
     return saveGroups(authUser.userId, tournament, body);
   }
 
+  if (action === "save_knockout") {
+    return saveKnockout(authUser.userId, tournament, body);
+  }
+
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });
 }
 
@@ -142,6 +146,56 @@ function saveGroups(
       group_predictions: JSON.parse(inserted.group_predictions),
       third_place_picks: JSON.parse(inserted.third_place_picks),
       knockout_picks: JSON.parse(inserted.knockout_picks),
+    },
+  });
+}
+
+function saveKnockout(
+  userId: string,
+  tournament: Tournament,
+  body: { knockout_picks: Record<string, string>; tiebreaker?: number }
+) {
+  const { lock_time_knockout } = tournament;
+  if (lock_time_knockout && new Date() > new Date(lock_time_knockout)) {
+    return NextResponse.json({ error: "Knockout predictions are locked" }, { status: 403 });
+  }
+
+  const resultsData = tournament.results_data as TournamentResults;
+  if (!resultsData?.groupStage) {
+    return NextResponse.json({ error: "Group stage results not yet available" }, { status: 400 });
+  }
+
+  const { knockout_picks, tiebreaker } = body;
+  if (!knockout_picks || typeof knockout_picks !== "object") {
+    return NextResponse.json({ error: "Invalid knockout picks data" }, { status: 400 });
+  }
+
+  const db = getDb();
+  const existing = db
+    .prepare("SELECT id FROM predictions WHERE user_id = ? AND tournament_id = ?")
+    .get(userId, tournament.id) as { id: string } | undefined;
+
+  if (!existing) {
+    return NextResponse.json({ error: "Submit group predictions first" }, { status: 400 });
+  }
+
+  const knockoutStr = JSON.stringify(knockout_picks);
+  const tiebreakerVal = tiebreaker != null ? Math.max(0, Math.round(tiebreaker)) : null;
+
+  db.prepare(
+    `UPDATE predictions
+     SET knockout_picks = ?, tiebreaker = ?, submitted_at = datetime('now')
+     WHERE id = ?`
+  ).run(knockoutStr, tiebreakerVal, existing.id);
+
+  const updated = db.prepare("SELECT * FROM predictions WHERE id = ?").get(existing.id) as PredictionRow;
+  return NextResponse.json({
+    ok: true,
+    prediction: {
+      ...updated,
+      group_predictions: JSON.parse(updated.group_predictions),
+      third_place_picks: JSON.parse(updated.third_place_picks),
+      knockout_picks: JSON.parse(updated.knockout_picks),
     },
   });
 }

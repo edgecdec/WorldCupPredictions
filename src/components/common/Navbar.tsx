@@ -11,6 +11,7 @@ import { useThemeMode } from "@/hooks/useThemeMode";
 const NAV_LINKS = [
   { label: "Predictions", href: "/bracket" },
   { label: "Leaderboard", href: "/leaderboard" },
+  { label: "Who Picked", href: "/whopicked" },
   { label: "Groups", href: "/groups" },
 ] as const;
 

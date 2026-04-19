@@ -29,6 +29,19 @@ function getActiveTournament(): Tournament | null {
   };
 }
 
+interface GroupPredictionRow extends PredictionRow {
+  username: string;
+}
+
+function parsePredictionRow(row: PredictionRow) {
+  return {
+    ...row,
+    group_predictions: JSON.parse(row.group_predictions),
+    third_place_picks: JSON.parse(row.third_place_picks),
+    knockout_picks: JSON.parse(row.knockout_picks),
+  };
+}
+
 export async function GET(req: NextRequest) {
   const authUser = getAuthUser(req);
   if (!authUser) {
@@ -40,6 +53,31 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, prediction: null });
   }
 
+  const groupId = req.nextUrl.searchParams.get("group_id");
+
+  // Return all predictions in a group
+  if (groupId) {
+    const db = getDb();
+    const rows = db
+      .prepare(
+        `SELECT p.*, u.username
+         FROM predictions p
+         JOIN users u ON p.user_id = u.id
+         JOIN group_members gm ON gm.prediction_id = p.id
+         WHERE gm.group_id = ? AND p.tournament_id = ?`
+      )
+      .all(groupId, tournament.id) as GroupPredictionRow[];
+
+    return NextResponse.json({
+      ok: true,
+      predictions: rows.map((r) => ({
+        ...parsePredictionRow(r),
+        username: r.username,
+      })),
+    });
+  }
+
+  // Return current user's prediction
   const db = getDb();
   const row = db
     .prepare("SELECT * FROM predictions WHERE user_id = ? AND tournament_id = ?")
@@ -51,12 +89,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    prediction: {
-      ...row,
-      group_predictions: JSON.parse(row.group_predictions),
-      third_place_picks: JSON.parse(row.third_place_picks),
-      knockout_picks: JSON.parse(row.knockout_picks),
-    },
+    prediction: parsePredictionRow(row),
   });
 }
 
@@ -121,15 +154,7 @@ function saveGroups(
     ).run(name, groupPredStr, thirdPlaceStr, existing.id);
 
     const updated = db.prepare("SELECT * FROM predictions WHERE id = ?").get(existing.id) as PredictionRow;
-    return NextResponse.json({
-      ok: true,
-      prediction: {
-        ...updated,
-        group_predictions: JSON.parse(updated.group_predictions),
-        third_place_picks: JSON.parse(updated.third_place_picks),
-        knockout_picks: JSON.parse(updated.knockout_picks),
-      },
-    });
+    return NextResponse.json({ ok: true, prediction: parsePredictionRow(updated) });
   }
 
   const id = uuid();
@@ -139,15 +164,7 @@ function saveGroups(
   ).run(id, userId, tournament.id, name, groupPredStr, thirdPlaceStr);
 
   const inserted = db.prepare("SELECT * FROM predictions WHERE id = ?").get(id) as PredictionRow;
-  return NextResponse.json({
-    ok: true,
-    prediction: {
-      ...inserted,
-      group_predictions: JSON.parse(inserted.group_predictions),
-      third_place_picks: JSON.parse(inserted.third_place_picks),
-      knockout_picks: JSON.parse(inserted.knockout_picks),
-    },
-  });
+  return NextResponse.json({ ok: true, prediction: parsePredictionRow(inserted) });
 }
 
 function saveKnockout(
@@ -189,13 +206,5 @@ function saveKnockout(
   ).run(knockoutStr, tiebreakerVal, existing.id);
 
   const updated = db.prepare("SELECT * FROM predictions WHERE id = ?").get(existing.id) as PredictionRow;
-  return NextResponse.json({
-    ok: true,
-    prediction: {
-      ...updated,
-      group_predictions: JSON.parse(updated.group_predictions),
-      third_place_picks: JSON.parse(updated.third_place_picks),
-      knockout_picks: JSON.parse(updated.knockout_picks),
-    },
-  });
+  return NextResponse.json({ ok: true, prediction: parsePredictionRow(updated) });
 }

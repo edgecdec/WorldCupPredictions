@@ -481,7 +481,7 @@
       "title": "Create Who Picked Whom page",
       "spec": "specs/groups.md",
       "priority": 43,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-036",
         "TASK-025"

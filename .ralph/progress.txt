@@ -371,3 +371,10 @@
 - Current user row highlighted with action.hover background and "You" chip
 - Clicking any score cell opens ScoringBreakdownDialog with full per-team/per-match breakdown
 - Lessons: Nova Act ActResult has only `metadata` field, no `text` or `response` — just use act() for verification assertions
+
+## TASK-042: Create compare predictions page (2026-04-19)
+- Created src/app/compare/page.tsx with group selector, multi-select up to 4 users, group stage side-by-side comparison with colored indicators (✅ exact, 🟡 right half, ❌ wrong), and knockout stage comparison with colored chips per user showing picks and correct/wrong status.
+- Reused the leaderboard API endpoint which already returns all predictions for a group — no new API needed.
+- Used the same group selector pattern as the leaderboard page (Suspense wrapper, useSearchParams for initial group).
+- Lesson: The deploy webhook can race — the webhook fires and builds before git fetch completes if there's a lock file issue. Had to manually pull and build on the server. The webhook log showed a build without /compare because git fetch hadn't pulled the latest commit yet.
+- Lesson: Nova Act ActResult has only a `metadata` field, not `response`. Use it for pass/fail only, not for extracting text responses.

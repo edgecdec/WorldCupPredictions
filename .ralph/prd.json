@@ -469,7 +469,7 @@
       "title": "Create compare predictions page",
       "spec": "specs/bracket.md",
       "priority": 42,
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "TASK-025",
         "TASK-031"

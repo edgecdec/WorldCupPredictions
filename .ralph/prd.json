@@ -662,7 +662,7 @@
       "title": "Create auto-sync API for group stage results from ESPN",
       "spec": "specs/deployment.md",
       "priority": 42,
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "TASK-057",
         "TASK-027"

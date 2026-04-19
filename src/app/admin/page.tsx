@@ -151,6 +151,23 @@ export default function AdminPage() {
     }
   };
 
+  const handleEspnSync = async () => {
+    setError("");
+    setSuccess("");
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/auto-sync");
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "Sync failed");
+      setSuccess("Group stage results synced from ESPN! Knockout bracket generated.");
+      fetchTournament();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (authLoading || loading) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
@@ -215,6 +232,27 @@ export default function AdminPage() {
           existingResults={tournament.results_data?.groupStage ?? null}
           onSaved={fetchTournament}
         />
+      )}
+
+      {tournament?.bracket_data?.groups && !tournament.results_data?.groupStage && (
+        <Card sx={{ mb: 4 }}>
+          <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "center" }}>
+            <Typography variant="h6">Auto-Sync from ESPN</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Fetch live group standings from ESPN and auto-populate results.
+              Only works when all group stage matches are complete.
+            </Typography>
+            <Button
+              variant="contained"
+              color="info"
+              onClick={handleEspnSync}
+              disabled={submitting}
+              startIcon={submitting ? <CircularProgress size={20} color="inherit" /> : null}
+            >
+              Sync from ESPN
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
       {tournament?.results_data?.knockoutBracket && (

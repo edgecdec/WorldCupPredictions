@@ -513,3 +513,12 @@
 - The existing `/api/scores?type=standings` endpoint already supported this — no API changes needed.
 - Nova Act ActResult only has `.metadata` field — no `.success` or `.response`. Just use `nova.act()` without checking return value for verification steps.
 - Lesson: The ESPN standings API returns group names like "Group A" — the `fetchGroupStandings` already strips "Group " prefix to match our group naming convention (just "A", "B", etc.).
+
+## TASK-060: Create auto-sync API for group stage results from ESPN (2026-04-19)
+- Created `src/app/api/auto-sync/route.ts` — admin-only GET endpoint that fetches ESPN group standings, validates all groups complete (3 games each), determines best 8 third-place teams via FIFA tiebreaking rules, and auto-populates group stage results + generates knockout bracket.
+- `src/lib/bestThirdPlace.ts` already existed from a previous iteration with `determineBestThirdPlace()` and `isGroupStageComplete()` — no changes needed.
+- `espnSync.ts` already had `goalsFor` in `GroupStanding` — no changes needed.
+- Added "Sync from ESPN" button card to admin page, shown only when bracket data exists but group results don't.
+- The endpoint guards against re-syncing if group results already exist.
+- Nova Act verified the button is visible on the admin page.
+- Lesson: Always check git history before creating files — they may already exist from prior iterations.

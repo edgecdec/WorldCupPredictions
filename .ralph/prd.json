@@ -578,6 +578,17 @@
         "TASK-031"
       ],
       "description": "Add @media print CSS to globals.css. Print button on bracket pages. Export-as-image via html2canvas."
+    },
+    {
+      "id": "TASK-052",
+      "title": "Fix home page: show AuthForm when not logged in regardless of tournament state",
+      "spec": "specs/bracket.md",
+      "priority": 19,
+      "status": "open",
+      "dependencies": [
+        "TASK-012"
+      ],
+      "description": "Bug: The home page only shows AuthForm when a tournament exists AND user is not logged in. If no tournament exists, it shows 'No tournament yet' with no way to log in. Fix src/app/page.tsx: check user auth FIRST. If not logged in, show the title, subtitle, and AuthForm regardless of tournament state. Only show tournament info, countdown, and navigation after the user is authenticated. Also add an Admin Panel button for admin users when logged in. This matches the March Madness pattern where unauthenticated users always see the login form."
     }
   ]
 }

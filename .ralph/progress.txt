@@ -321,3 +321,12 @@
 - Added to admin page below GroupResultsEditor, only visible when knockoutBracket exists in results_data.
 - Updated TournamentResponse type in admin page to include knockoutBracket and knockout fields.
 - Lesson: The KnockoutBracket `picks` prop doubles as the "selected" state — for admin results mode, pass results as picks and use onPick to set results. No need for a separate "admin mode" prop.
+
+## TASK-036: Create groups API (2026-04-19)
+- Created `src/app/api/groups/route.ts` with GET, POST (create/join/leave) actions.
+- GET supports listing user's groups (via prediction join) and lookup by invite_code query param.
+- POST create: validates name length, scoring settings, generates invite code via crypto.randomBytes.
+- POST join: links a prediction_id to a group, enforces max_brackets limit per user.
+- POST leave: removes all user's predictions from the group.
+- DB schema uses group_members(group_id, prediction_id) — groups link to predictions, not users directly.
+- Lesson: The World Cup schema differs from March Madness — group membership is per-prediction, not per-user. This means join requires a prediction_id and leave removes all of a user's predictions from the group.

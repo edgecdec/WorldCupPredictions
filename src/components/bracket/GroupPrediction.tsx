@@ -1,10 +1,12 @@
 'use client';
-import { Card, CardContent, Typography, IconButton, Chip, Box, Stack } from '@mui/material';
+import { Card, CardContent, Typography, IconButton, Chip, Box, Stack, alpha } from '@mui/material';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import type { Theme } from '@mui/material/styles';
 import type { Team } from '@/types';
 
 const POSITION_LABELS = ['1st', '2nd', '3rd', '4th'] as const;
+const HIGHLIGHT_ALPHA = 0.12;
 
 interface GroupPredictionProps {
   groupName: string;
@@ -12,6 +14,7 @@ interface GroupPredictionProps {
   order: string[];
   onChange: (groupName: string, newOrder: string[]) => void;
   disabled?: boolean;
+  advancingThirdPlaceTeams?: string[];
 }
 
 function moveItem(arr: string[], from: number, to: number): string[] {
@@ -21,7 +24,17 @@ function moveItem(arr: string[], from: number, to: number): string[] {
   return next;
 }
 
-export default function GroupPrediction({ groupName, teams, order, onChange, disabled }: GroupPredictionProps) {
+function getRowBgColor(position: number, teamName: string, advancingThird: string[], theme: Theme): string {
+  if (position <= 1) return alpha(theme.palette.success.main, HIGHLIGHT_ALPHA);
+  if (position === 2) {
+    return advancingThird.includes(teamName)
+      ? alpha(theme.palette.success.main, HIGHLIGHT_ALPHA)
+      : alpha(theme.palette.warning.main, HIGHLIGHT_ALPHA);
+  }
+  return alpha(theme.palette.error.main, HIGHLIGHT_ALPHA);
+}
+
+export default function GroupPrediction({ groupName, teams, order, onChange, disabled, advancingThirdPlaceTeams = [] }: GroupPredictionProps) {
   const teamMap = new Map(teams.map((t) => [t.name, t]));
 
   const handleMove = (index: number, direction: -1 | 1) => {
@@ -50,7 +63,7 @@ export default function GroupPrediction({ groupName, teams, order, onChange, dis
                   py: 0.5,
                   px: 1,
                   borderRadius: 1,
-                  bgcolor: 'action.hover',
+                  bgcolor: (theme: Theme) => getRowBgColor(i, name, advancingThirdPlaceTeams, theme),
                 }}
               >
                 <Typography variant="body2" sx={{ minWidth: 24, fontWeight: 'bold', color: 'text.secondary' }}>

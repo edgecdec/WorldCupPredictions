@@ -719,7 +719,7 @@
       "title": "Highlight advancing/eliminated teams on group predictions page",
       "spec": "specs/bracket.md",
       "priority": 44,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-025"
       ],

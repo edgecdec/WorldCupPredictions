@@ -165,6 +165,7 @@ export default function PublicBracketPage() {
                   order={groupOrders[g.name] || g.teams.map((t) => t.name)}
                   onChange={() => {}}
                   disabled
+                  advancingThirdPlaceTeams={thirdPlacePicks}
                 />
               ))}
             </Box>

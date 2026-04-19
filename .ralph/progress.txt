@@ -530,3 +530,11 @@
 - Added compact scoring summary chip (KO: x/x/x/x/x/x) on each group card with tooltip
 - Nova Act verified: chips visible, gear icon works, dialog opens with correct fields, cancel closes
 - Lesson: Nova Act ActResult doesn't have a .response attribute — just print the result object directly
+
+## TASK-065: Highlight advancing/eliminated teams on group predictions page (2026-04-19)
+- Added position-based background colors to GroupPrediction component using MUI `alpha()` utility
+- 1st/2nd → green (success.main), 3rd advancing → green, 3rd not advancing → amber (warning.main), 4th → red (error.main)
+- Added `advancingThirdPlaceTeams` prop to GroupPrediction, passed from bracket page and public bracket page
+- Used HIGHLIGHT_ALPHA = 0.12 for subtle backgrounds that work in both light and dark themes
+- Nova Act confirmed: green for 1st/2nd, brown/amber for 3rd, red for 4th — all visible
+- Lesson: MUI's `alpha()` from `@mui/material` works well for theme-aware transparent backgrounds

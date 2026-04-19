@@ -746,6 +746,18 @@
         "TASK-039"
       ],
       "description": "Calculate and display each user's maximum possible remaining score on the leaderboard. Create src/lib/maxPossible.ts with calculateMaxPossible(prediction, currentResults, bracketData, settings): for each unresolved knockout match, assume the user's pick wins. Sum current score + all remaining possible points (base + max upset bonus for each remaining correct pick). For group stage, max is already locked in once results are entered. Display as a 'Max' column on the leaderboard table. Compute client-side after leaderboard loads (use requestIdleCallback or setTimeout to avoid blocking render). Show a spinner while computing, then fill in the number. Also add an 'Eliminated from contention' indicator \u2014 if a user's max possible is less than the current leader's actual score, show a skull or X icon."
+    },
+    {
+      "id": "TASK-068",
+      "title": "Add autofill buttons (Chalk/Random/Smart) for predictions",
+      "spec": "specs/bracket.md",
+      "priority": 45,
+      "status": "open",
+      "dependencies": [
+        "TASK-025",
+        "TASK-032"
+      ],
+      "description": "Add autofill functionality to both the group stage and knockout prediction pages. Create src/lib/autofill.ts with three strategies: (1) Chalk \u2014 higher-ranked team (lower FIFA ranking number) always wins/finishes higher. Groups ordered by FIFA ranking, knockout picks favor the better-ranked team. (2) Random \u2014 random order for groups, coin flip for knockout. (3) Smart \u2014 weighted by FIFA ranking difference (e.g. 70% chance the better team wins, scaled by ranking gap). Add autofill buttons (Chalk/Random/Smart) to the bracket page and knockout page. Only fill empty slots \u2014 don't overwrite existing picks. Show a confirmation dialog before applying. For groups, autofill sets the order. For knockout, autofill picks winners for unfilled matchups. For 3rd-place picks, chalk/smart pick the 8 highest-ranked 3rd-place teams."
     }
   ]
 }

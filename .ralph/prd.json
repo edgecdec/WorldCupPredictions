@@ -191,7 +191,7 @@
       "title": "Create group stage scoring function",
       "spec": "specs/scoring.md",
       "priority": 18,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-014"
       ],

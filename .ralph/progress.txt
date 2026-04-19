@@ -139,3 +139,14 @@
 - Placed in a "Quick Setup" card above the manual create form
 - Build and tsc passed first try. Deploy verified on attempt 3.
 - Lessons: Nova Act ActResult uses str() for content inspection, not .response attribute. Keep seed button minimal — reuses existing POST /api/admin endpoint.
+
+## TASK-018: Create group stage scoring function (2026-04-18)
+- Created src/lib/scoring.ts with scoreGroupStage function
+- Per-team scoring: advance_correct (boolean match), exact_position, upset_bonus (prediction-gated, capped at predicted position)
+- Per-group bonuses: advancement_correct_bonus (all 4 advance/not-advance correct), perfect_order_bonus (all 4 exact positions)
+- Advance logic: predicted 1st/2nd = advance, predicted 3rd + in thirdPlacePicks = advance, predicted 4th = not advance
+- Upset bonus: max(0, seed - predictedPosition) * upsetBonusPerPlace, only when actualPosition <= predictedPosition
+- Returns GroupStageScoreResult with total and perGroup detail array
+- Exported GroupScoreDetail and GroupStageScoreResult interfaces for use by leaderboard/breakdown components
+- Build and tsc passed first try. Deploy verified on attempt 4.
+- Lessons: Keep scoring as pure functions with no DB dependency — easy to test and reuse. The independence of advancement_correct_bonus and perfect_order_bonus is key — perfect order does NOT imply advancement correct due to 3rd-place pick interaction.

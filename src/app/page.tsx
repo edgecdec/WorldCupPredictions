@@ -6,9 +6,10 @@ import CountdownTimer from "@/components/common/CountdownTimer";
 import TournamentTimeline from "@/components/common/TournamentTimeline";
 import AuthForm from "@/components/auth/AuthForm";
 import LiveScores from "@/components/bracket/LiveScores";
+import MiniBracket from "@/components/bracket/MiniBracket";
 import { useAuth } from "@/hooks/useAuth";
 import { useLiveScores } from "@/hooks/useLiveScores";
-import type { Tournament, BracketData } from "@/types";
+import type { Tournament, BracketData, TournamentResults, KnockoutMatchup } from "@/types";
 
 interface TournamentResponse {
   ok: boolean;
@@ -22,6 +23,8 @@ export default function Home() {
   const { user, loading: authLoading } = useAuth();
   const [tournament, setTournament] = useState<TournamentResponse["tournament"]>(null);
   const [loading, setLoading] = useState(true);
+  const [knockoutPicks, setKnockoutPicks] = useState<Record<string, string>>({});
+  const [knockoutMatchups, setKnockoutMatchups] = useState<KnockoutMatchup[]>([]);
 
   const tournamentStarted = Boolean(
     tournament?.lock_time_groups && new Date(tournament.lock_time_groups) <= new Date()
@@ -40,10 +43,24 @@ export default function Home() {
   useEffect(() => {
     fetch("/api/tournaments")
       .then((r) => r.json())
-      .then((d: TournamentResponse) => setTournament(d.tournament))
+      .then((d: TournamentResponse) => {
+        setTournament(d.tournament);
+        const results = d.tournament?.results_data as TournamentResults | null;
+        if (results?.knockoutBracket) setKnockoutMatchups(results.knockoutBracket);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    fetch("/api/picks")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.ok && d.prediction?.knockout_picks) setKnockoutPicks(d.prediction.knockout_picks);
+      })
+      .catch(() => {});
+  }, [user]);
 
   if (loading || authLoading) {
     return (
@@ -125,6 +142,17 @@ export default function Home() {
           ) : null}
         </Box>
       </Box>
+
+      {knockoutMatchups.length > 0 && Object.keys(knockoutPicks).length > 0 && (
+        <Box sx={{ mt: 3, maxWidth: 500, mx: "auto" }}>
+          <MiniBracket
+            matchups={knockoutMatchups}
+            picks={knockoutPicks}
+            countryCodeMap={countryCodeMap}
+            results={(tournament?.results_data as TournamentResults)?.knockout}
+          />
+        </Box>
+      )}
 
       {tournamentStarted && (
         <Box sx={{ mt: 4, textAlign: "left" }}>

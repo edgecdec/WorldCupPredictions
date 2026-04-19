@@ -901,7 +901,7 @@
       "title": "Create mini-bracket progression widget with round tabs",
       "spec": "specs/bracket.md",
       "priority": 48,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-031"
       ],

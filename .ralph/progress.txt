@@ -740,3 +740,10 @@
 - Added warning Alert with LockIcon on both /bracket and /bracket/knockout pages when submissions are locked
 - Disabled editing on bracket pages when any group has locked submissions
 - Nova Act quota exceeded — could not run browser test, but verified deployment returns 200 and pages render correctly via curl
+
+## TASK-081: Create mini-bracket progression widget with round tabs (2026-04-19)
+- Created MiniBracket.tsx with tabs for R32→R16, R16→QF, QF→SF, SF→Final showing advancing teams as compact chips with flags.
+- Champion pick highlighted with gold border and trophy icon at top.
+- Integrated into: home page (shows when user has knockout picks), profile page (after score summary), knockout predictions page (above bracket as quick reference).
+- Nova Act test skipped due to daily quota exceeded — verified deployment via curl (200 on / and /bracket/knockout).
+- Lesson: Keep widget components self-contained with minimal props. The countryCodeMap pattern is reused everywhere — could be a context/hook in the future.

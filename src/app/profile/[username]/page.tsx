@@ -14,6 +14,7 @@ import GroupPrediction from '@/components/bracket/GroupPrediction';
 import ThirdPlacePicker from '@/components/bracket/ThirdPlacePicker';
 import KnockoutBracket from '@/components/bracket/KnockoutBracket';
 import MobileBracket from '@/components/bracket/MobileBracket';
+import MiniBracket from '@/components/bracket/MiniBracket';
 import TeamFlag from '@/components/common/TeamFlag';
 import { useAuth } from '@/hooks/useAuth';
 import type { Tournament, BracketData, TournamentResults, GroupPrediction as GroupPredictionType } from '@/types';
@@ -271,6 +272,13 @@ export default function ProfilePage() {
             </Box>
           )}
         </Paper>
+      )}
+
+      {/* Mini Bracket Progression */}
+      {pred && matchups.length > 0 && Object.keys(pred.knockoutPicks).length > 0 && (
+        <Box sx={{ mb: 3, maxWidth: 500 }}>
+          <MiniBracket matchups={matchups} picks={pred.knockoutPicks} countryCodeMap={countryCodeMap} results={results?.knockout} />
+        </Box>
       )}
 
       {/* Group Predictions */}

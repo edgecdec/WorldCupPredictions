@@ -16,6 +16,7 @@ import AutofillButtons, { AutofillStrategy } from '@/components/common/AutofillB
 import { chalkKnockout, randomKnockout, smartKnockout } from '@/lib/autofill';
 import TouchAppIcon from '@mui/icons-material/TouchApp';
 import SimpleKnockoutMode from '@/components/bracket/SimpleKnockoutMode';
+import MiniBracket from '@/components/bracket/MiniBracket';
 import ScoringRulesSummary from '@/components/common/ScoringRulesSummary';
 
 export default function KnockoutPage() {
@@ -200,6 +201,12 @@ export default function KnockoutPage() {
       {success && <Alert severity="success" sx={{ my: 2 }} onClose={() => setSuccess('')}>{success}</Alert>}
 
       <ScoringRulesSummary mode="knockout" />
+
+      {Object.keys(picks).length > 0 && (
+        <Box sx={{ mb: 2, maxWidth: 500 }}>
+          <MiniBracket matchups={matchups} picks={picks} countryCodeMap={countryCodeMap} results={results?.knockout} />
+        </Box>
+      )}
 
       {!disabled && (
         <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>

@@ -63,3 +63,12 @@
 - Used proper error typing (`e instanceof Error`) instead of `any` per anti-patterns.
 - Nova Act test: `ActResult` has no `.response` or `.result` attribute — only `.metadata`. For verification, just call `act()` and check it doesn't throw.
 - Component is not rendered on any page yet (that's TASK-012), so browser test just verified site still loads.
+
+## TASK-009: Create Navbar and add to layout (2026-04-18)
+- Created src/components/common/Navbar.tsx following March Madness pattern
+- MUI AppBar with ⚽ World Cup Predictions title, nav links (Predictions, Leaderboard, Groups), Admin link for admins, theme toggle, auth status (username + logout or login)
+- Mobile responsive: hamburger menu with Drawer for small screens
+- Added Navbar to Providers.tsx (renders above children inside AuthProvider)
+- Nav links only shown when user is logged in
+- Nova Act verified: Navbar visible with correct text and theme toggle on production
+- Lesson: Nova Act ActResult has no response/matches_intent attribute — just use it for visual verification via logs, don't assert on result attributes

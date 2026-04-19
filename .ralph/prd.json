@@ -91,7 +91,7 @@
       "title": "Create Navbar and add to layout",
       "spec": "specs/code-style.md",
       "priority": 9,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-007"
       ],

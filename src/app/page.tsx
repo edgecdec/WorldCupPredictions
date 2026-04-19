@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { Box, Typography, Button, CircularProgress } from "@mui/material";
 import Link from "next/link";
 import CountdownTimer from "@/components/common/CountdownTimer";
+import TournamentTimeline from "@/components/common/TournamentTimeline";
 import AuthForm from "@/components/auth/AuthForm";
 import LiveScores from "@/components/bracket/LiveScores";
 import { useAuth } from "@/hooks/useAuth";
@@ -87,6 +88,10 @@ export default function Home() {
               />
             </Box>
           )}
+          <TournamentTimeline
+            lockTimeGroups={tournament.lock_time_groups}
+            lockTimeKnockout={tournament.lock_time_knockout}
+          />
         </>
       ) : (
         <Typography color="text.secondary" sx={{ mt: 2 }}>

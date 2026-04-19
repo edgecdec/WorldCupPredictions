@@ -969,7 +969,7 @@
       "title": "Create tournament timeline component on home page",
       "spec": "specs/bracket.md",
       "priority": 43,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-012"
       ],

@@ -102,7 +102,7 @@
       "title": "Create CountdownTimer component",
       "spec": "specs/bracket.md",
       "priority": 10,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-006"
       ],

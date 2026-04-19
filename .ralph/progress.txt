@@ -72,3 +72,13 @@
 - Nav links only shown when user is logged in
 - Nova Act verified: Navbar visible with correct text and theme toggle on production
 - Lesson: Nova Act ActResult has no response/matches_intent attribute — just use it for visual verification via logs, don't assert on result attributes
+
+## TASK-010: Create CountdownTimer component (2026-04-18)
+- Created src/components/common/CountdownTimer.tsx
+- Props: targetDate (ISO string), optional label
+- Shows days/hours/min/sec with 1-second interval updates
+- Displays "Locked" in error color when target date has passed
+- Uses useEffect with cleanup (clearInterval) on unmount
+- Syncs to targetDate prop changes via useEffect dependency
+- Uses MUI theme tokens only (primary.main, text.secondary, error.main)
+- Lessons: Keep component simple — extracted calcTimeLeft as pure function, used UNIT_LABELS constant array to avoid inline strings. padStart(2, "0") for consistent display.

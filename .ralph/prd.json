@@ -516,7 +516,7 @@
       "title": "Create Monte Carlo simulation",
       "spec": "specs/bracket.md",
       "priority": 47,
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "TASK-046"
       ],
@@ -691,6 +691,17 @@
         "TASK-008"
       ],
       "description": "Create src/app/join/[code]/page.tsx. When a user visits /join/ABC123, the page looks up the group by invite_code. If not logged in, show AuthForm with a message like 'Log in or register to join [Group Name]'. After login/register, auto-join the group. If already logged in, show group name and a 'Join Group' button that calls POST /api/groups with action 'join'. After joining, redirect to /leaderboard?group=ID. If code is invalid, show error. Also update the groups page share button to copy the full URL (https://worldcup.edgecdec.com/join/CODE) instead of just the code. This is the primary way users will invite friends \u2014 share a link, friend clicks it, registers, and is automatically in the group."
+    },
+    {
+      "id": "TASK-063",
+      "title": "Add edit scoring settings for group admins on groups page",
+      "spec": "specs/groups.md",
+      "priority": 43,
+      "status": "open",
+      "dependencies": [
+        "TASK-038"
+      ],
+      "description": "On the groups page, group creators (created_by matches current user) should see a Settings/Edit icon button on their group card. Clicking it opens a dialog with the ScoringEditor pre-filled with the group's current scoring_settings. Save button calls a new PUT /api/groups endpoint that updates scoring_settings for the group (verify the user is the group creator). Only allow editing before the tournament locks (lock_time_groups). The Everyone group should also be editable by its admin (edgecdec). Show the current scoring summary on each group card (e.g. 'Knockout: 3/5/8/13/13/21' as a compact chip or tooltip) so users can see at a glance what scoring their group uses."
     }
   ]
 }

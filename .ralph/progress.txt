@@ -420,3 +420,10 @@
 - Actual results (from admin) cannot be overridden — only undecided matchups are clickable
 - Lesson: The existing KnockoutBracket/MobileBracket components work well in sim mode by passing `mergedKnockout` as `picks` and `actualKnockout` as `results`. The `results` prop controls the green highlight for actual results while `picks` controls the blue highlight for hypothetical.
 - Lesson: Nova Act `ActResult` has only a `metadata` attribute, not `response`. The act() output is logged to console but not returned as a string field.
+
+## TASK-047: Create Monte Carlo simulation (2026-04-19)
+- Created src/lib/monteCarloWorker.ts — self-contained web worker (no imports) that runs 1000 simulations using FIFA ranking-based logistic win probability model. Reports progress every 100 sims. Computes avgScore, avgPlace, winPct for each entry.
+- Created src/hooks/useMonteCarlo.ts — hook that manages the web worker lifecycle, debounces 500ms on hypo changes, auto-terminates on unmount.
+- Integrated Monte Carlo results table into the simulator page sidebar (wide screens) and drawer (narrow screens), showing win %, avg place, and avg score.
+- Lessons: Web workers in Next.js work with `new URL('../lib/worker.ts', import.meta.url)` pattern — no special config needed. Workers must be self-contained (no path alias imports). The March Madness monteCarloWorker.ts was a good reference pattern. The Monte Carlo panel only renders when knockout bracket exists, so it won't show until group results are entered.
+- Nova Act test confirmed the simulator page loads correctly on production. The Monte Carlo section will be visible once knockout bracket data exists.

@@ -884,6 +884,17 @@
         "TASK-032"
       ],
       "description": "Create src/app/profile/[username]/page.tsx. Public page (no auth required to view). Shows: username header, member since date, list of groups they belong to, their group predictions (read-only GroupPrediction cards), their knockout bracket (read-only KnockoutBracket), score summary (group stage score, knockout score, total, bonus points, percentile in each group), stats (perfect groups count, contrarian picks, champion pick). Link to profile from leaderboard usernames (clickable). Add a 'View Profile' link in the Navbar dropdown when logged in for your own profile."
+    },
+    {
+      "id": "TASK-080",
+      "title": "Allow group admins to lock/unlock submissions independently",
+      "spec": "specs/groups.md",
+      "priority": 47,
+      "status": "open",
+      "dependencies": [
+        "TASK-063"
+      ],
+      "description": "Add a 'Lock Submissions' toggle to the group settings (visible to group creator). When locked, members of that group cannot modify their predictions even if the tournament lock time hasn't passed yet. Add submissions_locked check to the picks API \u2014 when saving, check if any of the user's groups have submissions_locked=1 and if so, reject the save with a message explaining which group locked it. Show a lock icon and 'Submissions locked by group admin' message on the predictions page when applicable. Group admin can toggle lock/unlock anytime via PUT /api/groups. The Everyone group should not be lockable independently (only follows tournament lock time)."
     }
   ]
 }

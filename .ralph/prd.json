@@ -617,7 +617,7 @@
       "title": "Add ESPN team IDs to Team type and WORLD_CUP_2026_DATA",
       "spec": "specs/tournament-structure.md",
       "priority": 38,
-      "status": "open",
+      "status": "in_progress",
       "dependencies": [
         "TASK-053"
       ],

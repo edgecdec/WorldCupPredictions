@@ -18,19 +18,19 @@ const BRACKET_DATA: BracketData = {
     {
       name: 'A',
       teams: [
-        { name: 'TeamA1', fifaRanking: 5, pot: 1, groupSeed: 1 },
-        { name: 'TeamA2', fifaRanking: 20, pot: 2, groupSeed: 2 },
-        { name: 'TeamA3', fifaRanking: 50, pot: 3, groupSeed: 3 },
-        { name: 'TeamA4', fifaRanking: 80, pot: 4, groupSeed: 4 },
+        { name: 'TeamA1', fifaRanking: 5, pot: 1, groupSeed: 1, espnId: 1001 },
+        { name: 'TeamA2', fifaRanking: 20, pot: 2, groupSeed: 2, espnId: 1002 },
+        { name: 'TeamA3', fifaRanking: 50, pot: 3, groupSeed: 3, espnId: 1003 },
+        { name: 'TeamA4', fifaRanking: 80, pot: 4, groupSeed: 4, espnId: 1004 },
       ],
     },
     {
       name: 'B',
       teams: [
-        { name: 'TeamB1', fifaRanking: 3, pot: 1, groupSeed: 1 },
-        { name: 'TeamB2', fifaRanking: 15, pot: 2, groupSeed: 2 },
-        { name: 'TeamB3', fifaRanking: 45, pot: 3, groupSeed: 3 },
-        { name: 'TeamB4', fifaRanking: 90, pot: 4, groupSeed: 4 },
+        { name: 'TeamB1', fifaRanking: 3, pot: 1, groupSeed: 1, espnId: 2001 },
+        { name: 'TeamB2', fifaRanking: 15, pot: 2, groupSeed: 2, espnId: 2002 },
+        { name: 'TeamB3', fifaRanking: 45, pot: 3, groupSeed: 3, espnId: 2003 },
+        { name: 'TeamB4', fifaRanking: 90, pot: 4, groupSeed: 4, espnId: 2004 },
       ],
     },
   ],

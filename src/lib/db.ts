@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 import { DEFAULT_SCORING } from "@/types";
+import { WORLD_CUP_2026_DATA } from "@/lib/bracketData";
 
 const DB_PATH = path.join(process.cwd(), "data", "worldcup.db");
 export const EVERYONE_GROUP_ID = "everyone";
@@ -86,6 +87,7 @@ function initDb(db: Database.Database) {
   `);
 
   ensureEveryoneGroup(db);
+  migrateEspnIds(db);
 
   // Auto-assign any existing unassigned predictions to Everyone
   try {
@@ -95,6 +97,24 @@ function initDb(db: Database.Database) {
     ).all(EVERYONE_GROUP_ID) as { id: string }[];
     const ins = db.prepare("INSERT OR IGNORE INTO group_members (group_id, prediction_id) VALUES (?, ?)");
     for (const row of unassigned) ins.run(EVERYONE_GROUP_ID, row.id);
+  } catch { /* ignore migration errors */ }
+}
+
+function migrateEspnIds(db: Database.Database) {
+  try {
+    const row = db.prepare("SELECT id, bracket_data FROM tournaments ORDER BY year DESC LIMIT 1").get() as
+      | { id: string; bracket_data: string }
+      | undefined;
+    if (!row) return;
+    const data = JSON.parse(row.bracket_data);
+    if (!data.groups?.length) return;
+    // Check if first team already has espnId
+    if (data.groups[0].teams[0]?.espnId) return;
+    // Update with current WORLD_CUP_2026_DATA which includes espnIds
+    db.prepare("UPDATE tournaments SET bracket_data = ? WHERE id = ?").run(
+      JSON.stringify(WORLD_CUP_2026_DATA),
+      row.id,
+    );
   } catch { /* ignore migration errors */ }
 }
 

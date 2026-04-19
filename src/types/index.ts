@@ -18,6 +18,7 @@ export interface Team {
   fifaRanking: number;
   pot: 1 | 2 | 3 | 4;
   groupSeed: 1 | 2 | 3 | 4;
+  espnId: number;
 }
 
 export interface Group {

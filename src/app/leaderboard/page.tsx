@@ -5,9 +5,10 @@ import {
   Container, Typography, Box, CircularProgress, FormControl, InputLabel,
   Select, MenuItem, Table, TableBody, TableCell, TableContainer, TableHead,
   TableRow, TableSortLabel, Paper, Chip, Accordion, AccordionSummary, AccordionDetails,
-  Tooltip,
+  Tooltip, Button,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import CasinoIcon from '@mui/icons-material/Casino';
 import ChatIcon from '@mui/icons-material/Chat';
 import { useAuth } from '@/hooks/useAuth';
 import AuthForm from '@/components/auth/AuthForm';
@@ -153,16 +154,28 @@ function LeaderboardContent() {
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h4">Leaderboard</Typography>
-        {groups.length > 0 && (
-          <FormControl size="small" sx={{ minWidth: 200 }}>
-            <InputLabel>Group</InputLabel>
-            <Select value={selectedGroup} label="Group" onChange={(e) => setSelectedGroup(e.target.value)}>
-              {groups.map((g) => (
-                <MenuItem key={g.id} value={g.id}>{g.name}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        )}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          {selectedGroup && (
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<CasinoIcon />}
+              href={`/simulate?group=${selectedGroup}`}
+            >
+              What If?
+            </Button>
+          )}
+          {groups.length > 0 && (
+            <FormControl size="small" sx={{ minWidth: 200 }}>
+              <InputLabel>Group</InputLabel>
+              <Select value={selectedGroup} label="Group" onChange={(e) => setSelectedGroup(e.target.value)}>
+                {groups.map((g) => (
+                  <MenuItem key={g.id} value={g.id}>{g.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+        </Box>
       </Box>
 
       {loading ? (

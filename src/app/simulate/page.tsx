@@ -1,5 +1,6 @@
 'use client';
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { Suspense, useEffect, useState, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   Container, Typography, Box, CircularProgress, FormControl, InputLabel,
   Select, MenuItem, Table, TableBody, TableCell, TableContainer, TableHead,
@@ -74,9 +75,19 @@ function mergeKnockoutResults(
 }
 
 export default function SimulatePage() {
+  return (
+    <Suspense fallback={<Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>}>
+      <SimulateContent />
+    </Suspense>
+  );
+}
+
+function SimulateContent() {
+  const searchParams = useSearchParams();
+  const initialGroupId = searchParams.get('group') ?? '';
   const { user, loading: authLoading } = useAuth();
   const [groups, setGroups] = useState<GroupOption[]>([]);
-  const [groupId, setGroupId] = useState('');
+  const [groupId, setGroupId] = useState(initialGroupId);
   const [loading, setLoading] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -104,7 +115,7 @@ export default function SimulatePage() {
         if (d.groups) {
           const opts = d.groups.map((g: { id: string; name: string }) => ({ id: g.id, name: g.name }));
           setGroups(opts);
-          if (opts.length > 0) setGroupId(opts[0].id);
+          if (!groupId && opts.length > 0) setGroupId(opts[0].id);
         }
       });
   }, [user]);

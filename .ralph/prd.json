@@ -854,7 +854,7 @@
       "title": "Add simulator link to Navbar and make it accessible",
       "spec": "specs/code-style.md",
       "priority": 43,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-046",
         "TASK-009"

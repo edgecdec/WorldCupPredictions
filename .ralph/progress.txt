@@ -655,3 +655,10 @@
 - Nova Act verified: non-admin user sees "Not Yet Available" + lock icon on /leaderboard; admin user sees full content
 - Lesson: The test user `ralphtest` is admin, so always register a fresh non-admin user for phase gate testing
 - Lesson: MUI Tooltip on disabled Button needs a wrapping `<span>` to work properly
+
+## TASK-077: Add simulator link to Navbar and make it accessible (2026-04-19)
+- Added "Simulator" nav link between Leaderboard and Groups in Navbar
+- Added "What If?" button with CasinoIcon on leaderboard page, links to /simulate?group={selectedGroup}
+- Updated simulate page to read `group` query param via useSearchParams + Suspense wrapper
+- Added /simulate to PRE_TOURNAMENT_RESTRICTED in tournamentPhase.ts (greyed out before tournament starts)
+- Lessons: Nova Act ActResult has no `response` or `matches_intent` attributes — use action-based tests (click, navigate) and verify via page state rather than assertion-based checks. Use `metadata.num_steps_executed` for basic verification.

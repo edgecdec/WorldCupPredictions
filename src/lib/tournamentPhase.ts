@@ -24,7 +24,7 @@ export function getPhase(tournament: Tournament | null): TournamentPhase {
 }
 
 /** Pages restricted before group stage starts */
-export const PRE_TOURNAMENT_RESTRICTED = ['/leaderboard', '/stats', '/whopicked', '/compare'] as const;
+export const PRE_TOURNAMENT_RESTRICTED = ['/leaderboard', '/stats', '/whopicked', '/compare', '/simulate'] as const;
 
 /** Pages restricted before knockout starts */
 export const GROUP_STAGE_RESTRICTED = ['/bracket/knockout'] as const;

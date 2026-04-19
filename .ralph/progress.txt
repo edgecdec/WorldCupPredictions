@@ -471,3 +471,11 @@
 - Updated groups page copy button to copy full URL (origin/join/CODE) instead of just the code
 - Nova Act verified: invalid code error, groups page loads, /join/everyone shows group info
 - Lesson: Nova Act ActResult has no .matches() method — use page.content() for assertions
+
+## TASK-050: Create shareable public bracket links (2026-04-19)
+- Created `/api/picks/public` endpoint — fetches predictions by username without auth, case-insensitive username matching
+- Created `/bracket/[username]/page.tsx` — public read-only view showing group predictions, third-place picks, and knockout bracket
+- Added share button (ShareIcon) to the main bracket page header that copies the public URL to clipboard
+- Redirects to own bracket page if user views their own public link
+- Uses Snackbar for "Link copied!" feedback
+- Nova Act verified: public page loads correctly, share button visible and clickable when logged in

@@ -550,7 +550,7 @@
       "title": "Create shareable public bracket links",
       "spec": "specs/bracket.md",
       "priority": 50,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-025",
         "TASK-032"

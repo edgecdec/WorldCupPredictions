@@ -1,8 +1,9 @@
 'use client';
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Box, Button, Typography, Alert, CircularProgress, TextField } from '@mui/material';
+import { Box, Button, Typography, Alert, CircularProgress, TextField, IconButton, Tooltip, Snackbar } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import ShareIcon from '@mui/icons-material/Share';
 import Link from 'next/link';
 import GroupPrediction from '@/components/bracket/GroupPrediction';
 import ThirdPlacePicker from '@/components/bracket/ThirdPlacePicker';
@@ -22,6 +23,7 @@ export default function BracketPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -150,9 +152,21 @@ export default function BracketPage() {
 
   return (
     <Box sx={{ maxWidth: 1400, mx: 'auto', px: 2, py: 3 }}>
-      <Typography variant="h4" fontWeight="bold" gutterBottom>
-        Group Stage Predictions
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+        <Typography variant="h4" fontWeight="bold" sx={{ flex: 1 }}>
+          Group Stage Predictions
+        </Typography>
+        {user && (
+          <Tooltip title="Share bracket">
+            <IconButton onClick={async () => {
+              const url = `${window.location.origin}/bracket/${encodeURIComponent(user.username)}`;
+              try { await navigator.clipboard.writeText(url); setCopied(true); } catch { /* noop */ }
+            }}>
+              <ShareIcon />
+            </IconButton>
+          </Tooltip>
+        )}
+      </Box>
 
       {tournament.lock_time_groups && (
         <CountdownTimer targetDate={tournament.lock_time_groups} label="Predictions lock in" />
@@ -229,6 +243,8 @@ export default function BracketPage() {
           </Button>
         )}
       </Box>
+
+      <Snackbar open={copied} autoHideDuration={2000} onClose={() => setCopied(false)} message="Link copied!" />
     </Box>
   );
 }

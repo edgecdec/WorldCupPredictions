@@ -146,7 +146,7 @@
       "title": "Add result types to index.ts",
       "spec": "specs/scoring.md",
       "priority": 14,
-      "status": "open",
+      "status": "done",
       "dependencies": [],
       "description": "Add to src/types/index.ts: GroupStageResults {groupResults: Array<{groupName:string, order:[string,string,string,string]}>, advancingThirdPlace: string[]}. KnockoutResults = Record<string,string>. TournamentResults {groupStage?: GroupStageResults, knockout?: KnockoutResults, knockoutBracket?: KnockoutMatchup[]}."
     },

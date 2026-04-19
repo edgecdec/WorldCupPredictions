@@ -75,6 +75,19 @@ export const DEFAULT_SCORING: ScoringSettings = {
   },
 };
 
+export interface GroupStageResults {
+  groupResults: Array<{ groupName: string; order: [string, string, string, string] }>;
+  advancingThirdPlace: string[];
+}
+
+export type KnockoutResults = Record<string, string>;
+
+export interface TournamentResults {
+  groupStage?: GroupStageResults;
+  knockout?: KnockoutResults;
+  knockoutBracket?: KnockoutMatchup[];
+}
+
 export interface GroupPrediction {
   groupName: string;
   order: [string, string, string, string]; // team names in predicted finish order

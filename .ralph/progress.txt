@@ -106,3 +106,11 @@
 - Helper functions (team, group) keep the data declaration concise and type-safe
 - Build and tsc pass clean. Deployed and verified 200.
 - Lesson: Keep seed data in a single exported constant (WORLD_CUP_2026_DATA) — easy to import from admin page or tests. Helper factory functions reduce repetition without adding complexity.
+
+## TASK-014: Add result types to index.ts
+- Date: 2026-04-18
+- Status: done
+- Added GroupStageResults, KnockoutResults (Record<string,string>), and TournamentResults interfaces to src/types/index.ts
+- Placed them before GroupPrediction since TournamentResults references KnockoutMatchup (already defined below)
+- Both tsc --noEmit and next build passed first try
+- Lessons: Pure type additions are low-risk; no runtime impact, just need to verify build passes

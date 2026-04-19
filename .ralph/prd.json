@@ -606,7 +606,7 @@
       "title": "Add drag-and-drop reordering to GroupPrediction component",
       "spec": "specs/bracket.md",
       "priority": 48,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-025"
       ],

@@ -538,3 +538,14 @@
 - Used HIGHLIGHT_ALPHA = 0.12 for subtle backgrounds that work in both light and dark themes
 - Nova Act confirmed: green for 1st/2nd, brown/amber for 3rd, red for 4th — all visible
 - Lesson: MUI's `alpha()` from `@mui/material` works well for theme-aware transparent backgrounds
+
+## TASK-055: Add drag-and-drop reordering to GroupPrediction component (2026-04-19)
+- Added HTML5 drag-and-drop with DragIndicator handle icon on left of each team row
+- Visual drop indicator (primary color border-top) shows where team will land
+- Dragged row gets reduced opacity for visual feedback
+- Touch support via onTouchStart/Move/End with step-based movement calculation
+- Arrow buttons preserved as accessibility fallback on right side
+- Drag handles hidden when component is disabled
+- touchAction: 'none' prevents scroll interference during drag on mobile
+- Nova Act verified: drag handles visible, arrow buttons functional, reordering works
+- Lesson: Nova Act ActResult doesn't have .response attribute — just print the object directly

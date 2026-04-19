@@ -1,10 +1,13 @@
 'use client';
-import { Box, Card, CardContent, Typography, Chip, CircularProgress } from '@mui/material';
+import { Box, Card, CardActionArea, CardContent, Typography, Chip, CircularProgress } from '@mui/material';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import type { LiveGame } from '@/types';
 import TeamFlag from '@/components/common/TeamFlag';
 
 const STATE_IN = 'in';
 const STATE_POST = 'post';
+const ESPN_MATCH_URL = 'https://www.espn.com/soccer/match/_/gameId';
+const ESPN_SCOREBOARD_URL = 'https://www.espn.com/soccer/scoreboard/_/league/fifa.world';
 
 function statusColor(state: string): 'success' | 'default' | 'error' {
   if (state === STATE_IN) return 'success';
@@ -16,6 +19,10 @@ function statusLabel(game: LiveGame): string {
   if (game.state === STATE_IN) return game.detail || 'Live';
   if (game.state === STATE_POST) return 'Final';
   return game.detail || 'Scheduled';
+}
+
+function getEspnUrl(gameId: string): string {
+  return gameId ? `${ESPN_MATCH_URL}/${gameId}` : ESPN_SCOREBOARD_URL;
 }
 
 function TeamRow({ name, score, isLive, countryCode }: { name: string; score: string; isLive: boolean; countryCode?: string }) {
@@ -80,18 +87,26 @@ export default function LiveScores({ games, loading, countryCodeMap = {} }: Live
                 borderWidth: isLive ? 2 : 1,
               }}
             >
-              <CardContent sx={{ py: 1, px: 2, '&:last-child': { pb: 1 } }}>
-                <Box sx={{ display: 'flex', justifyContent: 'center', mb: 0.5 }}>
-                  <Chip
-                    label={statusLabel(game)}
-                    color={statusColor(game.state)}
-                    size="small"
-                    variant={isLive ? 'filled' : 'outlined'}
-                  />
-                </Box>
-                <TeamRow name={game.home.name} score={game.home.score} isLive={isLive} countryCode={countryCodeMap[game.home.name]} />
-                <TeamRow name={game.away.name} score={game.away.score} isLive={isLive} countryCode={countryCodeMap[game.away.name]} />
-              </CardContent>
+              <CardActionArea
+                component="a"
+                href={getEspnUrl(game.id)}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <CardContent sx={{ py: 1, px: 2, '&:last-child': { pb: 1 } }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', mb: 0.5, gap: 0.5 }}>
+                    <Chip
+                      label={statusLabel(game)}
+                      color={statusColor(game.state)}
+                      size="small"
+                      variant={isLive ? 'filled' : 'outlined'}
+                    />
+                    <OpenInNewIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                  </Box>
+                  <TeamRow name={game.home.name} score={game.home.score} isLive={isLive} countryCode={countryCodeMap[game.home.name]} />
+                  <TeamRow name={game.away.name} score={game.away.score} isLive={isLive} countryCode={countryCodeMap[game.away.name]} />
+                </CardContent>
+              </CardActionArea>
             </Card>
           );
         })}

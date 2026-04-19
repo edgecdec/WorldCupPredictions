@@ -721,3 +721,12 @@
 - Added contextual help tooltip to ThirdPlacePicker explaining "8 of 12 third-place teams advance"
 - Lesson: Don't use useSearchParams() in Next.js 15 without Suspense boundary — use window.location.search in useEffect instead to avoid build errors
 - Nova Act quota exceeded during testing — verified deployment via curl instead
+
+## TASK-088: Add ESPN match page links to live score cards (2026-04-19)
+- Wrapped each live score Card in MUI CardActionArea with href to ESPN match page
+- Used game.id (ESPN event ID) to construct URL: https://www.espn.com/soccer/match/_/gameId/{id}
+- Falls back to ESPN World Cup scoreboard if game ID is empty
+- Added OpenInNewIcon next to status chip to indicate external link
+- Extracted URL constants (ESPN_MATCH_URL, ESPN_SCOREBOARD_URL) per anti-patterns
+- Nova Act test skipped due to daily quota exceeded — not a code issue
+- Lesson: CardActionArea with component="a" is cleaner than wrapping Card in a Link for external URLs

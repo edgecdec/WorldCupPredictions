@@ -980,7 +980,7 @@
       "title": "Add ESPN match page links to live score cards",
       "spec": "specs/bracket.md",
       "priority": 44,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-058"
       ],

@@ -14,6 +14,7 @@ export interface GroupStanding {
   draws: number;
   losses: number;
   goalDifference: number;
+  goalsFor: number;
   gamesPlayed: number;
 }
 
@@ -108,6 +109,7 @@ export async function fetchGroupStandings(
         draws: parseStat(stats, 'draws') || parseStat(stats, 'ties'),
         losses: parseStat(stats, 'losses'),
         goalDifference: parseStat(stats, 'goalDifference') || parseStat(stats, 'pointDifferential'),
+        goalsFor: parseStat(stats, 'pointsFor') || parseStat(stats, 'goalsFor'),
         gamesPlayed: parseStat(stats, 'gamesPlayed'),
       };
     });

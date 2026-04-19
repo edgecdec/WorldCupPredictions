@@ -55,8 +55,8 @@ These are independent — perfect order does NOT imply advancement correct. A us
 - Formula: `floor(ranking_difference / modulus) × round_multiplier`
 - `ranking_difference = winner_fifa_rank - loser_fifa_rank` (positive when lower-ranked team wins)
 - Only awarded when user predicted the winning team
-- Default modulus: 10
-- Default multipliers per round: [1, 1, 2, 2, 1, 3] (R32, R16, QF, SF, 3rd, Final)
+- Default modulus: 5
+- Default multipliers per round: [1, 2, 3, 5, 5, 8] (R32, R16, QF, SF, 3rd, Final)
 
 ### Example
 FIFA #35 beats FIFA #3, user predicted it, QF round (multiplier 2x):
@@ -75,9 +75,9 @@ FIFA #35 beats FIFA #3, user predicted it, QF round (multiplier 2x):
   },
   "knockout": {
     "pointsPerRound": [3, 5, 8, 13, 13, 21],
-    "upsetMultiplierPerRound": [1, 1, 2, 2, 1, 3],
-    "upsetModulus": 10,
-    "championBonus": 5
+    "upsetMultiplierPerRound": [1, 2, 3, 5, 5, 8],
+    "upsetModulus": 5,
+    "championBonus": 0
   }
 }
 ```

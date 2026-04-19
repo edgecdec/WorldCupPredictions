@@ -70,9 +70,9 @@ export const DEFAULT_SCORING: ScoringSettings = {
   },
   knockout: {
     pointsPerRound: [3, 5, 8, 13, 13, 21],
-    upsetMultiplierPerRound: [1, 1, 2, 2, 1, 3],
-    upsetModulus: 10,
-    championBonus: 5,
+    upsetMultiplierPerRound: [1, 2, 3, 5, 5, 8],
+    upsetModulus: 5,
+    championBonus: 0,
   },
 };
 

@@ -295,7 +295,7 @@
       "title": "Create admin API - save group stage results",
       "spec": "specs/tournament-structure.md",
       "priority": 27,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-015",
         "TASK-026"

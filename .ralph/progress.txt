@@ -235,3 +235,11 @@
 - 32 total matches: R32(16) + R16(8) + QF(4) + SF(2) + 3RD(1) + FINAL(1)
 - 3rd place match and Final both fed by SF-1 and SF-2 (losers to 3RD, winners to FINAL)
 - Lessons: The task description said 31 matches but the actual bracket has 32. Implemented all 32 to be complete.
+
+## TASK-027: Create admin API - save group stage results (2026-04-18)
+- Added PUT handler to /api/admin with action 'save_group_results'
+- Validates 12 group results with 4 teams each, 8 advancing third-place teams
+- Verifies advancing 3rd-place teams are actually 3rd in their groups
+- Generates knockout bracket via generateKnockoutBracket() and saves to results_data
+- Merges with existing results_data to preserve any prior data
+- Lesson: The knockoutBracket.ts module already handles all the complex 3rd-place assignment logic, so the API just needs to validate inputs and delegate

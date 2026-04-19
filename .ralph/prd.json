@@ -906,6 +906,29 @@
         "TASK-031"
       ],
       "description": "Create src/components/bracket/MiniBracket.tsx \u2014 a compact bracket progression widget. Instead of showing the full bracket, show tabs for each round transition: 'R32\u2192R16' (shows the 16 winners advancing), 'R16\u2192QF' (shows 8 advancing), 'QF\u2192SF' (4 advancing), 'SF\u2192Final' (2 advancing + champion). Each tab shows a compact grid/list of teams that made it through to that round based on the user's picks. Use small flag + team name chips. Highlight the user's champion pick prominently. This gives a quick overview of 'who do I have going deep?' without needing the full bracket. Use it on: the home page as a summary of the user's picks, the profile page, and as a collapsible sidebar on the knockout predictions page while filling out the bracket. Should also work in read-only mode for viewing others' picks."
+    },
+    {
+      "id": "TASK-082",
+      "title": "Add pick animations and visual feedback",
+      "spec": "specs/bracket.md",
+      "priority": 49,
+      "status": "open",
+      "dependencies": [
+        "TASK-023",
+        "TASK-029"
+      ],
+      "description": "Add satisfying animations when users make picks. GroupPrediction: brief slide animation when reordering teams. Matchup: pulse/highlight animation (300ms) when a team is selected as winner. Champion pick (Final winner): confetti burst or gold shimmer effect. ThirdPlacePicker: chips animate in/out when toggled. Use CSS transitions and keyframes \u2014 no heavy animation libraries. Keep animations subtle and fast (200-400ms). Add a reduced-motion media query check to disable animations for users who prefer reduced motion."
+    },
+    {
+      "id": "TASK-083",
+      "title": "Add onboarding guide / tutorial for new users",
+      "spec": "specs/bracket.md",
+      "priority": 44,
+      "status": "open",
+      "dependencies": [
+        "TASK-025"
+      ],
+      "description": "Create src/components/common/OnboardingGuide.tsx \u2014 a step-by-step tutorial overlay that explains the prediction process to new users. Triggered on first visit to /bracket (check localStorage flag). Steps: (1) Welcome \u2014 explain the 2026 World Cup format briefly (48 teams, 12 groups of 4, top 2 advance + 8 best 3rd place teams). (2) Group predictions \u2014 explain they need to predict the finishing order 1-4 for each group. Show which positions mean 'advance' vs 'eliminated'. (3) Third-place picks \u2014 explain that 8 of 12 third-place teams also advance, and they need to pick which 8. Explain this is unique to the 48-team format. (4) Knockout bracket \u2014 explain this opens later after group stage ends, they'll pick winners for 31 matches. (5) Scoring overview \u2014 brief summary of how points work. Use a modal/dialog with Next/Back/Skip buttons. Show progress dots. Can be re-triggered from a '?' help button in the Navbar. Also add contextual help tooltips on the ThirdPlacePicker explaining '8 of 12 third-place teams advance to the Round of 32 \u2014 pick which ones you think will make it!'"
     }
   ]
 }

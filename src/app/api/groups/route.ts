@@ -104,6 +104,22 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  // Fetch members for a group
+  const membersGroupId = req.nextUrl.searchParams.get("members");
+  if (membersGroupId) {
+    const members = db
+      .prepare(
+        `SELECT gm.prediction_id, u.username, p.bracket_name
+         FROM group_members gm
+         JOIN predictions p ON p.id = gm.prediction_id
+         JOIN users u ON u.id = p.user_id
+         WHERE gm.group_id = ?
+         ORDER BY u.username`
+      )
+      .all(membersGroupId) as { prediction_id: string; username: string; bracket_name: string }[];
+    return NextResponse.json({ members });
+  }
+
   // List groups the user belongs to (via their predictions), created, or Everyone
   const groups = db
     .prepare(
@@ -262,6 +278,36 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+}
+
+export async function DELETE(req: NextRequest) {
+  const authUser = getAuthUser(req);
+  if (!authUser) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  const { action, group_id, prediction_id } = await req.json();
+  if (action !== "remove_member") {
+    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+  }
+  if (!group_id || !prediction_id) {
+    return NextResponse.json({ error: "group_id and prediction_id required" }, { status: 400 });
+  }
+  if (group_id === EVERYONE_GROUP_ID) {
+    return NextResponse.json({ error: "Cannot remove members from the Everyone group" }, { status: 400 });
+  }
+
+  const db = getDb();
+  const group = db.prepare("SELECT * FROM groups WHERE id = ?").get(group_id) as GroupRow | undefined;
+  if (!group) {
+    return NextResponse.json({ error: "Group not found" }, { status: 404 });
+  }
+  if (group.created_by !== authUser.userId) {
+    return NextResponse.json({ error: "Only the group creator can remove members" }, { status: 403 });
+  }
+
+  db.prepare("DELETE FROM group_members WHERE group_id = ? AND prediction_id = ?").run(group_id, prediction_id);
+  return NextResponse.json({ ok: true });
 }
 
 export async function PUT(req: NextRequest) {

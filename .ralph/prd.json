@@ -820,7 +820,7 @@
       "title": "Allow group admins to remove members from their group",
       "spec": "specs/groups.md",
       "priority": 47,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-038"
       ],

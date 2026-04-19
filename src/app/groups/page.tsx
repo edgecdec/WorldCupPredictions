@@ -11,9 +11,11 @@ import AddIcon from "@mui/icons-material/Add";
 import LoginIcon from "@mui/icons-material/Login";
 import PublicIcon from "@mui/icons-material/Public";
 import SettingsIcon from "@mui/icons-material/Settings";
+import PeopleIcon from "@mui/icons-material/People";
 import { useAuth } from "@/hooks/useAuth";
 import AuthForm from "@/components/auth/AuthForm";
 import ScoringEditor from "@/components/common/ScoringEditor";
+import MemberManageDialog from "@/components/common/MemberManageDialog";
 import type { ScoringSettings, UserPrediction } from "@/types";
 import { DEFAULT_SCORING } from "@/types";
 
@@ -54,6 +56,9 @@ export default function GroupsPage() {
   const [editGroup, setEditGroup] = useState<GroupInfo | null>(null);
   const [editScoring, setEditScoring] = useState<ScoringSettings>(DEFAULT_SCORING);
   const [saving, setSaving] = useState(false);
+
+  // Member management state
+  const [membersGroup, setMembersGroup] = useState<GroupInfo | null>(null);
 
   const showSnack = (msg: string, severity: "success" | "error" = "success") => {
     setSnackSeverity(severity);
@@ -239,9 +244,14 @@ export default function GroupsPage() {
                 </Box>
                 <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
                   {canEdit && (
-                    <IconButton size="small" onClick={() => openEditScoring(g)} title="Edit scoring settings">
-                      <SettingsIcon fontSize="small" />
-                    </IconButton>
+                    <>
+                      <IconButton size="small" onClick={() => setMembersGroup(g)} title="Manage members">
+                        <PeopleIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton size="small" onClick={() => openEditScoring(g)} title="Edit scoring settings">
+                        <SettingsIcon fontSize="small" />
+                      </IconButton>
+                    </>
                   )}
                   {!isEveryone && (
                     <>
@@ -336,6 +346,16 @@ export default function GroupsPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Member Management Dialog */}
+      {membersGroup && membersGroup.id !== "everyone" && (
+        <MemberManageDialog
+          groupId={membersGroup.id}
+          groupName={membersGroup.name}
+          onClose={() => setMembersGroup(null)}
+          onRemoved={loadGroups}
+        />
+      )}
 
       <Snackbar open={!!snack} autoHideDuration={2000} onClose={() => setSnack("")}>
         <Alert severity={snackSeverity} onClose={() => setSnack("")}>{snack}</Alert>

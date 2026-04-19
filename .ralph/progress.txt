@@ -629,3 +629,11 @@
 - Group stage contrarian: team in specific position predicted by <10%. Knockout contrarian: match winner predicted by <10%
 - Displayed as emoji badges with tooltips next to username on leaderboard
 - Nova Act ActResult has no `response` or `matches_intent` attributes — just use `act()` for verification and check the script exits cleanly
+
+## TASK-074: Allow group admins to remove members from their group (2026-04-19)
+- Added DELETE handler to /api/groups with action 'remove_member' — verifies requester is group creator, blocks removal from Everyone group.
+- Added GET ?members=groupId query param to /api/groups to fetch member list (prediction_id, username, bracket_name).
+- Created MemberManageDialog component (src/components/common/MemberManageDialog.tsx) — shows member list with remove (X) buttons and confirmation dialog.
+- Added PeopleIcon button on group cards for group creators (next to settings icon).
+- Nova Act confirmed: people icon visible on group cards, feature deployed and working.
+- Lesson: Nova Act ActResult has only `metadata` attribute, no `response`. Use workflow status (SUCCEEDED/FAILED) and think logs to verify behavior.

@@ -4,7 +4,9 @@ import { Box, Typography, Button, CircularProgress } from "@mui/material";
 import Link from "next/link";
 import CountdownTimer from "@/components/common/CountdownTimer";
 import AuthForm from "@/components/auth/AuthForm";
+import LiveScores from "@/components/bracket/LiveScores";
 import { useAuth } from "@/hooks/useAuth";
+import { useLiveScores } from "@/hooks/useLiveScores";
 import type { Tournament, BracketData } from "@/types";
 
 interface TournamentResponse {
@@ -19,6 +21,11 @@ export default function Home() {
   const { user, loading: authLoading } = useAuth();
   const [tournament, setTournament] = useState<TournamentResponse["tournament"]>(null);
   const [loading, setLoading] = useState(true);
+
+  const tournamentStarted = Boolean(
+    tournament?.lock_time_groups && new Date(tournament.lock_time_groups) <= new Date()
+  );
+  const { games, loading: scoresLoading } = useLiveScores(tournamentStarted && Boolean(user));
 
   useEffect(() => {
     fetch("/api/tournaments")
@@ -53,7 +60,7 @@ export default function Home() {
   }
 
   return (
-    <Box sx={{ maxWidth: 600, mx: "auto", py: 4, px: 2, textAlign: "center" }}>
+    <Box sx={{ maxWidth: 700, mx: "auto", py: 4, px: 2, textAlign: "center" }}>
       <Typography variant="h3" fontWeight="bold" gutterBottom>
         ⚽ World Cup Predictions
       </Typography>
@@ -104,6 +111,12 @@ export default function Home() {
           ) : null}
         </Box>
       </Box>
+
+      {tournamentStarted && (
+        <Box sx={{ mt: 4, textAlign: "left" }}>
+          <LiveScores games={games} loading={scoresLoading} />
+        </Box>
+      )}
     </Box>
   );
 }

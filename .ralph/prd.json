@@ -639,7 +639,7 @@
       "title": "Create useLiveScores hook and LiveScores component",
       "spec": "specs/bracket.md",
       "priority": 40,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-057"
       ],

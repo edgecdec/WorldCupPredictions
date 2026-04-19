@@ -498,3 +498,11 @@
 - Both functions use `next: { revalidate: N }` for caching (30s scores, 60s standings).
 - Lesson: ESPN API uses `homeAway` field to distinguish home/away competitors, and stats are in a flat array with `name` keys — need to search by stat name.
 - Lesson: Keep ESPN sync minimal — just data fetching and mapping. UI components (TASK-058/059) will consume via the API route.
+
+## TASK-058: Create useLiveScores hook and LiveScores component (2026-04-19)
+- Created `src/hooks/useLiveScores.ts` — polls `/api/scores` every 30s when enabled, returns `{games, loading}`.
+- Created `src/components/bracket/LiveScores.tsx` — compact card grid showing live/recent/upcoming matches with status chips and team scores. Live matches get green border and "Live" chip.
+- Added LiveScores to home page, only shown when tournament has started (past lock_time_groups) and user is logged in.
+- Games sorted: live first, then recent (post), then upcoming.
+- Nova Act confirmed: login works, home page renders correctly. LiveScores section correctly hidden when tournament hasn't started yet (lock_time_groups is 2026-06-11).
+- Lesson: Nova Act `ActResult` has no `.response` attribute — the agent's return value is logged in stdout but not accessible as a Python attribute. Use `result.metadata` or just check `result` truthiness.

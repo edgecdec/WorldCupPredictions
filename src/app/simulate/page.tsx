@@ -10,12 +10,15 @@ import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import LeaderboardIcon from '@mui/icons-material/Leaderboard';
 import CloseIcon from '@mui/icons-material/Close';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import LinearProgress from '@mui/material/LinearProgress';
+import CasinoIcon from '@mui/icons-material/Casino';
 import KnockoutBracket from '@/components/bracket/KnockoutBracket';
 import MobileBracket from '@/components/bracket/MobileBracket';
 import { useAuth } from '@/hooks/useAuth';
 import AuthForm from '@/components/auth/AuthForm';
 import { scoreTotalPrediction } from '@/lib/scoring';
 import { cascadeClear } from '@/lib/bracketUtils';
+import { useMonteCarlo } from '@/hooks/useMonteCarlo';
 import type {
   BracketData, ScoringSettings, KnockoutMatchup, GroupPrediction,
   GroupStageResults, KnockoutResults, TournamentResults,
@@ -207,6 +210,24 @@ export default function SimulatePage() {
 
   const hypoCount = Object.keys(hypo).length;
 
+  // Monte Carlo entries for the hook
+  const mcEntries = useMemo(
+    () => entries.map((e) => ({
+      key: `${e.username}|${e.bracket_name}`,
+      picks: e.knockout_picks,
+    })),
+    [entries],
+  );
+
+  const { mcResults, progress: mcProgress, running: mcRunning } = useMonteCarlo(
+    mcEntries,
+    actualKnockout ?? {},
+    hypo,
+    matchups,
+    bracketData,
+    settings?.knockout,
+  );
+
   if (authLoading) return null;
   if (!user) {
     return (
@@ -308,6 +329,61 @@ export default function SimulatePage() {
     </Box>
   );
 
+  const monteCarloPanel = (
+    <Box sx={{ mt: 2 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+        <CasinoIcon sx={{ fontSize: 18 }} />
+        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+          Monte Carlo (1,000 sims)
+        </Typography>
+        {mcRunning && (
+          <Chip label={`${mcProgress}/1000`} size="small" variant="outlined" sx={{ ml: 'auto' }} />
+        )}
+      </Box>
+      {mcRunning && <LinearProgress variant="determinate" value={(mcProgress / 1000) * 100} sx={{ mb: 1 }} />}
+      {mcResults.length > 0 && (
+        <TableContainer component={Paper} sx={{ maxHeight: 400, overflow: 'auto' }}>
+          <Table size="small" stickyHeader>
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ py: 0.5, px: 1 }}>#</TableCell>
+                <TableCell sx={{ py: 0.5, px: 1 }}>Player</TableCell>
+                <TableCell align="right" sx={{ py: 0.5, px: 1 }}>Win %</TableCell>
+                <TableCell align="right" sx={{ py: 0.5, px: 1 }}>Avg Place</TableCell>
+                <TableCell align="right" sx={{ py: 0.5, px: 1 }}>Avg Score</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {mcResults.map((r, i) => {
+                const isCurrentUser = r.key.startsWith(`${user.username}|`);
+                return (
+                  <TableRow key={r.key} sx={isCurrentUser ? { bgcolor: 'action.selected' } : undefined}>
+                    <TableCell sx={{ py: 0.25, px: 1 }}>{i + 1}</TableCell>
+                    <TableCell sx={{ py: 0.25, px: 1 }}>
+                      <Typography variant="body2" noWrap sx={{ fontSize: '0.75rem', maxWidth: 120 }}>
+                        {r.key.replace('|', ' — ').replace(/ — $/, '')}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right" sx={{ py: 0.25, px: 1 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>{r.winPct}%</Typography>
+                    </TableCell>
+                    <TableCell align="right" sx={{ py: 0.25, px: 1 }}>{r.avgPlace}</TableCell>
+                    <TableCell align="right" sx={{ py: 0.25, px: 1 }}>{r.avgScore}</TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+      {!mcRunning && mcResults.length === 0 && matchups.length > 0 && (
+        <Typography variant="body2" color="text.secondary">
+          Simulation will start automatically when predictions are loaded.
+        </Typography>
+      )}
+    </Box>
+  );
+
   return (
     <Container maxWidth={false} sx={{ mt: 2, px: 2, mb: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
@@ -382,6 +458,7 @@ export default function SimulatePage() {
           {isWide && (
             <Box sx={{ width: 340, flexShrink: 0 }}>
               {leaderboardPanel}
+              {monteCarloPanel}
             </Box>
           )}
         </Box>
@@ -395,6 +472,7 @@ export default function SimulatePage() {
             <IconButton onClick={() => setDrawerOpen(false)}><CloseIcon /></IconButton>
           </Box>
           {leaderboardPanel}
+          {monteCarloPanel}
         </Box>
       </Drawer>
     </Container>

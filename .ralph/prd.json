@@ -516,7 +516,7 @@
       "title": "Create Monte Carlo simulation",
       "spec": "specs/bracket.md",
       "priority": 47,
-      "status": "open",
+      "status": "in_progress",
       "dependencies": [
         "TASK-046"
       ],

@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Box, Button, Typography, Alert, CircularProgress, TextField, useMediaQuery, useTheme } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import LockIcon from '@mui/icons-material/Lock';
 import Link from 'next/link';
 import KnockoutBracket from '@/components/bracket/KnockoutBracket';
 import MobileBracket from '@/components/bracket/MobileBracket';
@@ -28,6 +29,7 @@ export default function KnockoutPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [simpleMode, setSimpleMode] = useState(false);
+  const [lockedGroup, setLockedGroup] = useState<string | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -59,6 +61,7 @@ export default function KnockoutPage() {
               setTiebreaker(String(pred.tiebreaker));
             }
           }
+          if (pData.locked_group) setLockedGroup(pData.locked_group);
         }
       } catch {
         setError('Failed to load data');
@@ -108,7 +111,7 @@ export default function KnockoutPage() {
   const isLocked = Boolean(
     tournament?.lock_time_knockout && new Date() > new Date(tournament.lock_time_knockout),
   );
-  const disabled = !user || isLocked;
+  const disabled = !user || isLocked || !!lockedGroup;
 
   const handleSave = async () => {
     if (disabled) return;
@@ -184,6 +187,12 @@ export default function KnockoutPage() {
       {!user && (
         <Alert severity="info" sx={{ my: 2 }}>
           Log in to make your knockout predictions.
+        </Alert>
+      )}
+
+      {lockedGroup && (
+        <Alert severity="warning" icon={<LockIcon />} sx={{ my: 2 }}>
+          Submissions locked by group admin ({lockedGroup})
         </Alert>
       )}
 

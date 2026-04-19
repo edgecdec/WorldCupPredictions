@@ -4,6 +4,7 @@ import { Box, Button, Typography, Alert, CircularProgress, TextField, IconButton
 import SaveIcon from '@mui/icons-material/Save';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import ShareIcon from '@mui/icons-material/Share';
+import LockIcon from '@mui/icons-material/Lock';
 import Link from 'next/link';
 import GroupPrediction from '@/components/bracket/GroupPrediction';
 import ThirdPlacePicker from '@/components/bracket/ThirdPlacePicker';
@@ -36,6 +37,7 @@ export default function BracketPage() {
   const [activeTab, setActiveTab] = useState(0);
   const [simpleMode, setSimpleMode] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [lockedGroup, setLockedGroup] = useState<string | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -84,6 +86,7 @@ export default function BracketPage() {
               setThirdPlacePicks(pred.third_place_picks);
             }
           }
+          if (pData.locked_group) setLockedGroup(pData.locked_group);
         }
         setGroupOrders(defaults);
       } catch {
@@ -152,7 +155,7 @@ export default function BracketPage() {
     tournament?.lock_time_groups && new Date() > new Date(tournament.lock_time_groups),
   );
   const tournamentStarted = isLocked;
-  const disabled = !user || isLocked;
+  const disabled = !user || isLocked || !!lockedGroup;
 
   const handleSave = async () => {
     if (!bracketData || disabled) return;
@@ -235,6 +238,12 @@ export default function BracketPage() {
       {!user && (
         <Alert severity="info" sx={{ my: 2 }}>
           Log in to make your predictions.
+        </Alert>
+      )}
+
+      {lockedGroup && (
+        <Alert severity="warning" icon={<LockIcon />} sx={{ my: 2 }}>
+          Submissions locked by group admin ({lockedGroup})
         </Alert>
       )}
 

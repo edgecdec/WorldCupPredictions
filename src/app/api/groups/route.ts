@@ -316,9 +316,10 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const { group_id, scoring_settings } = await req.json();
-  if (!group_id || !scoring_settings) {
-    return NextResponse.json({ error: "group_id and scoring_settings required" }, { status: 400 });
+  const body = await req.json();
+  const { group_id, scoring_settings, submissions_locked } = body;
+  if (!group_id) {
+    return NextResponse.json({ error: "group_id required" }, { status: 400 });
   }
 
   const db = getDb();
@@ -334,7 +335,21 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Only the group creator can edit settings" }, { status: 403 });
   }
 
-  // Check tournament lock time
+  // Handle submissions_locked toggle
+  if (typeof submissions_locked === "boolean") {
+    if (group_id === EVERYONE_GROUP_ID) {
+      return NextResponse.json({ error: "The Everyone group cannot be locked independently" }, { status: 400 });
+    }
+    db.prepare("UPDATE groups SET submissions_locked = ? WHERE id = ?").run(submissions_locked ? 1 : 0, group_id);
+    return NextResponse.json({ ok: true });
+  }
+
+  // Handle scoring settings update
+  if (!scoring_settings) {
+    return NextResponse.json({ error: "scoring_settings or submissions_locked required" }, { status: 400 });
+  }
+
+  // Check tournament lock time for scoring edits
   const tournament = db
     .prepare("SELECT lock_time_groups FROM tournaments ORDER BY year DESC LIMIT 1")
     .get() as { lock_time_groups: string } | undefined;

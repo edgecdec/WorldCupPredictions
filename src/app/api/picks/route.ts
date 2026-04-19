@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuid } from "uuid";
-import { getDb, autoAssignPredictionToEveryone } from "@/lib/db";
+import { getDb, autoAssignPredictionToEveryone, EVERYONE_GROUP_ID } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import type { Tournament, GroupPrediction, TournamentResults } from "@/types";
 
@@ -27,6 +27,20 @@ function getActiveTournament(): Tournament | null {
     bracket_data: JSON.parse(row.bracket_data as string),
     results_data: JSON.parse(row.results_data as string),
   };
+}
+
+function getLockedGroupName(userId: string): string | null {
+  const db = getDb();
+  const row = db
+    .prepare(
+      `SELECT g.name FROM groups g
+       JOIN group_members gm ON gm.group_id = g.id
+       JOIN predictions p ON p.id = gm.prediction_id
+       WHERE p.user_id = ? AND g.submissions_locked = 1 AND g.id != ?
+       LIMIT 1`
+    )
+    .get(userId, EVERYONE_GROUP_ID) as { name: string } | undefined;
+  return row?.name ?? null;
 }
 
 interface GroupPredictionRow extends PredictionRow {
@@ -83,13 +97,16 @@ export async function GET(req: NextRequest) {
     .prepare("SELECT * FROM predictions WHERE user_id = ? AND tournament_id = ?")
     .get(authUser.userId, tournament.id) as PredictionRow | undefined;
 
+  const lockedGroup = getLockedGroupName(authUser.userId);
+
   if (!row) {
-    return NextResponse.json({ ok: true, prediction: null });
+    return NextResponse.json({ ok: true, prediction: null, locked_group: lockedGroup });
   }
 
   return NextResponse.json({
     ok: true,
     prediction: parsePredictionRow(row),
+    locked_group: lockedGroup,
   });
 }
 
@@ -130,6 +147,14 @@ function saveGroups(
   const { lock_time_groups } = tournament;
   if (lock_time_groups && new Date() > new Date(lock_time_groups)) {
     return NextResponse.json({ error: "Group predictions are locked" }, { status: 403 });
+  }
+
+  const lockedGroup = getLockedGroupName(userId);
+  if (lockedGroup) {
+    return NextResponse.json(
+      { error: `Submissions locked by group admin (${lockedGroup})` },
+      { status: 403 }
+    );
   }
 
   const { bracket_name, group_predictions, third_place_picks } = body;
@@ -177,6 +202,14 @@ function saveKnockout(
   const { lock_time_knockout } = tournament;
   if (lock_time_knockout && new Date() > new Date(lock_time_knockout)) {
     return NextResponse.json({ error: "Knockout predictions are locked" }, { status: 403 });
+  }
+
+  const lockedGroup = getLockedGroupName(userId);
+  if (lockedGroup) {
+    return NextResponse.json(
+      { error: `Submissions locked by group admin (${lockedGroup})` },
+      { status: 403 }
+    );
   }
 
   const resultsData = tournament.results_data as TournamentResults;

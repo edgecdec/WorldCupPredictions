@@ -12,6 +12,8 @@ import LoginIcon from "@mui/icons-material/Login";
 import PublicIcon from "@mui/icons-material/Public";
 import SettingsIcon from "@mui/icons-material/Settings";
 import PeopleIcon from "@mui/icons-material/People";
+import LockIcon from "@mui/icons-material/Lock";
+import LockOpenIcon from "@mui/icons-material/LockOpen";
 import { useAuth } from "@/hooks/useAuth";
 import AuthForm from "@/components/auth/AuthForm";
 import ScoringEditor from "@/components/common/ScoringEditor";
@@ -28,6 +30,7 @@ interface GroupInfo {
   member_count: number;
   scoring_settings: ScoringSettings;
   max_brackets: number | null;
+  submissions_locked: number;
 }
 
 const MAX_GROUP_NAME_LENGTH = 50;
@@ -179,6 +182,22 @@ export default function GroupsPage() {
     }
   };
 
+  const handleToggleLock = async (g: GroupInfo) => {
+    try {
+      const res = await fetch("/api/groups", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ group_id: g.id, submissions_locked: !g.submissions_locked }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      showSnack(g.submissions_locked ? "Submissions unlocked" : "Submissions locked");
+      loadGroups();
+    } catch (e: unknown) {
+      showSnack(e instanceof Error ? e.message : "Failed to toggle lock", "error");
+    }
+  };
+
   const scoringSummary = (s: ScoringSettings) =>
     `KO: ${s.knockout.pointsPerRound.join("/")}`;
 
@@ -245,6 +264,14 @@ export default function GroupsPage() {
                 <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
                   {canEdit && (
                     <>
+                      {!isEveryone && (
+                        <Tooltip title={g.submissions_locked ? "Unlock submissions" : "Lock submissions"}>
+                          <IconButton size="small" onClick={() => handleToggleLock(g)}
+                            color={g.submissions_locked ? "error" : "default"}>
+                            {g.submissions_locked ? <LockIcon fontSize="small" /> : <LockOpenIcon fontSize="small" />}
+                          </IconButton>
+                        </Tooltip>
+                      )}
                       <IconButton size="small" onClick={() => setMembersGroup(g)} title="Manage members">
                         <PeopleIcon fontSize="small" />
                       </IconButton>
@@ -252,6 +279,11 @@ export default function GroupsPage() {
                         <SettingsIcon fontSize="small" />
                       </IconButton>
                     </>
+                  )}
+                  {!isEveryone && g.submissions_locked && !canEdit && (
+                    <Tooltip title="Submissions locked by group admin">
+                      <LockIcon fontSize="small" color="error" />
+                    </Tooltip>
                   )}
                   {!isEveryone && (
                     <>

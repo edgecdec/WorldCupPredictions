@@ -890,7 +890,7 @@
       "title": "Allow group admins to lock/unlock submissions independently",
       "spec": "specs/groups.md",
       "priority": 47,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-063"
       ],

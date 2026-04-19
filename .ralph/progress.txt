@@ -730,3 +730,13 @@
 - Extracted URL constants (ESPN_MATCH_URL, ESPN_SCOREBOARD_URL) per anti-patterns
 - Nova Act test skipped due to daily quota exceeded — not a code issue
 - Lesson: CardActionArea with component="a" is cleaner than wrapping Card in a Link for external URLs
+
+## TASK-080: Allow group admins to lock/unlock submissions independently (2026-04-19)
+- Added submissions_locked toggle to PUT /api/groups for group admins (not Everyone group)
+- Added lock check in picks API (both save_groups and save_knockout) — queries group_members for any group with submissions_locked=1
+- Returns locked_group name in GET /api/picks response so bracket pages can show warning
+- Added lock/unlock icon button on groups page for group admins (not shown for Everyone group)
+- Non-admin members see a lock icon indicator when their group is locked
+- Added warning Alert with LockIcon on both /bracket and /bracket/knockout pages when submissions are locked
+- Disabled editing on bracket pages when any group has locked submissions
+- Nova Act quota exceeded — could not run browser test, but verified deployment returns 200 and pages render correctly via curl

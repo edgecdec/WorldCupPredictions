@@ -562,7 +562,7 @@
       "title": "Create print-friendly bracket view",
       "spec": "specs/bracket.md",
       "priority": 51,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-031"
       ],

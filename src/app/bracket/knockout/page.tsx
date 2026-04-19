@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Box, Button, Typography, Alert, CircularProgress, TextField, useMediaQuery, useTheme } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -10,6 +10,7 @@ import CountdownTimer from '@/components/common/CountdownTimer';
 import { useAuth } from '@/hooks/useAuth';
 import { cascadeClear } from '@/lib/bracketUtils';
 import type { Tournament, TournamentResults, KnockoutMatchup } from '@/types';
+import PrintExportButtons from '@/components/common/PrintExportButtons';
 
 export default function KnockoutPage() {
   const { user, loading: authLoading } = useAuth();
@@ -21,6 +22,7 @@ export default function KnockoutPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     async function load() {
@@ -141,12 +143,13 @@ export default function KnockoutPage() {
   return (
     <Box sx={{ maxWidth: 1600, mx: 'auto', px: 2, py: 3 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-        <Button component={Link} href="/bracket" startIcon={<ArrowBackIcon />} size="small">
+        <Button component={Link} href="/bracket" startIcon={<ArrowBackIcon />} size="small" className="no-print">
           Groups
         </Button>
-        <Typography variant="h4" fontWeight="bold">
+        <Typography variant="h4" fontWeight="bold" sx={{ flex: 1 }}>
           Knockout Predictions
         </Typography>
+        <PrintExportButtons targetRef={printRef} filename="knockout-bracket" />
       </Box>
 
       {tournament.lock_time_knockout && (
@@ -162,25 +165,27 @@ export default function KnockoutPage() {
       {error && <Alert severity="error" sx={{ my: 2 }} onClose={() => setError('')}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ my: 2 }} onClose={() => setSuccess('')}>{success}</Alert>}
 
-      {isMobile ? (
-        <MobileBracket
-          matchups={matchups}
-          picks={picks}
-          onPick={disabled ? undefined : handlePick}
-          readOnly={disabled}
-          results={results?.knockout}
-        />
-      ) : (
-        <KnockoutBracket
-          matchups={matchups}
-          picks={picks}
-          onPick={disabled ? undefined : handlePick}
-          readOnly={disabled}
-          results={results?.knockout}
-        />
-      )}
+      <Box ref={printRef}>
+        {isMobile ? (
+          <MobileBracket
+            matchups={matchups}
+            picks={picks}
+            onPick={disabled ? undefined : handlePick}
+            readOnly={disabled}
+            results={results?.knockout}
+          />
+        ) : (
+          <KnockoutBracket
+            matchups={matchups}
+            picks={picks}
+            onPick={disabled ? undefined : handlePick}
+            readOnly={disabled}
+            results={results?.knockout}
+          />
+        )}
+      </Box>
 
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, mt: 3, flexWrap: 'wrap' }}>
+      <Box className="no-print" sx={{ display: 'flex', alignItems: 'center', gap: 3, mt: 3, flexWrap: 'wrap' }}>
         <TextField
           label="Tiebreaker: Total goals in Final"
           type="number"

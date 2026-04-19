@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Box, Button, Typography, Alert, CircularProgress, TextField, IconButton, Tooltip, Snackbar } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
@@ -10,6 +10,7 @@ import ThirdPlacePicker from '@/components/bracket/ThirdPlacePicker';
 import CountdownTimer from '@/components/common/CountdownTimer';
 import { useAuth } from '@/hooks/useAuth';
 import type { Tournament, BracketData, TournamentResults, GroupPrediction as GroupPredictionType } from '@/types';
+import PrintExportButtons from '@/components/common/PrintExportButtons';
 
 const REQUIRED_THIRD_PLACE = 8;
 
@@ -24,6 +25,7 @@ export default function BracketPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [copied, setCopied] = useState(false);
+  const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     async function load() {
@@ -156,6 +158,7 @@ export default function BracketPage() {
         <Typography variant="h4" fontWeight="bold" sx={{ flex: 1 }}>
           Group Stage Predictions
         </Typography>
+        <PrintExportButtons targetRef={printRef} filename="group-predictions" />
         {user && (
           <Tooltip title="Share bracket">
             <IconButton onClick={async () => {
@@ -191,36 +194,38 @@ export default function BracketPage() {
         fullWidth
       />
 
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(4, 1fr)' },
-          gap: 2,
-          mb: 4,
-        }}
-      >
-        {bracketData.groups.map((g) => (
-          <GroupPrediction
-            key={g.name}
-            groupName={g.name}
-            teams={g.teams}
-            order={groupOrders[g.name] || g.teams.map((t) => t.name)}
-            onChange={handleGroupChange}
+      <Box ref={printRef}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(4, 1fr)' },
+            gap: 2,
+            mb: 4,
+          }}
+        >
+          {bracketData.groups.map((g) => (
+            <GroupPrediction
+              key={g.name}
+              groupName={g.name}
+              teams={g.teams}
+              order={groupOrders[g.name] || g.teams.map((t) => t.name)}
+              onChange={handleGroupChange}
+              disabled={disabled}
+            />
+          ))}
+        </Box>
+
+        <Box sx={{ mb: 4 }}>
+          <ThirdPlacePicker
+            thirdPlaceTeams={thirdPlaceTeams}
+            selected={validThirdPicks}
+            onChange={setThirdPlacePicks}
             disabled={disabled}
           />
-        ))}
+        </Box>
       </Box>
 
-      <Box sx={{ mb: 4 }}>
-        <ThirdPlacePicker
-          thirdPlaceTeams={thirdPlaceTeams}
-          selected={validThirdPicks}
-          onChange={setThirdPlacePicks}
-          disabled={disabled}
-        />
-      </Box>
-
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+      <Box className="no-print" sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
         <Button
           variant="contained"
           size="large"

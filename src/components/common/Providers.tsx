@@ -9,8 +9,10 @@ export default function Providers({ children }: { children: ReactNode }) {
   return (
     <ThemeRegistry>
       <AuthProvider>
-        <Navbar />
-        <PickReminderBanner />
+        <div className="no-print">
+          <Navbar />
+          <PickReminderBanner />
+        </div>
         {children}
       </AuthProvider>
     </ThemeRegistry>

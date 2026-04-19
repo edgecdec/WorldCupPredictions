@@ -479,3 +479,13 @@
 - Redirects to own bracket page if user views their own public link
 - Uses Snackbar for "Link copied!" feedback
 - Nova Act verified: public page loads correctly, share button visible and clickable when logged in
+
+## TASK-051: Create print-friendly bracket view (2026-04-19)
+- Added @media print CSS to globals.css: hides navbar, buttons (.no-print), removes box-shadows, forces white background with print-color-adjust.
+- Created PrintExportButtons component with Print (window.print) and Save Image (html2canvas) buttons.
+- Added PrintExportButtons to /bracket, /bracket/knockout, and /bracket/[username] pages.
+- Wrapped bracket content in ref divs for html2canvas capture; marked save/share buttons as no-print.
+- Wrapped Navbar + PickReminderBanner in a .no-print div in Providers.tsx.
+- html2canvas was already in package.json dependencies.
+- Nova Act confirmed both Print and Save Image buttons visible on deployed site.
+- Lesson: Nova Act ActResult doesn't have .response or .metadata.success — the return value is in the think/return logs. Use result.metadata for timing info only.

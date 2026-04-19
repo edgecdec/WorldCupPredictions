@@ -17,3 +17,26 @@ a {
   color: inherit;
   text-decoration: none;
 }
+
+@media print {
+  nav,
+  header,
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  * {
+    box-shadow: none !important;
+  }
+}

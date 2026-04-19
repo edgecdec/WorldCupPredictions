@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Box, Typography, Alert, CircularProgress, Button, IconButton, Tooltip, Snackbar, useMediaQuery, useTheme } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -11,6 +11,7 @@ import KnockoutBracket from '@/components/bracket/KnockoutBracket';
 import MobileBracket from '@/components/bracket/MobileBracket';
 import { useAuth } from '@/hooks/useAuth';
 import type { Tournament, BracketData, TournamentResults, GroupPrediction as GroupPredictionType } from '@/types';
+import PrintExportButtons from '@/components/common/PrintExportButtons';
 
 export default function PublicBracketPage() {
   const { username } = useParams<{ username: string }>();
@@ -28,6 +29,7 @@ export default function PublicBracketPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const printRef = useRef<HTMLDivElement>(null);
 
   // Redirect to own bracket page if viewing self
   useEffect(() => {
@@ -127,70 +129,73 @@ export default function PublicBracketPage() {
   return (
     <Box sx={{ maxWidth: 1600, mx: 'auto', px: 2, py: 3 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, flexWrap: 'wrap' }}>
-        <Button component={Link} href="/" startIcon={<ArrowBackIcon />} size="small">Home</Button>
+        <Button component={Link} href="/" startIcon={<ArrowBackIcon />} size="small" className="no-print">Home</Button>
         <Typography variant="h4" fontWeight="bold" sx={{ flex: 1 }}>
           {decodedUsername}&apos;s Bracket{bracketName ? `: ${bracketName}` : ''}
         </Typography>
+        <PrintExportButtons targetRef={printRef} filename={`${decodedUsername}-bracket`} />
         <Tooltip title="Copy link">
-          <IconButton onClick={handleShare}><ShareIcon /></IconButton>
+          <IconButton onClick={handleShare} className="no-print"><ShareIcon /></IconButton>
         </Tooltip>
       </Box>
 
-      {tiebreaker != null && (
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Tiebreaker (total goals in Final): {tiebreaker}
-        </Typography>
-      )}
+      <Box ref={printRef}>
+        {tiebreaker != null && (
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Tiebreaker (total goals in Final): {tiebreaker}
+          </Typography>
+        )}
 
-      {bracketData?.groups && (
-        <>
-          <Typography variant="h5" fontWeight="bold" sx={{ mb: 2 }}>Group Stage</Typography>
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(4, 1fr)' },
-              gap: 2,
-              mb: 3,
-            }}
-          >
-            {bracketData.groups.map((g) => (
-              <GroupPrediction
-                key={g.name}
-                groupName={g.name}
-                teams={g.teams}
-                order={groupOrders[g.name] || g.teams.map((t) => t.name)}
-                onChange={() => {}}
-                disabled
-              />
-            ))}
-          </Box>
-
-          {thirdPlacePicks.length > 0 && (
-            <Box sx={{ mb: 4 }}>
-              <ThirdPlacePicker
-                thirdPlaceTeams={bracketData.groups.map((g) => {
-                  const order = groupOrders[g.name];
-                  return order ? order[2] : g.teams[2].name;
-                })}
-                selected={thirdPlacePicks}
-                onChange={() => {}}
-                disabled
-              />
+        {bracketData?.groups && (
+          <>
+            <Typography variant="h5" fontWeight="bold" sx={{ mb: 2 }}>Group Stage</Typography>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(4, 1fr)' },
+                gap: 2,
+                mb: 3,
+              }}
+            >
+              {bracketData.groups.map((g) => (
+                <GroupPrediction
+                  key={g.name}
+                  groupName={g.name}
+                  teams={g.teams}
+                  order={groupOrders[g.name] || g.teams.map((t) => t.name)}
+                  onChange={() => {}}
+                  disabled
+                />
+              ))}
             </Box>
-          )}
-        </>
-      )}
 
-      {matchups.length > 0 && Object.keys(knockoutPicks).length > 0 && (
-        <>
-          <Typography variant="h5" fontWeight="bold" sx={{ mb: 2 }}>Knockout Bracket</Typography>
-          {isMobile ? (
-            <MobileBracket matchups={matchups} picks={knockoutPicks} readOnly results={results?.knockout} />
-          ) : (
-            <KnockoutBracket matchups={matchups} picks={knockoutPicks} readOnly results={results?.knockout} />
-          )}
-        </>
-      )}
+            {thirdPlacePicks.length > 0 && (
+              <Box sx={{ mb: 4 }}>
+                <ThirdPlacePicker
+                  thirdPlaceTeams={bracketData.groups.map((g) => {
+                    const order = groupOrders[g.name];
+                    return order ? order[2] : g.teams[2].name;
+                  })}
+                  selected={thirdPlacePicks}
+                  onChange={() => {}}
+                  disabled
+                />
+              </Box>
+            )}
+          </>
+        )}
+
+        {matchups.length > 0 && Object.keys(knockoutPicks).length > 0 && (
+          <>
+            <Typography variant="h5" fontWeight="bold" sx={{ mb: 2 }}>Knockout Bracket</Typography>
+            {isMobile ? (
+              <MobileBracket matchups={matchups} picks={knockoutPicks} readOnly results={results?.knockout} />
+            ) : (
+              <KnockoutBracket matchups={matchups} picks={knockoutPicks} readOnly results={results?.knockout} />
+            )}
+          </>
+        )}
+      </Box>
 
       <Snackbar
         open={copied}

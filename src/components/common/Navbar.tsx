@@ -89,7 +89,14 @@ export default function Navbar() {
             </Tooltip>
             {user ? (
               <>
-                <Typography variant="body2" sx={{ mx: 1 }}>{user.username}</Typography>
+                <Typography
+                  variant="body2"
+                  component="a"
+                  href={`/profile/${encodeURIComponent(user.username)}`}
+                  sx={{ mx: 1, color: 'inherit', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
+                >
+                  {user.username}
+                </Typography>
                 <Button color="inherit" onClick={handleLogout} size="small">Logout</Button>
               </>
             ) : (
@@ -139,8 +146,8 @@ export default function Navbar() {
             <Divider />
             {user ? (
               <>
-                <ListItemButton disabled>
-                  <ListItemText primary={user.username} />
+                <ListItemButton component="a" href={`/profile/${encodeURIComponent(user.username)}`}>
+                  <ListItemText primary={`${user.username} — View Profile`} />
                 </ListItemButton>
                 <ListItemButton onClick={handleLogout}>
                   <ListItemText primary="Logout" />

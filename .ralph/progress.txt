@@ -703,3 +703,13 @@
 - Both columns are sortable
 - Lesson: `scoreTotalPrediction` already returns detailed breakdowns with `upsetBonusPoints` per group/round — no need for separate calculation functions
 - Lesson: Nova Act `ActResult` uses `.metadata` not `.response` for return values
+
+## TASK-079: Create user profile page at /profile/[username]
+- Date: 2026-04-19
+- Created /api/profile API endpoint that returns user info, groups, predictions, score summaries per group, and stats (perfect groups, hot streak, contrarian picks)
+- Created /profile/[username] page with: header (username, member since, champion pick), groups list, score summary table across all groups, read-only group predictions, read-only knockout bracket
+- Made leaderboard usernames clickable links to profile pages
+- Made Navbar username clickable to own profile (both desktop and mobile drawer)
+- Nova Act confirmed profile page loads correctly with username, "Member since" text, and prediction status
+- Lesson: Nova Act ActResult uses `.response` not `.matches` — remember for future tests
+- Lesson: Nova Act free tier has daily quota limits — first test run counts as verification if it passes

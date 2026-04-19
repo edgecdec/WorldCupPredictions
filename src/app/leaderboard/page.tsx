@@ -12,6 +12,7 @@ import CasinoIcon from '@mui/icons-material/Casino';
 import ChatIcon from '@mui/icons-material/Chat';
 import { useAuth } from '@/hooks/useAuth';
 import { useSelectedGroup } from '@/hooks/useSelectedGroup';
+import Link from 'next/link';
 import AuthForm from '@/components/auth/AuthForm';
 import ScoringBreakdownDialog from '@/components/common/ScoringBreakdownDialog';
 import GroupChat from '@/components/common/GroupChat';
@@ -225,7 +226,13 @@ function LeaderboardContent() {
                       </Box>
                     </TableCell>
                     <TableCell>
-                      {entry.username}
+                      <Box
+                        component={Link}
+                        href={`/profile/${encodeURIComponent(entry.username)}`}
+                        sx={{ color: 'inherit', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
+                      >
+                        {entry.username}
+                      </Box>
                       {isCurrentUser && <Chip label="You" size="small" sx={{ ml: 1 }} color="primary" variant="outlined" />}
                       {entry.eliminated && (
                         <Tooltip title="Eliminated — max possible score is below the leader"><span style={{ marginLeft: 4 }}>☠️</span></Tooltip>

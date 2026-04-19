@@ -877,7 +877,7 @@
       "title": "Create user profile page at /profile/[username]",
       "spec": "specs/code-style.md",
       "priority": 47,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-039",
         "TASK-025",

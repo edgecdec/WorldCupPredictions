@@ -365,7 +365,7 @@
       "title": "Create MobileBracket with round tabs",
       "spec": "specs/bracket.md",
       "priority": 33,
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "TASK-031"
       ],

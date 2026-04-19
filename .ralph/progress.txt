@@ -299,3 +299,10 @@
 - Added ArrowForwardIcon import and TournamentResults type to bracket page
 - Nova Act verified: page loads correctly on production, shows "group stage results not entered" message
 - Lesson: Nova Act `act()` returns `ActResult` with only `metadata` field; use schema parameter for structured responses
+
+## TASK-033: Create MobileBracket with round tabs (2026-04-18)
+- Created `src/components/bracket/MobileBracket.tsx` with MUI Tabs per round (R32, R16, QF, SF, 3rd, Final)
+- Same props interface as KnockoutBracket for drop-in replacement
+- Added `useMediaQuery` + `useTheme` to knockout page to auto-switch between Desktop (<md) and Mobile layouts
+- Nova Act doesn't support mobile viewport sizes (min ~1280x650) — can't directly test mobile layout via Nova Act. Verified page loads without crash at desktop size.
+- Lesson: Nova Act has strict viewport requirements (~1600x813 ±20%). For mobile UI testing, need a different approach or manual verification.

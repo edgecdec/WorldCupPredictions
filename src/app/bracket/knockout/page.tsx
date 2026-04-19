@@ -1,10 +1,11 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
-import { Box, Button, Typography, Alert, CircularProgress, TextField } from '@mui/material';
+import { Box, Button, Typography, Alert, CircularProgress, TextField, useMediaQuery, useTheme } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import Link from 'next/link';
 import KnockoutBracket from '@/components/bracket/KnockoutBracket';
+import MobileBracket from '@/components/bracket/MobileBracket';
 import CountdownTimer from '@/components/common/CountdownTimer';
 import { useAuth } from '@/hooks/useAuth';
 import { cascadeClear } from '@/lib/bracketUtils';
@@ -73,6 +74,9 @@ export default function KnockoutPage() {
   const results = tournament?.results_data as TournamentResults | undefined;
   const hasGroupResults = Boolean(results?.groupStage);
   const hasKnockoutBracket = matchups.length > 0;
+
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const isLocked = Boolean(
     tournament?.lock_time_knockout && new Date() > new Date(tournament.lock_time_knockout),
@@ -158,13 +162,23 @@ export default function KnockoutPage() {
       {error && <Alert severity="error" sx={{ my: 2 }} onClose={() => setError('')}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ my: 2 }} onClose={() => setSuccess('')}>{success}</Alert>}
 
-      <KnockoutBracket
-        matchups={matchups}
-        picks={picks}
-        onPick={disabled ? undefined : handlePick}
-        readOnly={disabled}
-        results={results?.knockout}
-      />
+      {isMobile ? (
+        <MobileBracket
+          matchups={matchups}
+          picks={picks}
+          onPick={disabled ? undefined : handlePick}
+          readOnly={disabled}
+          results={results?.knockout}
+        />
+      ) : (
+        <KnockoutBracket
+          matchups={matchups}
+          picks={picks}
+          onPick={disabled ? undefined : handlePick}
+          readOnly={disabled}
+          results={results?.knockout}
+        />
+      )}
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, mt: 3, flexWrap: 'wrap' }}>
         <TextField

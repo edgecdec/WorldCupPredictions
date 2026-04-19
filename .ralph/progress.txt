@@ -330,3 +330,12 @@
 - POST leave: removes all user's predictions from the group.
 - DB schema uses group_members(group_id, prediction_id) — groups link to predictions, not users directly.
 - Lesson: The World Cup schema differs from March Madness — group membership is per-prediction, not per-user. This means join requires a prediction_id and leave removes all of a user's predictions from the group.
+
+## TASK-037: Create ScoringEditor component (2026-04-19)
+- Created src/components/common/ScoringEditor.tsx with all group stage and knockout scoring inputs
+- Uses DEFAULT_SCORING as pre-fill, onChange callback for parent control
+- Group stage: advanceCorrect, exactPosition, upsetBonusPerPlace, advancementCorrectBonus, perfectOrderBonus
+- Knockout: 6 pointsPerRound fields, 6 upsetMultiplierPerRound fields, upsetModulus, championBonus
+- Used KNOCKOUT_ROUNDS constant for round labels to avoid duplication
+- Used MUI TextField with type="number" and size="small" for compact layout
+- Lessons: Keep component stateless (controlled via value/onChange) for reuse in groups page dialog

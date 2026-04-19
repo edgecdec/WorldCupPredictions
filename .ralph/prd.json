@@ -410,7 +410,7 @@
       "title": "Create ScoringEditor component",
       "spec": "specs/scoring.md",
       "priority": 37,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-006"
       ],

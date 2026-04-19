@@ -469,7 +469,7 @@
       "title": "Create compare predictions page",
       "spec": "specs/bracket.md",
       "priority": 42,
-      "status": "open",
+      "status": "in_progress",
       "dependencies": [
         "TASK-025",
         "TASK-031"
@@ -668,6 +668,17 @@
         "TASK-027"
       ],
       "description": "Create src/app/api/auto-sync/route.ts. GET endpoint (admin only or cron-triggered) that fetches ESPN group standings, determines if all group stage matches are complete (all teams played 3 games), and if so, auto-populates the tournament's group stage results from ESPN data. Maps ESPN standings order to our GroupStageResults format. Determines which 3rd-place teams advance based on FIFA's best-third-place rules (points, GD, goals scored). Triggers knockout bracket generation. This automates what the admin would otherwise do manually. Add a 'Sync from ESPN' button on the admin page that calls this endpoint."
+    },
+    {
+      "id": "TASK-061",
+      "title": "Create auto-join 'Everyone' group with default scoring",
+      "spec": "specs/groups.md",
+      "priority": 35,
+      "status": "open",
+      "dependencies": [
+        "TASK-036"
+      ],
+      "description": "Add an 'Everyone' group that all users automatically belong to, following the March Madness pattern. In src/lib/db.ts: add ensureEveryoneGroup() that creates a group with id='everyone', name='Everyone', invite_code='everyone', DEFAULT_SCORING settings if it doesn't exist. Call it during DB init. Add joinEveryoneGroup(db, userId) that inserts the user into group_members for the everyone group. Add autoAssignPredictionToEveryone(db, predictionId) that adds the prediction to group_members for everyone. Wire these in: (1) call joinEveryoneGroup in the register handler in auth route after creating the user, (2) call autoAssignPredictionToEveryone in the picks route after saving/creating a prediction. The Everyone group should appear in every user's group list and its leaderboard shows all players. It cannot be left or deleted. On the groups page, show it at the top with a special indicator (e.g. globe icon)."
     }
   ]
 }

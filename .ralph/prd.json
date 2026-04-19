@@ -500,17 +500,6 @@
       "description": "Create src/app/stats/page.tsx 'use client'. Group selector. Most popular champion, most contrarian picks, group accuracy %, most chalk vs upset-heavy brackets."
     },
     {
-      "id": "TASK-045",
-      "title": "Create ESPN live score sync",
-      "spec": "specs/deployment.md",
-      "priority": 45,
-      "status": "open",
-      "dependencies": [
-        "TASK-013"
-      ],
-      "description": "Create src/lib/espnSync.ts (fetch ESPN soccer scoreboard, parse to LiveGame[]). Create src/hooks/useLiveScores.ts (poll 30s). Create src/components/bracket/LiveScores.tsx (compact score cards)."
-    },
-    {
       "id": "TASK-046",
       "title": "Create What-If simulator",
       "spec": "specs/bracket.md",
@@ -622,6 +611,63 @@
         "TASK-025"
       ],
       "description": "The GroupPrediction component currently uses up/down arrow buttons to reorder teams. Add drag-and-drop support so users can drag teams to reorder them within a group. Use HTML5 drag-and-drop API (no extra dependencies) or a lightweight approach with onDragStart/onDragOver/onDrop on each team row. Keep the up/down arrows as a fallback for accessibility. Each team row should show a drag handle icon (DragIndicator from MUI icons) on the left. While dragging, show a visual indicator of where the team will be dropped. Touch support is important for mobile \u2014 ensure drag works on touch devices or fall back to the arrow buttons on mobile. Test with Nova Act on https://worldcup.edgecdec.com/bracket to verify drag reordering works."
+    },
+    {
+      "id": "TASK-056",
+      "title": "Add ESPN team IDs to Team type and WORLD_CUP_2026_DATA",
+      "spec": "specs/tournament-structure.md",
+      "priority": 38,
+      "status": "open",
+      "dependencies": [
+        "TASK-053"
+      ],
+      "description": "Add optional espnId: number field to the Team interface in src/types/index.ts. Update WORLD_CUP_2026_DATA in src/lib/bracketData.ts with ESPN team IDs for all 48 teams. IDs from ESPN API: Mexico=203, South Korea=451, Czechia=450, South Africa=467, Canada=206, Switzerland=475, Qatar=4398, Bosnia and Herzegovina=452, Brazil=205, Morocco=3575, Scotland=453, Haiti=2218, USA=660, Australia=454, Paraguay=439, Turkiye=456, Germany=481, Ecuador=2305, Ivory Coast=2296, Curacao=15050, Netherlands=487, Japan=457, Sweden=473, Tunisia=2306, Belgium=464, Egypt=2296, Iran=2311, New Zealand=5765, Spain=471, Uruguay=441, Saudi Arabia=2310, Cape Verde=4397, France=478, Senegal=2296, Norway=468, Iraq=2308, Argentina=440, Algeria=2296, Austria=459, Jordan=2309, Portugal=497, Colombia=2299, Uzbekistan=2312, DR Congo=2296, England=476, Croatia=488, Ghana=2296, Panama=2225. Verify IDs by cross-referencing with ESPN standings API: https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standings. Also update the tournament in the DB with the new bracket_data including espnIds."
+    },
+    {
+      "id": "TASK-057",
+      "title": "Create ESPN live scores sync service",
+      "spec": "specs/deployment.md",
+      "priority": 39,
+      "status": "open",
+      "dependencies": [
+        "TASK-056"
+      ],
+      "description": "Create src/lib/espnSync.ts. Fetch live World Cup scores from ESPN API: https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard. Parse each event into a LiveGame object: extract team names (match by ESPN team ID to our team names using bracketData), scores, match status (scheduled/in/post), clock, period, detail text. Export fetchLiveScores(bracketData): Promise<LiveGame[]>. Also export fetchGroupStandings() that hits https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standings and returns current group tables with points, wins, draws, losses, GD for each team. Match ESPN team IDs to our team names."
+    },
+    {
+      "id": "TASK-058",
+      "title": "Create useLiveScores hook and LiveScores component",
+      "spec": "specs/bracket.md",
+      "priority": 40,
+      "status": "open",
+      "dependencies": [
+        "TASK-057"
+      ],
+      "description": "Create src/hooks/useLiveScores.ts \u2014 hook that calls fetchLiveScores() every 30 seconds when there are active matches, returns {games: LiveGame[], loading: boolean}. Only poll when tournament is in progress (between start and end dates). Create src/components/bracket/LiveScores.tsx \u2014 compact card grid showing in-progress and recent match scores. Each card shows team flags/names, score, match status/clock. Add LiveScores to the home page when matches are in progress."
+    },
+    {
+      "id": "TASK-059",
+      "title": "Create live group standings component with prediction comparison",
+      "spec": "specs/bracket.md",
+      "priority": 41,
+      "status": "open",
+      "dependencies": [
+        "TASK-057",
+        "TASK-025"
+      ],
+      "description": "Create src/components/bracket/GroupStandings.tsx. Fetches current group standings from ESPN via fetchGroupStandings(). For each group, shows a table with: position, team name, points, W/D/L, GD. Next to the live standings, show the user's predicted order for that group with colored indicators: green checkmark if team is currently in the position the user predicted, yellow arrow if team is in the right half (top 2 / bottom 2) but wrong exact position, red X if completely wrong. This gives users real-time feedback on how their group predictions are tracking. Add a 'Live Standings' tab or section to the /bracket page that appears once the tournament has started."
+    },
+    {
+      "id": "TASK-060",
+      "title": "Create auto-sync API for group stage results from ESPN",
+      "spec": "specs/deployment.md",
+      "priority": 42,
+      "status": "open",
+      "dependencies": [
+        "TASK-057",
+        "TASK-027"
+      ],
+      "description": "Create src/app/api/auto-sync/route.ts. GET endpoint (admin only or cron-triggered) that fetches ESPN group standings, determines if all group stage matches are complete (all teams played 3 games), and if so, auto-populates the tournament's group stage results from ESPN data. Maps ESPN standings order to our GroupStageResults format. Determines which 3rd-place teams advance based on FIFA's best-third-place rules (points, GD, goals scored). Triggers knockout bracket generation. This automates what the admin would otherwise do manually. Add a 'Sync from ESPN' button on the admin page that calls this endpoint."
     }
   ]
 }

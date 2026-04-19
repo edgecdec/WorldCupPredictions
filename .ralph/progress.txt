@@ -16,3 +16,12 @@
 - Followed March Madness pattern but adapted: uses Request object instead of Next.js cookies() for API route compatibility.
 - Helper functions setTokenCookie/clearTokenCookie for Set-Cookie header strings.
 - Lessons: Using named constants (SALT_ROUNDS, TOKEN_EXPIRY, MAX_AGE_SECONDS, TOKEN_NAME) instead of magic values. The 'cookie' package was already in dependencies.
+
+## TASK-003: Create auth API - POST register/login (2026-04-18)
+- Created src/app/api/auth/route.ts with POST handler for register and login actions.
+- Register: validates username/password length, checks uniqueness, hashes password, inserts user, returns JWT in httpOnly cookie.
+- Login: finds user by username, verifies password, returns JWT in httpOnly cookie.
+- Used proper UserRow interface instead of `any` for the DB query result.
+- Used named constants for validation limits (MIN_PASSWORD_LENGTH, MAX_USERNAME_LENGTH, MAX_PASSWORD_LENGTH).
+- Leveraged existing auth.ts helpers: signToken, setTokenCookie, hashPassword, verifyPassword.
+- Build and tsc passed first try. Deploy verified on attempt 3 (waited for webhook rebuild).

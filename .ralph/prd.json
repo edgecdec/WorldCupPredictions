@@ -26,7 +26,7 @@
       "title": "Create auth API - POST register/login",
       "spec": "specs/anti-patterns.md",
       "priority": 3,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-002"
       ],

@@ -3,6 +3,7 @@ import { getDb } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { scoreTotalPrediction } from '@/lib/scoring';
 import { calculateMaxPossible } from '@/lib/maxPossible';
+import { calculateIndicators } from '@/lib/leaderboardIndicators';
 import {
   BracketData,
   DEFAULT_SCORING,
@@ -145,6 +146,26 @@ export async function GET(req: NextRequest) {
   const leaderScore = leaderboard.length > 0 ? leaderboard[0].totalScore : 0;
   for (const entry of leaderboard) {
     entry.eliminated = (entry.maxPossible ?? 0) < leaderScore;
+  }
+
+  // Calculate emoji indicators
+  const allParsed = leaderboard.map((e) => ({
+    group_predictions: e.prediction!.group_predictions,
+    third_place_picks: e.prediction!.third_place_picks,
+    knockout_picks: e.prediction!.knockout_picks,
+  }));
+  for (const entry of leaderboard) {
+    const parsed = {
+      group_predictions: entry.prediction!.group_predictions,
+      third_place_picks: entry.prediction!.third_place_picks,
+      knockout_picks: entry.prediction!.knockout_picks,
+    };
+    const indicators = calculateIndicators(
+      parsed, allParsed, groupStageResults, knockoutResults, knockoutMatchups,
+    );
+    entry.perfectGroups = indicators.perfectGroups;
+    entry.hotStreak = indicators.hotStreak;
+    entry.contrarianPicks = indicators.contrarianPicks;
   }
 
   return NextResponse.json({

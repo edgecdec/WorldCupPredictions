@@ -619,3 +619,13 @@
 - Moved action buttons (Done for third-place, Review/Save for knockout) into the persistent bottom bar for consistent thumb access.
 - All touch targets already met 48px+ minimum (56px group cards, 64px knockout cards).
 - Lesson: Nova Act `ActResult` doesn't have `.response` or `.succeeded` — use the returned object's actual attributes. The test still confirmed the UI worked correctly through the agent's think logs.
+
+## TASK-073: Add leaderboard emoji indicators (2026-04-19)
+- Created `src/lib/leaderboardIndicators.ts` with pure functions for calculating perfect groups (🎯), hot streak (🔥), and contrarian picks (😱)
+- Added `perfectGroups`, `hotStreak`, `contrarianPicks` fields to `LeaderboardEntry` type
+- Indicators calculated server-side in leaderboard API to avoid client-side computation overhead
+- Hot streak requires 3+ consecutive correct knockout picks to display (avoids noise)
+- Contrarian threshold is 10% — picks made by <10% of the group that turned out correct
+- Group stage contrarian: team in specific position predicted by <10%. Knockout contrarian: match winner predicted by <10%
+- Displayed as emoji badges with tooltips next to username on leaderboard
+- Nova Act ActResult has no `response` or `matches_intent` attributes — just use `act()` for verification and check the script exits cleanly

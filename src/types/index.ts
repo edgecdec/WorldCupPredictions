@@ -128,6 +128,9 @@ export interface LeaderboardEntry {
   maxPossible?: number;
   championEliminated?: boolean;
   eliminated?: boolean;
+  perfectGroups?: number;
+  hotStreak?: number;
+  contrarianPicks?: number;
   prediction?: {
     id: string;
     user_id: string;

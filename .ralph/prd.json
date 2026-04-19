@@ -809,7 +809,7 @@
       "title": "Add leaderboard emoji indicators (\ud83d\udd25 streak, \ud83d\ude31 contrarian pick)",
       "spec": "specs/scoring.md",
       "priority": 46,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-039"
       ],

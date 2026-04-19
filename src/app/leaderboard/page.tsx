@@ -208,6 +208,15 @@ function LeaderboardContent() {
                       {entry.championEliminated && !entry.eliminated && (
                         <Tooltip title="Bracket Busted — predicted champion has been knocked out"><span style={{ marginLeft: 4 }}>💀</span></Tooltip>
                       )}
+                      {(entry.perfectGroups ?? 0) > 0 && (
+                        <Tooltip title={`${entry.perfectGroups} perfect group${entry.perfectGroups === 1 ? '' : 's'} — all 4 positions exactly correct`}><span style={{ marginLeft: 4 }}>🎯{entry.perfectGroups}</span></Tooltip>
+                      )}
+                      {(entry.hotStreak ?? 0) >= 3 && (
+                        <Tooltip title={`${entry.hotStreak} consecutive correct knockout picks in a row`}><span style={{ marginLeft: 4 }}>🔥{entry.hotStreak}</span></Tooltip>
+                      )}
+                      {(entry.contrarianPicks ?? 0) > 0 && (
+                        <Tooltip title={`${entry.contrarianPicks} contrarian pick${entry.contrarianPicks === 1 ? '' : 's'} that hit — predicted by less than 10% of the group`}><span style={{ marginLeft: 4 }}>😱{entry.contrarianPicks}</span></Tooltip>
+                      )}
                     </TableCell>
                     <TableCell>{entry.bracket_name}</TableCell>
                     <TableCell

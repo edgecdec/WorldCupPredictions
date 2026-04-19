@@ -895,6 +895,17 @@
         "TASK-063"
       ],
       "description": "Add a 'Lock Submissions' toggle to the group settings (visible to group creator). When locked, members of that group cannot modify their predictions even if the tournament lock time hasn't passed yet. Add submissions_locked check to the picks API \u2014 when saving, check if any of the user's groups have submissions_locked=1 and if so, reject the save with a message explaining which group locked it. Show a lock icon and 'Submissions locked by group admin' message on the predictions page when applicable. Group admin can toggle lock/unlock anytime via PUT /api/groups. The Everyone group should not be lockable independently (only follows tournament lock time)."
+    },
+    {
+      "id": "TASK-081",
+      "title": "Create mini-bracket progression widget with round tabs",
+      "spec": "specs/bracket.md",
+      "priority": 48,
+      "status": "open",
+      "dependencies": [
+        "TASK-031"
+      ],
+      "description": "Create src/components/bracket/MiniBracket.tsx \u2014 a compact bracket progression widget. Instead of showing the full bracket, show tabs for each round transition: 'R32\u2192R16' (shows the 16 winners advancing), 'R16\u2192QF' (shows 8 advancing), 'QF\u2192SF' (4 advancing), 'SF\u2192Final' (2 advancing + champion). Each tab shows a compact grid/list of teams that made it through to that round based on the user's picks. Use small flag + team name chips. Highlight the user's champion pick prominently. This gives a quick overview of 'who do I have going deep?' without needing the full bracket. Use it on: the home page as a summary of the user's picks, the profile page, and as a collapsible sidebar on the knockout predictions page while filling out the bracket. Should also work in read-only mode for viewing others' picks."
     }
   ]
 }

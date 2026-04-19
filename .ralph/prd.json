@@ -307,7 +307,7 @@
       "title": "Create admin page - group results entry UI",
       "spec": "specs/tournament-structure.md",
       "priority": 28,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-027",
         "TASK-016"
@@ -600,6 +600,17 @@
         "TASK-013"
       ],
       "description": "The current WORLD_CUP_2026_DATA in src/lib/bracketData.ts has incorrect placeholder groups. Replace with the actual 2026 FIFA World Cup draw results: Group A: Mexico(15,pot1), South Africa(61,pot4), South Korea(22,pot2), Czechia(44,pot3). Group B: Canada(27,pot1), Bosnia and Herzegovina(71,pot4), Qatar(51,pot3), Switzerland(17,pot2). Group C: Brazil(5,pot1), Morocco(11,pot2), Haiti(84,pot4), Scotland(36,pot3). Group D: USA(14,pot1), Paraguay(39,pot3), Australia(26,pot2), Turkiye(25,pot4). Group E: Germany(9,pot1), Curacao(82,pot4), Ivory Coast(42,pot3), Ecuador(23,pot2). Group F: Netherlands(7,pot1), Japan(18,pot2), Sweden(43,pot3), Tunisia(40,pot4). Group G: Belgium(8,pot1), Egypt(34,pot2), Iran(20,pot3), New Zealand(86,pot4). Group H: Spain(1,pot1), Cape Verde(68,pot4), Saudi Arabia(60,pot3), Uruguay(16,pot2). Group I: France(3,pot1), Senegal(19,pot2), Norway(29,pot3), Iraq(58,pot4). Group J: Argentina(2,pot1), Algeria(35,pot2), Austria(24,pot3), Jordan(66,pot4). Group K: Portugal(6,pot1), DR Congo(56,pot4), Uzbekistan(50,pot3), Colombia(13,pot2). Group L: England(4,pot1), Croatia(10,pot2), Ghana(72,pot3), Panama(30,pot4). Pot assignments determine groupSeed: pot1=seed1, pot2=seed2, pot3=seed3, pot4=seed4. Also update the seeded tournament in the database if one exists with empty bracket_data."
+    },
+    {
+      "id": "TASK-054",
+      "title": "Fix /bracket page client-side crash",
+      "spec": "specs/anti-patterns.md",
+      "priority": 17,
+      "status": "open",
+      "dependencies": [
+        "TASK-025"
+      ],
+      "description": "Bug: The /bracket page crashes with 'Application error: a client-side exception has occurred'. This was confirmed via Nova Act browser testing. Debug by checking the browser console error. Likely causes: accessing a property on null/undefined tournament data, bracket_data being an empty object {} instead of having groups array, or a type mismatch. The tournament in the DB was seeded with empty bracket_data '{}' \u2014 the page needs to handle this gracefully (show a message like 'Tournament data not yet available') OR the bracket_data needs to be populated with WORLD_CUP_2026_DATA. Fix the crash and verify with a Nova Act test against https://worldcup.edgecdec.com/bracket."
     }
   ]
 }

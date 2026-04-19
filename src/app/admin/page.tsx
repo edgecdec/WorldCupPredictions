@@ -13,7 +13,8 @@ import {
 } from "@mui/material";
 import { useAuth } from "@/hooks/useAuth";
 import { WORLD_CUP_2026_DATA } from "@/lib/bracketData";
-import type { Tournament, BracketData } from "@/types";
+import GroupResultsEditor from "@/components/admin/GroupResultsEditor";
+import type { Tournament, BracketData, GroupStageResults } from "@/types";
 
 const SEED_TOURNAMENT_NAME = "FIFA World Cup";
 const SEED_TOURNAMENT_YEAR = 2026;
@@ -25,7 +26,7 @@ interface TournamentResponse {
   tournament:
     | (Omit<Tournament, "bracket_data" | "results_data"> & {
         bracket_data: BracketData | null;
-        results_data: Record<string, unknown> | null;
+        results_data: { groupStage?: GroupStageResults } | null;
       })
     | null;
 }
@@ -146,7 +147,7 @@ export default function AdminPage() {
   }
 
   return (
-    <Box sx={{ maxWidth: 700, mx: "auto", py: 4, px: 2 }}>
+    <Box sx={{ maxWidth: 900, mx: "auto", py: 4, px: 2 }}>
       <Typography variant="h4" fontWeight="bold" gutterBottom>
         Admin Panel
       </Typography>
@@ -180,6 +181,14 @@ export default function AdminPage() {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {tournament?.bracket_data && (
+        <GroupResultsEditor
+          bracketData={tournament.bracket_data}
+          existingResults={tournament.results_data?.groupStage ?? null}
+          onSaved={fetchTournament}
+        />
       )}
 
       {!tournament && (

@@ -243,3 +243,14 @@
 - Generates knockout bracket via generateKnockoutBracket() and saves to results_data
 - Merges with existing results_data to preserve any prior data
 - Lesson: The knockoutBracket.ts module already handles all the complex 3rd-place assignment logic, so the API just needs to validate inputs and delegate
+
+## TASK-028: Create admin page - group results entry UI (2026-04-18)
+- Created src/components/admin/GroupResultsEditor.tsx as a standalone component
+- Per-group finishing order with up/down arrows (reuses same pattern as GroupPrediction)
+- Third-place advancement chips: select exactly 8 of 12, auto-removes stale picks when reordering changes 3rd-place team
+- Submit calls PUT /api/admin with action 'save_group_results'
+- Loads existing results if present (supports editing after initial save)
+- Integrated into admin page, only visible when tournament with bracket_data exists
+- Widened admin page max-width from 700px to 900px to accommodate 3-column group grid
+- Build and tsc passed first try. Deploy verified (200 response).
+- Lesson: Previous agent had already committed the implementation under a different commit message but didn't update prd.json status. Always verify git state before assuming changes need to be made.

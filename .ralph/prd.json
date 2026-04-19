@@ -538,7 +538,7 @@
       "title": "Create pick reminder banner",
       "spec": "specs/bracket.md",
       "priority": 49,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-010",
         "TASK-007"

@@ -438,3 +438,12 @@
 - Followed March Madness GroupChat pattern closely, adapted for direct fetch instead of api helper
 - Nova Act test confirmed: accordion visible, expandable, shows messages and input field
 - Lesson: The World Cup project's group_members table uses prediction_id (not user_id like March Madness), so membership checks need a JOIN through predictions
+
+## TASK-049: Create pick reminder banner (2026-04-19)
+- Created PickReminderBanner component at src/components/common/PickReminderBanner.tsx
+- Shows MUI Alert warning when within 24h of group or knockout lock time and predictions are incomplete
+- Dismissible via session storage (resets on new browser session)
+- Added to Providers.tsx so it appears on all pages below the Navbar
+- Checks both group stage completeness (all 12 groups + 8 third-place picks) and knockout completeness
+- Nova Act test confirmed: page loads correctly, banner correctly hidden when lock time is >24h away
+- Lesson: Nova Act ActResult doesn't have a .response attribute — just print the result object directly

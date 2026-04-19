@@ -447,3 +447,11 @@
 - Checks both group stage completeness (all 12 groups + 8 third-place picks) and knockout completeness
 - Nova Act test confirmed: page loads correctly, banner correctly hidden when lock time is >24h away
 - Lesson: Nova Act ActResult doesn't have a .response attribute — just print the result object directly
+
+## TASK-056: Add ESPN team IDs to Team type and WORLD_CUP_2026_DATA (2026-04-19)
+- Added `espnId: number` to the Team interface in src/types/index.ts
+- Updated all 48 teams in WORLD_CUP_2026_DATA with verified ESPN team IDs
+- Added `getTeamByEspnId(data, espnId)` utility to bracketData.ts for ESPN-based lookups
+- Added auto-migration in db.ts `migrateEspnIds()` that updates existing tournament bracket_data with espnIds on server restart
+- Updated test fixtures in tests/scoring.test.ts to include espnId field
+- Lesson: When adding a required field to a shared type, grep for all test fixtures that construct that type — they'll break too

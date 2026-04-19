@@ -46,7 +46,7 @@ export default function MobileBracket({ matchups, picks, onPick, readOnly, resul
               <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mb: 0.25, display: 'block' }}>
                 {m.id}
               </Typography>
-              <Matchup matchup={m} userPick={picks[m.id]} onPick={onPick} readOnly={readOnly} result={results?.[m.id]} countryCodeMap={countryCodeMap} />
+              <Matchup matchup={m} userPick={picks[m.id]} onPick={onPick} readOnly={readOnly} result={results?.[m.id]} countryCodeMap={countryCodeMap} isChampionPick={currentRound === ROUND_FINAL && m.id.startsWith('FINAL')} />
             </Box>
           ))
         )}

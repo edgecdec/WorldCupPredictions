@@ -149,7 +149,7 @@ export default function KnockoutBracket({ matchups, picks, onPick, readOnly, res
               <Typography variant="caption" sx={{ fontWeight: 700, color: 'warning.main' }}>
                 🏆 Final
               </Typography>
-              <Matchup matchup={finalMatchup} userPick={picks[finalMatchup.id]} onPick={handlePick} readOnly={readOnly} result={results?.[finalMatchup.id]} countryCodeMap={countryCodeMap} />
+              <Matchup matchup={finalMatchup} userPick={picks[finalMatchup.id]} onPick={handlePick} readOnly={readOnly} result={results?.[finalMatchup.id]} countryCodeMap={countryCodeMap} isChampionPick />
             </Box>
           )}
           {thirdMatchup && (

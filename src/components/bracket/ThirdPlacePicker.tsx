@@ -1,10 +1,12 @@
 'use client';
+import { useState, useCallback } from 'react';
 import { Box, Chip, Typography, Tooltip } from '@mui/material';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import TeamFlag from '@/components/common/TeamFlag';
 
 const REQUIRED_COUNT = 8;
 const TOTAL_THIRD_PLACE = 12;
+const POP_DURATION_MS = 300;
 
 interface ThirdPlacePickerProps {
   thirdPlaceTeams: string[];
@@ -15,14 +17,18 @@ interface ThirdPlacePickerProps {
 }
 
 export default function ThirdPlacePicker({ thirdPlaceTeams, selected, onChange, disabled, countryCodeMap = {} }: ThirdPlacePickerProps) {
-  const handleToggle = (team: string) => {
+  const [animatingChip, setAnimatingChip] = useState<string | null>(null);
+
+  const handleToggle = useCallback((team: string) => {
     if (disabled) return;
+    setAnimatingChip(team);
+    setTimeout(() => setAnimatingChip(null), POP_DURATION_MS);
     if (selected.includes(team)) {
       onChange(selected.filter((t) => t !== team));
     } else if (selected.length < REQUIRED_COUNT) {
       onChange([...selected, team]);
     }
-  };
+  }, [disabled, selected, onChange]);
 
   return (
     <Box>
@@ -50,7 +56,10 @@ export default function ThirdPlacePicker({ thirdPlaceTeams, selected, onChange, 
               variant={isSelected ? 'filled' : 'outlined'}
               onClick={() => handleToggle(team)}
               disabled={disabled}
-              sx={{ cursor: disabled ? 'default' : 'pointer' }}
+              sx={{
+                cursor: disabled ? 'default' : 'pointer',
+                animation: animatingChip === team ? `chipPop ${POP_DURATION_MS}ms ease` : 'none',
+              }}
             />
           );
         })}

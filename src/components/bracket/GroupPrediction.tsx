@@ -11,6 +11,7 @@ import TeamFlag from '@/components/common/TeamFlag';
 const POSITION_LABELS = ['1st', '2nd', '3rd', '4th'] as const;
 const HIGHLIGHT_ALPHA = 0.12;
 const DROP_INDICATOR_HEIGHT = 2;
+const SLIDE_DURATION_MS = 250;
 
 interface GroupPredictionProps {
   groupName: string;
@@ -57,7 +58,13 @@ export default function GroupPrediction({ groupName, teams, order, onChange, dis
   const teamMap = new Map(teams.map((t) => [t.name, t]));
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropTarget, setDropTarget] = useState<number | null>(null);
+  const [movedTeam, setMovedTeam] = useState<string | null>(null);
   const touchState = useRef<{ startY: number; index: number; moved: boolean } | null>(null);
+
+  const animateMove = useCallback((teamName: string) => {
+    setMovedTeam(teamName);
+    setTimeout(() => setMovedTeam(null), SLIDE_DURATION_MS);
+  }, []);
 
   const handleDragStart = useCallback((e: React.DragEvent, index: number) => {
     if (disabled) return;
@@ -114,6 +121,7 @@ export default function GroupPrediction({ groupName, teams, order, onChange, dis
   const handleMove = (index: number, direction: -1 | 1) => {
     const target = index + direction;
     if (target < 0 || target >= order.length) return;
+    animateMove(order[index]);
     onChange(groupName, moveItem(order, index, target));
   };
 
@@ -153,6 +161,7 @@ export default function GroupPrediction({ groupName, teams, order, onChange, dis
                   cursor: disabled ? 'default' : 'grab',
                   transition: 'opacity 0.15s, border-top 0.15s',
                   touchAction: disabled ? 'auto' : 'none',
+                  animation: movedTeam === name ? `slideReorder ${SLIDE_DURATION_MS}ms ease` : 'none',
                 }}
               >
                 {!disabled && (

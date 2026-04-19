@@ -1,7 +1,10 @@
 'use client';
+import { useState, useCallback } from 'react';
 import { Box, Paper, Typography } from '@mui/material';
 import type { KnockoutMatchup } from '@/types';
 import TeamFlag from '@/components/common/TeamFlag';
+
+const PULSE_DURATION_MS = 300;
 
 interface MatchupProps {
   matchup: KnockoutMatchup;
@@ -11,6 +14,7 @@ interface MatchupProps {
   disabled?: boolean;
   result?: string;
   countryCodeMap?: Record<string, string>;
+  isChampionPick?: boolean;
 }
 
 function TeamSlot({
@@ -22,6 +26,7 @@ function TeamSlot({
   onClick,
   position,
   countryCode,
+  animating,
 }: {
   team: string | null;
   isPicked: boolean;
@@ -31,6 +36,7 @@ function TeamSlot({
   onClick: () => void;
   position: 'top' | 'bottom';
   countryCode?: string;
+  animating: boolean;
 }) {
   const bg = isCorrect
     ? 'rgba(76, 175, 80, 0.3)'
@@ -60,6 +66,7 @@ function TeamSlot({
         minHeight: 28,
         '&:hover': clickable && team ? { background: isPicked ? bg : 'action.hover' } : {},
         transition: 'background 0.2s ease',
+        animation: animating ? `pickPulse ${PULSE_DURATION_MS}ms ease` : 'none',
       }}
     >
       {team ? (
@@ -96,7 +103,7 @@ function TeamSlot({
   );
 }
 
-export default function Matchup({ matchup, userPick, onPick, readOnly, disabled, result, countryCodeMap = {} }: MatchupProps) {
+export default function Matchup({ matchup, userPick, onPick, readOnly, disabled, result, countryCodeMap = {}, isChampionPick }: MatchupProps) {
   const clickable = !readOnly && !disabled && !!onPick;
   const pickA = userPick === matchup.teamA;
   const pickB = userPick === matchup.teamB;
@@ -106,17 +113,39 @@ export default function Matchup({ matchup, userPick, onPick, readOnly, disabled,
   const correctB = !!result && pickB && result === matchup.teamB;
   const wrongB = !!result && pickB && result !== matchup.teamB;
 
+  const [animatingSlot, setAnimatingSlot] = useState<'A' | 'B' | null>(null);
+
+  const handlePick = useCallback((team: string, slot: 'A' | 'B') => {
+    setAnimatingSlot(slot);
+    setTimeout(() => setAnimatingSlot(null), PULSE_DURATION_MS);
+    onPick?.(matchup.id, team);
+  }, [onPick, matchup.id]);
+
+  const showShimmer = isChampionPick && userPick;
+
   return (
-    <Paper elevation={0} sx={{ background: 'transparent', borderRadius: 0, my: 0.25 }}>
+    <Paper
+      elevation={0}
+      sx={{
+        background: showShimmer
+          ? 'linear-gradient(90deg, transparent 0%, rgba(255,193,7,0.25) 50%, transparent 100%)'
+          : 'transparent',
+        backgroundSize: showShimmer ? '200% 100%' : undefined,
+        animation: showShimmer ? 'championShimmer 2s ease-in-out infinite' : 'none',
+        borderRadius: 0,
+        my: 0.25,
+      }}
+    >
       <TeamSlot
         team={matchup.teamA}
         isPicked={pickA}
         isCorrect={correctA}
         isWrong={wrongA}
         clickable={clickable}
-        onClick={() => matchup.teamA && onPick?.(matchup.id, matchup.teamA)}
+        onClick={() => matchup.teamA && handlePick(matchup.teamA, 'A')}
         position="top"
         countryCode={matchup.teamA ? countryCodeMap[matchup.teamA] : undefined}
+        animating={animatingSlot === 'A'}
       />
       <TeamSlot
         team={matchup.teamB}
@@ -124,9 +153,10 @@ export default function Matchup({ matchup, userPick, onPick, readOnly, disabled,
         isCorrect={correctB}
         isWrong={wrongB}
         clickable={clickable}
-        onClick={() => matchup.teamB && onPick?.(matchup.id, matchup.teamB)}
+        onClick={() => matchup.teamB && handlePick(matchup.teamB, 'B')}
         position="bottom"
         countryCode={matchup.teamB ? countryCodeMap[matchup.teamB] : undefined}
+        animating={animatingSlot === 'B'}
       />
     </Paper>
   );

@@ -912,7 +912,7 @@
       "title": "Add pick animations and visual feedback",
       "spec": "specs/bracket.md",
       "priority": 49,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-023",
         "TASK-029"

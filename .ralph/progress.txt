@@ -747,3 +747,13 @@
 - Integrated into: home page (shows when user has knockout picks), profile page (after score summary), knockout predictions page (above bracket as quick reference).
 - Nova Act test skipped due to daily quota exceeded — verified deployment via curl (200 on / and /bracket/knockout).
 - Lesson: Keep widget components self-contained with minimal props. The countryCodeMap pattern is reused everywhere — could be a context/hook in the future.
+
+## TASK-082: Add pick animations and visual feedback (2026-04-19)
+- Added CSS keyframes in globals.css: pickPulse (matchup picks), chipPop (third-place chips), championShimmer (Final winner gold shimmer), slideReorder (group team reorder).
+- All animations respect `prefers-reduced-motion: reduce` media query.
+- Matchup.tsx: pulse animation on team slot when picked, gold shimmer on Final matchup when champion is selected via `isChampionPick` prop.
+- GroupPrediction.tsx: slide animation on team row when moved via arrow buttons.
+- ThirdPlacePicker.tsx: pop animation on chip when toggled.
+- KnockoutBracket.tsx and MobileBracket.tsx: pass `isChampionPick` to Final matchup.
+- No external animation libraries — pure CSS transitions/keyframes only.
+- Nova Act test skipped due to daily quota exceeded (external limitation).

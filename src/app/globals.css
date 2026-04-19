@@ -18,6 +18,36 @@ a {
   text-decoration: none;
 }
 
+/* Pick animations */
+@keyframes pickPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+
+@keyframes chipPop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+
+@keyframes championShimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes slideReorder {
+  0% { transform: translateY(var(--slide-from, 0)); opacity: 0.7; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes pickPulse { 0%, 100% { transform: none; } }
+  @keyframes chipPop { 0%, 100% { transform: none; } }
+  @keyframes championShimmer { 0%, 100% { background-position: center; } }
+  @keyframes slideReorder { 0%, 100% { transform: none; opacity: 1; } }
+}
+
 @media print {
   nav,
   header,

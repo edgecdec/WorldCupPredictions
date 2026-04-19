@@ -104,7 +104,7 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // List groups the user belongs to (via their predictions), always including Everyone
+  // List groups the user belongs to (via their predictions), created, or Everyone
   const groups = db
     .prepare(
       `SELECT DISTINCT g.*, COALESCE(u.username, 'System') as creator_name,
@@ -119,10 +119,16 @@ export async function GET(req: NextRequest) {
         (SELECT COUNT(*) FROM group_members gm2 WHERE gm2.group_id = g.id) as member_count
        FROM groups g
        LEFT JOIN users u ON g.created_by = u.id
+       WHERE g.created_by = ?
+       UNION
+       SELECT g.*, COALESCE(u.username, 'System') as creator_name,
+        (SELECT COUNT(*) FROM group_members gm2 WHERE gm2.group_id = g.id) as member_count
+       FROM groups g
+       LEFT JOIN users u ON g.created_by = u.id
        WHERE g.id = ?
        ORDER BY created_at DESC`
     )
-    .all(authUser.userId, EVERYONE_GROUP_ID) as GroupRow[];
+    .all(authUser.userId, authUser.userId, EVERYONE_GROUP_ID) as GroupRow[];
 
   return NextResponse.json({
     groups: groups.map((g) => ({
@@ -167,6 +173,17 @@ export async function POST(req: NextRequest) {
       `INSERT INTO groups (id, name, invite_code, created_by, scoring_settings, max_brackets)
        VALUES (?, ?, ?, ?, ?, ?)`
     ).run(id, name, inviteCode, authUser.userId, JSON.stringify(settings), maxBrackets);
+
+    // Auto-join creator's prediction to the new group
+    const creatorPrediction = db
+      .prepare("SELECT id FROM predictions WHERE user_id = ? LIMIT 1")
+      .get(authUser.userId) as { id: string } | undefined;
+    if (creatorPrediction) {
+      db.prepare("INSERT OR IGNORE INTO group_members (group_id, prediction_id) VALUES (?, ?)").run(
+        id,
+        creatorPrediction.id
+      );
+    }
 
     return NextResponse.json({ ok: true, id, invite_code: inviteCode });
   }

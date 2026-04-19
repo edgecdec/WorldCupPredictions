@@ -88,6 +88,7 @@ function initDb(db: Database.Database) {
 
   ensureEveryoneGroup(db);
   migrateEspnIds(db);
+  migrateCreatorsToOwnGroups(db);
 
   // Auto-assign any existing unassigned predictions to Everyone
   try {
@@ -115,6 +116,21 @@ function migrateEspnIds(db: Database.Database) {
       JSON.stringify(WORLD_CUP_2026_DATA),
       row.id,
     );
+  } catch { /* ignore migration errors */ }
+}
+
+function migrateCreatorsToOwnGroups(db: Database.Database) {
+  try {
+    const groups = db.prepare(
+      `SELECT g.id, g.created_by FROM groups g WHERE g.id != ?`
+    ).all(EVERYONE_GROUP_ID) as { id: string; created_by: string }[];
+    const ins = db.prepare("INSERT OR IGNORE INTO group_members (group_id, prediction_id) VALUES (?, ?)");
+    for (const g of groups) {
+      const pred = db.prepare("SELECT id FROM predictions WHERE user_id = ? LIMIT 1").get(g.created_by) as
+        | { id: string }
+        | undefined;
+      if (pred) ins.run(g.id, pred.id);
+    }
   } catch { /* ignore migration errors */ }
 }
 

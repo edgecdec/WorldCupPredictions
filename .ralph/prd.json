@@ -708,7 +708,7 @@
       "title": "Fix: auto-join creator to group on creation",
       "spec": "specs/groups.md",
       "priority": 37,
-      "status": "open",
+      "status": "in_progress",
       "dependencies": [
         "TASK-036"
       ],

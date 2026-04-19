@@ -156,3 +156,12 @@
 - Knockout scoring: base points per round, upset bonus using FIFA rankings with modulus formula, champion bonus for correct Final pick
 - `scoreTotalPrediction()` combines group stage + knockout into a single result
 - Lessons: Keep scoring functions pure — they take data in and return structured results. The `KnockoutMatchup.round` field (0-5) maps directly to the `KNOCKOUT_ROUNDS` array indices, making round lookup straightforward.
+
+## TASK-020: Add scoring unit tests with vitest (2026-04-18)
+- Added vitest 3.1.2 as devDependency, created vitest.config.ts with @/ alias
+- Created tests/scoring.test.ts with 28 tests covering:
+  - Group stage: advance_correct, exact_position, upset bonus (capped at prediction), 3rd-place interaction, independent advancement/perfect order bonuses, multi-group sums, missing predictions, custom settings
+  - Knockout: base points per round, upset bonus with modulus and round multipliers, champion bonus, unplayed matches, 3rd place match, custom settings
+  - Integration: scoreTotalPrediction combining both, handling missing results
+- All tests pass, build clean
+- Lesson: vitest resolves @/ alias via vitest.config.ts resolve.alias, not tsconfig paths

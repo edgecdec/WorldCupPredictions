@@ -213,7 +213,7 @@
       "title": "Create scoring unit tests",
       "spec": "specs/scoring.md",
       "priority": 20,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-019"
       ],

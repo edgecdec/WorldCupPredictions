@@ -123,6 +123,15 @@ export interface LeaderboardEntry {
   knockoutScore: number;
   totalScore: number;
   tiebreaker: number | null;
+  prediction?: {
+    id: string;
+    user_id: string;
+    bracket_name: string;
+    group_predictions: GroupPrediction[];
+    third_place_picks: string[];
+    knockout_picks: Record<string, string>;
+    tiebreaker: number | null;
+  };
 }
 
 export interface KnockoutMatchup {

@@ -106,6 +106,15 @@ export async function GET(req: NextRequest) {
       knockoutScore: result.knockoutScore,
       totalScore: result.totalScore,
       tiebreaker: p.tiebreaker,
+      prediction: {
+        id: p.id,
+        user_id: p.user_id,
+        bracket_name: p.bracket_name,
+        group_predictions: groupPredictions,
+        third_place_picks: thirdPlacePicks,
+        knockout_picks: knockoutPicks,
+        tiebreaker: p.tiebreaker,
+      },
     };
   });
 
@@ -117,5 +126,10 @@ export async function GET(req: NextRequest) {
     return 0;
   });
 
-  return NextResponse.json({ leaderboard, scoring_settings: scoringSettings });
+  return NextResponse.json({
+    leaderboard,
+    scoring_settings: scoringSettings,
+    results: resultsData,
+    bracket_data: bracketData,
+  });
 }

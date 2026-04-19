@@ -362,3 +362,12 @@
 - Group Stage tab shows per-group rows with predicted vs actual position, advance correct, exact position, and upset bonus columns.
 - Knockout tab shows per-match rows with round, matchup, pick, winner, base points, and upset bonus. Correct/incorrect rows are color-coded.
 - Lessons: Separated breakdown computation into its own utility file to keep the component under 150 lines and the scoring logic reusable. The existing `scoreGroupStage`/`scoreKnockout` functions compute totals but not per-item detail, so the breakdown utils mirror their logic at a finer granularity.
+
+## TASK-041: Create leaderboard page (2026-04-19)
+- Created src/app/leaderboard/page.tsx with sortable MUI table, group selector, scoring breakdown dialog
+- Extended leaderboard API to return prediction data, results, and bracketData for breakdown dialog
+- Added prediction field to LeaderboardEntry type (optional, for API response)
+- Used Suspense boundary to wrap useSearchParams (Next.js 15 requirement for static generation)
+- Current user row highlighted with action.hover background and "You" chip
+- Clicking any score cell opens ScoringBreakdownDialog with full per-team/per-match breakdown
+- Lessons: Nova Act ActResult has only `metadata` field, no `text` or `response` — just use act() for verification assertions

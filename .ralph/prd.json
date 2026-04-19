@@ -457,7 +457,7 @@
       "title": "Create leaderboard page",
       "spec": "specs/scoring.md",
       "priority": 41,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-039",
         "TASK-040"

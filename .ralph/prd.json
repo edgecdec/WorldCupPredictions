@@ -724,6 +724,17 @@
         "TASK-025"
       ],
       "description": "On the /bracket group predictions page, visually indicate which teams the user is predicting to advance vs not advance. In each GroupPrediction card: teams predicted 1st or 2nd get a subtle green background (theme: success.main with low alpha). Teams predicted 3rd that are picked as one of the 8 advancing third-place teams also get green. Teams predicted 3rd but NOT picked to advance get a neutral/amber background. Teams predicted 4th get a subtle red/dimmed background (theme: error.main with low alpha). This makes it immediately clear at a glance which teams the user expects to go through. The ThirdPlacePicker selection should dynamically update the 3rd-place team colors in the group cards (green if selected, amber if not). Use MUI theme tokens for colors \u2014 no hardcoded hex."
+    },
+    {
+      "id": "TASK-066",
+      "title": "Add correct/incorrect color coding to bracket picks after results",
+      "spec": "specs/bracket.md",
+      "priority": 44,
+      "status": "open",
+      "dependencies": [
+        "TASK-031"
+      ],
+      "description": "On the knockout bracket view and group predictions page, after results are entered, color-code the user's picks: green background/border for correct picks, red/dimmed for incorrect picks. In KnockoutBracket/Matchup: if a result exists for a matchup and the user picked the correct winner, highlight their pick in green (success.main). If they picked wrong, show it in red (error.main) with the correct winner indicated. In GroupPrediction: after group results exist, show green for teams in the correct position, amber for correct half but wrong position, red for completely wrong. Apply to both the user's own bracket view and the public/shared bracket view."
     }
   ]
 }

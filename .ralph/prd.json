@@ -180,7 +180,7 @@
       "title": "Add seed test tournament button to admin",
       "spec": "specs/tournament-structure.md",
       "priority": 17,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-016"
       ],

@@ -15,6 +15,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { WORLD_CUP_2026_DATA } from "@/lib/bracketData";
 import type { Tournament, BracketData } from "@/types";
 
+const SEED_TOURNAMENT_NAME = "FIFA World Cup";
+const SEED_TOURNAMENT_YEAR = 2026;
+const SEED_LOCK_GROUPS = "2026-06-11T00:00:00";
+const SEED_LOCK_KNOCKOUT = "2026-06-30T00:00:00";
+
 interface TournamentResponse {
   ok: boolean;
   tournament:
@@ -50,6 +55,33 @@ export default function AdminPage() {
   useEffect(() => {
     fetchTournament();
   }, [fetchTournament]);
+
+  const handleSeedTournament = async () => {
+    setError("");
+    setSuccess("");
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: SEED_TOURNAMENT_NAME,
+          year: SEED_TOURNAMENT_YEAR,
+          lock_time_groups: SEED_LOCK_GROUPS,
+          lock_time_knockout: SEED_LOCK_KNOCKOUT,
+          bracket_data: WORLD_CUP_2026_DATA,
+        }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "Failed to seed tournament");
+      setSuccess("Test tournament seeded successfully!");
+      fetchTournament();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const handleUseWorldCupData = () => {
     setBracketData(WORLD_CUP_2026_DATA);
@@ -146,6 +178,26 @@ export default function AdminPage() {
                 sx={{ mt: 1 }}
               />
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {!tournament && (
+        <Card sx={{ mb: 4 }}>
+          <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "center" }}>
+            <Typography variant="h6">Quick Setup</Typography>
+            <Typography variant="body2" color="text.secondary">
+              No tournament exists. Seed a test tournament with 2026 World Cup data.
+            </Typography>
+            <Button
+              variant="contained"
+              color="secondary"
+              onClick={handleSeedTournament}
+              disabled={submitting}
+              startIcon={submitting ? <CircularProgress size={20} color="inherit" /> : null}
+            >
+              Seed Test Tournament
+            </Button>
           </CardContent>
         </Card>
       )}

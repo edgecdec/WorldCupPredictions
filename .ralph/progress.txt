@@ -131,3 +131,11 @@
 - "Use 2026 World Cup Data" button loads WORLD_CUP_2026_DATA into bracket_data
 - Submits to POST /api/admin
 - Lessons: NovaAct uses `starting_page` not `starting_url`, and `metadata` not `response` on ActResult
+
+## TASK-017: Add seed test tournament button to admin page (2026-04-18)
+- Added "Seed Test Tournament" button to admin page, only visible when no tournament exists
+- One-click creates tournament with name "FIFA World Cup", year 2026, lock_time_groups 2026-06-11, lock_time_knockout 2026-06-30, using WORLD_CUP_2026_DATA
+- Used named constants for seed values (SEED_TOURNAMENT_NAME, SEED_TOURNAMENT_YEAR, SEED_LOCK_GROUPS, SEED_LOCK_KNOCKOUT)
+- Placed in a "Quick Setup" card above the manual create form
+- Build and tsc passed first try. Deploy verified on attempt 3.
+- Lessons: Nova Act ActResult uses str() for content inspection, not .response attribute. Keep seed button minimal — reuses existing POST /api/admin endpoint.

@@ -137,7 +137,7 @@
       "title": "Create bracketData utilities and seed data",
       "spec": "specs/tournament-structure.md",
       "priority": 13,
-      "status": "open",
+      "status": "done",
       "dependencies": [],
       "description": "Create src/lib/bracketData.ts. Functions: parseBracketData, getTeamByName, getGroupByName, getTeamSeed, getTeamRanking. Export WORLD_CUP_2026_DATA with 12 groups of 4 teams using real team names, FIFA rankings, correct pot assignments."
     },

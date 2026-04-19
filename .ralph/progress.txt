@@ -206,3 +206,11 @@
 - Component is ~90 lines, well under the 150-line limit
 - No naming conflict with GroupPrediction type in types/index.ts since component is default export
 - Lesson: The bracket/ directory didn't exist yet — needed to create it first
+
+## TASK-024: Create ThirdPlacePicker component (2026-04-18)
+- Created src/components/bracket/ThirdPlacePicker.tsx
+- Toggleable Chips for selecting exactly 8 of 12 third-place teams
+- Enforces max selection of 8, shows count display
+- Supports disabled prop for locked state
+- Follows existing GroupPrediction component patterns (MUI, theme tokens, props-based)
+- Clean build, deployed successfully

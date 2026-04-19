@@ -609,3 +609,13 @@
 - Nova Act confirmed knockout page loads correctly (shows "group results not entered" since no results exist yet — expected)
 - Lesson: The 3RD place match needs special handling since its teams are SF losers, not winners. Used getSFLoser helper.
 - Lesson: Nova Act ActResult uses `.output` not `.response` for return values.
+
+## TASK-072: Simple Mode mobile styling and touch optimization (2026-04-19)
+- Added `useSwipe` hook for swipe-left-to-skip and swipe-right-to-go-back gestures in both SimpleMode and SimpleKnockoutMode.
+- Added thumb-friendly bottom navigation bar with Back/Skip (or Done/Save) buttons, respecting safe-area-inset-bottom for notched devices.
+- Added pick highlight animation (300ms scale pulse via MUI keyframes) on team selection before auto-advancing.
+- Added `@media (prefers-reduced-motion: reduce)` to disable animations for accessibility.
+- Added `WebkitTapHighlightColor: 'transparent'` to prevent default tap highlight on mobile.
+- Moved action buttons (Done for third-place, Review/Save for knockout) into the persistent bottom bar for consistent thumb access.
+- All touch targets already met 48px+ minimum (56px group cards, 64px knockout cards).
+- Lesson: Nova Act `ActResult` doesn't have `.response` or `.succeeded` — use the returned object's actual attributes. The test still confirmed the UI worked correctly through the agent's think logs.

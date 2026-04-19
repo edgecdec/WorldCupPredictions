@@ -1,6 +1,6 @@
 'use client';
 import { useState, useCallback, useMemo } from 'react';
-import { Dialog, Box, Typography, Button, IconButton, LinearProgress, Chip, alpha } from '@mui/material';
+import { Dialog, Box, Typography, Button, IconButton, LinearProgress, Chip, alpha, keyframes } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import UndoIcon from '@mui/icons-material/Undo';
@@ -8,9 +8,17 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import type { BracketData, Group } from '@/types';
 import TeamFlag from '@/components/common/TeamFlag';
 import ThirdPlacePicker from '@/components/bracket/ThirdPlacePicker';
+import useSwipe from '@/hooks/useSwipe';
 
 const REQUIRED_THIRD_PLACE = 8;
 const POSITION_LABELS = ['1st', '2nd', '3rd', '4th'] as const;
+const PICK_HIGHLIGHT_MS = 300;
+
+const pickFlash = keyframes`
+  0% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+  100% { transform: scale(1); }
+`;
 
 interface SimpleModeProps {
   open: boolean;
@@ -23,12 +31,12 @@ interface SimpleModeProps {
 
 export default function SimpleMode({ open, onClose, bracketData, initialGroupOrders, initialThirdPlacePicks, countryCodeMap }: SimpleModeProps) {
   const groups = bracketData.groups;
-  const totalSteps = groups.length + 1; // 12 groups + third-place picker
+  const totalSteps = groups.length + 1;
   const [step, setStep] = useState(0);
   const [groupOrders, setGroupOrders] = useState<Record<string, string[]>>(initialGroupOrders);
   const [thirdPlacePicks, setThirdPlacePicks] = useState<string[]>(initialThirdPlacePicks);
-  // Tracks the order of picks within the current group
   const [currentPicks, setCurrentPicks] = useState<string[]>([]);
+  const [lastPicked, setLastPicked] = useState<string | null>(null);
 
   const isThirdPlaceStep = step >= groups.length;
   const currentGroup: Group | undefined = groups[step];
@@ -48,16 +56,19 @@ export default function SimpleMode({ open, onClose, bracketData, initialGroupOrd
   }, [groups, groupOrders]);
 
   const handlePickTeam = useCallback((teamName: string) => {
+    setLastPicked(teamName);
     const newPicks = [...currentPicks, teamName];
     setCurrentPicks(newPicks);
 
     if (newPicks.length === 4 && currentGroup) {
-      // All 4 picked — save order and auto-advance
       setGroupOrders((prev) => ({ ...prev, [currentGroup.name]: newPicks as unknown as string[] }));
       setTimeout(() => {
         setStep((s) => s + 1);
         setCurrentPicks([]);
-      }, 300);
+        setLastPicked(null);
+      }, PICK_HIGHLIGHT_MS);
+    } else {
+      setTimeout(() => setLastPicked(null), PICK_HIGHLIGHT_MS);
     }
   }, [currentPicks, currentGroup]);
 
@@ -71,12 +82,26 @@ export default function SimpleMode({ open, onClose, bracketData, initialGroupOrd
     if (step > 0) {
       setStep((s) => s - 1);
       setCurrentPicks([]);
+      setLastPicked(null);
     }
   }, [step]);
+
+  const handleSkip = useCallback(() => {
+    if (!isThirdPlaceStep && step < groups.length - 1) {
+      setStep((s) => s + 1);
+      setCurrentPicks([]);
+      setLastPicked(null);
+    } else if (!isThirdPlaceStep) {
+      setStep(groups.length);
+      setCurrentPicks([]);
+    }
+  }, [isThirdPlaceStep, step, groups.length]);
 
   const handleExit = useCallback(() => {
     onClose(groupOrders, thirdPlacePicks);
   }, [onClose, groupOrders, thirdPlacePicks]);
+
+  const swipeHandlers = useSwipe(handleSkip, handleBack);
 
   const teamMap = useMemo(() => {
     const map = new Map<string, { fifaRanking: number; countryCode?: string; pot: number }>();
@@ -90,7 +115,10 @@ export default function SimpleMode({ open, onClose, bracketData, initialGroupOrd
 
   return (
     <Dialog open={open} fullScreen>
-      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', bgcolor: 'background.default' }}>
+      <Box
+        sx={{ display: 'flex', flexDirection: 'column', height: '100vh', bgcolor: 'background.default' }}
+        {...swipeHandlers}
+      >
         {/* Header */}
         <Box sx={{ display: 'flex', alignItems: 'center', px: 2, py: 1, gap: 1, borderBottom: 1, borderColor: 'divider' }}>
           <IconButton onClick={handleBack} disabled={step === 0} size="small">
@@ -110,7 +138,7 @@ export default function SimpleMode({ open, onClose, bracketData, initialGroupOrd
         <LinearProgress variant="determinate" value={progress} sx={{ height: 4 }} />
 
         {/* Content */}
-        <Box sx={{ flex: 1, overflow: 'auto', px: 2, py: 3 }}>
+        <Box sx={{ flex: 1, overflow: 'auto', px: 2, py: 2 }}>
           {isThirdPlaceStep ? (
             <Box sx={{ maxWidth: 600, mx: 'auto' }}>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -122,16 +150,6 @@ export default function SimpleMode({ open, onClose, bracketData, initialGroupOrd
                 onChange={setThirdPlacePicks}
                 countryCodeMap={countryCodeMap}
               />
-              <Button
-                variant="contained"
-                size="large"
-                fullWidth
-                sx={{ mt: 3 }}
-                disabled={thirdPlacePicks.filter((t) => thirdPlaceTeams.includes(t)).length !== REQUIRED_THIRD_PLACE}
-                onClick={handleExit}
-              >
-                Done
-              </Button>
             </Box>
           ) : (
             <Box sx={{ maxWidth: 500, mx: 'auto' }}>
@@ -146,8 +164,16 @@ export default function SimpleMode({ open, onClose, bracketData, initialGroupOrd
                   </Box>
                   {currentPicks.map((name, i) => {
                     const info = teamMap.get(name);
+                    const justPicked = name === lastPicked;
                     return (
-                      <Box key={name} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 0.5, px: 1, borderRadius: 1, bgcolor: (theme) => alpha(theme.palette.success.main, 0.08), mb: 0.5 }}>
+                      <Box
+                        key={name}
+                        sx={{
+                          display: 'flex', alignItems: 'center', gap: 1.5, py: 0.5, px: 1,
+                          borderRadius: 1, bgcolor: (theme) => alpha(theme.palette.success.main, 0.08), mb: 0.5,
+                          animation: justPicked ? `${pickFlash} ${PICK_HIGHLIGHT_MS}ms ease` : 'none',
+                        }}
+                      >
                         <Chip label={POSITION_LABELS[i]} size="small" color="success" variant="outlined" />
                         {info?.countryCode && <TeamFlag countryCode={info.countryCode} size={24} />}
                         <Typography variant="body1">{name}</Typography>
@@ -173,18 +199,14 @@ export default function SimpleMode({ open, onClose, bracketData, initialGroupOrd
                     key={name}
                     onClick={() => handlePickTeam(name)}
                     sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 2,
-                      p: 2,
-                      mb: 1.5,
-                      borderRadius: 2,
-                      border: 1,
-                      borderColor: 'divider',
-                      cursor: 'pointer',
-                      minHeight: 56,
+                      display: 'flex', alignItems: 'center', gap: 2,
+                      p: 2, mb: 1.5, borderRadius: 2, border: 1, borderColor: 'divider',
+                      cursor: 'pointer', minHeight: 56,
+                      transition: 'background-color 0.15s ease',
+                      WebkitTapHighlightColor: 'transparent',
                       '&:hover': { bgcolor: 'action.hover' },
                       '&:active': { bgcolor: 'action.selected' },
+                      '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
                     }}
                   >
                     {info?.countryCode && <TeamFlag countryCode={info.countryCode} size={32} />}
@@ -198,6 +220,39 @@ export default function SimpleMode({ open, onClose, bracketData, initialGroupOrd
                 );
               })}
             </Box>
+          )}
+        </Box>
+
+        {/* Bottom navigation bar — thumb-friendly */}
+        <Box sx={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          px: 2, py: 1.5, borderTop: 1, borderColor: 'divider',
+          bgcolor: 'background.paper',
+          pb: 'calc(env(safe-area-inset-bottom, 0px) + 12px)',
+        }}>
+          <Button
+            onClick={handleBack}
+            disabled={step === 0}
+            sx={{ minHeight: 48, minWidth: 80 }}
+          >
+            Back
+          </Button>
+          {isThirdPlaceStep ? (
+            <Button
+              variant="contained"
+              onClick={handleExit}
+              disabled={thirdPlacePicks.filter((t) => thirdPlaceTeams.includes(t)).length !== REQUIRED_THIRD_PLACE}
+              sx={{ minHeight: 48, minWidth: 120 }}
+            >
+              Done
+            </Button>
+          ) : (
+            <Button
+              onClick={handleSkip}
+              sx={{ minHeight: 48, minWidth: 80 }}
+            >
+              Skip
+            </Button>
           )}
         </Box>
       </Box>

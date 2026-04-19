@@ -2,7 +2,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import {
   Dialog, Box, Typography, Button, IconButton, LinearProgress,
-  TextField, Alert, alpha, Chip,
+  TextField, Alert, alpha, Chip, keyframes,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -12,6 +12,15 @@ import { KNOCKOUT_ROUNDS } from '@/types';
 import TeamFlag from '@/components/common/TeamFlag';
 import { cascadeClear } from '@/lib/bracketUtils';
 import { getFeederMatchupIds } from '@/lib/knockoutBracket';
+import useSwipe from '@/hooks/useSwipe';
+
+const PICK_HIGHLIGHT_MS = 300;
+
+const pickFlash = keyframes`
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(46,125,50,0.4); }
+  50% { transform: scale(1.02); box-shadow: 0 0 0 6px rgba(46,125,50,0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(46,125,50,0); }
+`;
 
 interface SimpleKnockoutModeProps {
   open: boolean;
@@ -23,13 +32,9 @@ interface SimpleKnockoutModeProps {
   teamRankings: Record<string, number>;
 }
 
-/** Order matchups so later rounds appear only after their feeders. */
 function buildMatchupOrder(matchups: KnockoutMatchup[]): KnockoutMatchup[] {
-  const byId = new Map(matchups.map((m) => [m.id, m]));
   const ordered: KnockoutMatchup[] = [];
   const added = new Set<string>();
-
-  // Process rounds in order: R32(0), R16(1), QF(2), SF(3), 3RD(4), FINAL(5)
   const rounds = [0, 1, 2, 3, 4, 5];
   for (const round of rounds) {
     const roundMatchups = matchups
@@ -49,34 +54,24 @@ function buildMatchupOrder(matchups: KnockoutMatchup[]): KnockoutMatchup[] {
   return ordered;
 }
 
-/** Resolve teams for a matchup based on current picks. */
 function resolveTeams(
   matchup: KnockoutMatchup,
   picks: Record<string, string>,
 ): { teamA: string | null; teamB: string | null } {
-  // R32 matchups have teams set from group results
   if (matchup.round === 0) {
     return { teamA: matchup.teamA, teamB: matchup.teamB };
   }
   const feeders = getFeederMatchupIds(matchup.id);
   if (!feeders) return { teamA: matchup.teamA, teamB: matchup.teamB };
-
-  // For 3RD place match, losers advance (not winners)
   if (matchup.id === '3RD') {
-    // SF losers play 3rd place match — but we need the OTHER team from each SF
-    // Actually the 3RD match teams are the SF losers, which we can't directly derive
-    // from picks alone. The feeders are SF-1 and SF-2, and the teams are the losers.
-    // We need to find who DIDN'T win each SF.
-    return { teamA: null, teamB: null }; // handled specially below
+    return { teamA: null, teamB: null };
   }
-
   return {
     teamA: picks[feeders[0]] || null,
     teamB: picks[feeders[1]] || null,
   };
 }
 
-/** Get the loser of a semifinal based on picks and matchup data. */
 function getSFLoser(
   sfId: string,
   matchups: KnockoutMatchup[],
@@ -101,6 +96,7 @@ export default function SimpleKnockoutMode({
   const [tiebreaker, setTiebreaker] = useState(initialTiebreaker);
   const [step, setStep] = useState(0);
   const [cascadeWarning, setCascadeWarning] = useState<{ matchupId: string; team: string } | null>(null);
+  const [justPicked, setJustPicked] = useState<string | null>(null);
 
   const ordered = useMemo(() => buildMatchupOrder(matchups), [matchups]);
   const totalMatchups = ordered.length;
@@ -110,29 +106,29 @@ export default function SimpleKnockoutMode({
 
   const progress = isSpecialStep
     ? 100
-    : ((step + 1) / (totalMatchups + 2)) * 100; // +2 for tiebreaker + review
+    : ((step + 1) / (totalMatchups + 2)) * 100;
 
-  /** Check if picking a team would cascade-clear downstream picks. */
   const wouldCascade = useCallback((matchupId: string, team: string): boolean => {
     const oldPick = picks[matchupId];
     if (!oldPick || oldPick === team) return false;
     const cleared = cascadeClear(picks, matchupId, matchups);
-    return Object.keys(picks).length > Object.keys(cleared).length + 1; // +1 for the changed pick itself
+    return Object.keys(picks).length > Object.keys(cleared).length + 1;
   }, [picks, matchups]);
 
   const applyPick = useCallback((matchupId: string, team: string) => {
+    setJustPicked(team);
     setPicks((prev) => {
       const cleared = cascadeClear(prev, matchupId, matchups);
       return { ...cleared, [matchupId]: team };
     });
-    // Auto-advance after brief delay
     setTimeout(() => {
+      setJustPicked(null);
       if (step < totalMatchups - 1) {
         setStep((s) => s + 1);
       } else {
         setStep(STEP_TIEBREAKER);
       }
-    }, 300);
+    }, PICK_HIGHLIGHT_MS);
   }, [matchups, step, totalMatchups]);
 
   const handlePick = useCallback((matchupId: string, team: string) => {
@@ -156,11 +152,20 @@ export default function SimpleKnockoutMode({
     else if (step > 0) setStep((s) => s - 1);
   }, [step, totalMatchups]);
 
+  const handleSkip = useCallback(() => {
+    if (!isSpecialStep && step < totalMatchups - 1) {
+      setStep((s) => s + 1);
+    } else if (!isSpecialStep) {
+      setStep(STEP_TIEBREAKER);
+    }
+  }, [isSpecialStep, step, totalMatchups]);
+
   const handleExit = useCallback(() => {
     onClose(picks, tiebreaker);
   }, [onClose, picks, tiebreaker]);
 
-  /** Resolve the two teams for the current matchup. */
+  const swipeHandlers = useSwipe(handleSkip, handleBack);
+
   const currentTeams = useMemo(() => {
     if (!currentMatchup) return { teamA: null, teamB: null };
     if (currentMatchup.id === '3RD') {
@@ -180,7 +185,10 @@ export default function SimpleKnockoutMode({
 
   return (
     <Dialog open={open} fullScreen>
-      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', bgcolor: 'background.default' }}>
+      <Box
+        sx={{ display: 'flex', flexDirection: 'column', height: '100vh', bgcolor: 'background.default' }}
+        {...swipeHandlers}
+      >
         {/* Header */}
         <Box sx={{ display: 'flex', alignItems: 'center', px: 2, py: 1, gap: 1, borderBottom: 1, borderColor: 'divider' }}>
           <IconButton onClick={handleBack} disabled={step === 0} size="small">
@@ -220,16 +228,11 @@ export default function SimpleKnockoutMode({
         {/* Content */}
         <Box sx={{ flex: 1, overflow: 'auto', px: 2, py: 3, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {step === STEP_TIEBREAKER ? (
-            <TiebreakerStep
-              tiebreaker={tiebreaker}
-              onChange={setTiebreaker}
-              onNext={() => setStep(STEP_REVIEW)}
-            />
+            <TiebreakerStep tiebreaker={tiebreaker} onChange={setTiebreaker} />
           ) : step === STEP_REVIEW ? (
             <ReviewStep
               ordered={ordered}
               picks={picks}
-              matchups={matchups}
               countryCodeMap={countryCodeMap}
               tiebreaker={tiebreaker}
               filledCount={filledCount}
@@ -246,10 +249,49 @@ export default function SimpleKnockoutMode({
               roundLabel={roundLabel}
               countryCodeMap={countryCodeMap}
               teamRankings={teamRankings}
-              step={step}
-              total={totalMatchups}
+              justPicked={justPicked}
             />
           ) : null}
+        </Box>
+
+        {/* Bottom navigation bar — thumb-friendly */}
+        <Box sx={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          px: 2, py: 1.5, borderTop: 1, borderColor: 'divider',
+          bgcolor: 'background.paper',
+          pb: 'calc(env(safe-area-inset-bottom, 0px) + 12px)',
+        }}>
+          <Button
+            onClick={handleBack}
+            disabled={step === 0}
+            sx={{ minHeight: 48, minWidth: 80 }}
+          >
+            Back
+          </Button>
+          {step === STEP_TIEBREAKER ? (
+            <Button
+              variant="contained"
+              onClick={() => setStep(STEP_REVIEW)}
+              sx={{ minHeight: 48, minWidth: 120 }}
+            >
+              Review Picks
+            </Button>
+          ) : step === STEP_REVIEW ? (
+            <Button
+              variant="contained"
+              onClick={handleExit}
+              sx={{ minHeight: 48, minWidth: 120 }}
+            >
+              Save Picks
+            </Button>
+          ) : (
+            <Button
+              onClick={handleSkip}
+              sx={{ minHeight: 48, minWidth: 80 }}
+            >
+              Skip
+            </Button>
+          )}
         </Box>
       </Box>
     </Dialog>
@@ -260,7 +302,7 @@ export default function SimpleKnockoutMode({
 
 function MatchupStep({
   matchup, teamA, teamB, currentPick, onPick, roundLabel,
-  countryCodeMap, teamRankings, step, total,
+  countryCodeMap, teamRankings, justPicked,
 }: {
   matchup: KnockoutMatchup;
   teamA: string | null;
@@ -270,8 +312,7 @@ function MatchupStep({
   roundLabel: string;
   countryCodeMap: Record<string, string>;
   teamRankings: Record<string, number>;
-  step: number;
-  total: number;
+  justPicked: string | null;
 }) {
   if (!teamA || !teamB) {
     return (
@@ -295,6 +336,7 @@ function MatchupStep({
         <TeamCard
           team={teamA}
           isPicked={currentPick === teamA}
+          justPicked={justPicked === teamA}
           onClick={() => onPick(matchup.id, teamA)}
           countryCode={countryCodeMap[teamA]}
           ranking={teamRankings[teamA]}
@@ -305,6 +347,7 @@ function MatchupStep({
         <TeamCard
           team={teamB}
           isPicked={currentPick === teamB}
+          justPicked={justPicked === teamB}
           onClick={() => onPick(matchup.id, teamB)}
           countryCode={countryCodeMap[teamB]}
           ranking={teamRankings[teamB]}
@@ -315,10 +358,11 @@ function MatchupStep({
 }
 
 function TeamCard({
-  team, isPicked, onClick, countryCode, ranking,
+  team, isPicked, justPicked, onClick, countryCode, ranking,
 }: {
   team: string;
   isPicked: boolean;
+  justPicked: boolean;
   onClick: () => void;
   countryCode?: string;
   ranking?: number;
@@ -327,19 +371,17 @@ function TeamCard({
     <Box
       onClick={onClick}
       sx={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 2,
-        p: 2.5,
-        borderRadius: 2,
-        border: 2,
+        display: 'flex', alignItems: 'center', gap: 2,
+        p: 2.5, borderRadius: 2, border: 2,
         borderColor: isPicked ? 'primary.main' : 'divider',
         bgcolor: (theme) => isPicked ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
-        cursor: 'pointer',
-        minHeight: 64,
-        transition: 'all 0.2s ease',
+        cursor: 'pointer', minHeight: 64,
+        transition: 'all 0.15s ease',
+        WebkitTapHighlightColor: 'transparent',
+        animation: justPicked ? `${pickFlash} ${PICK_HIGHLIGHT_MS}ms ease` : 'none',
         '&:hover': { bgcolor: 'action.hover' },
         '&:active': { bgcolor: 'action.selected' },
+        '@media (prefers-reduced-motion: reduce)': { animation: 'none', transition: 'none' },
       }}
     >
       {countryCode && <TeamFlag countryCode={countryCode} size={40} />}
@@ -357,11 +399,10 @@ function TeamCard({
 }
 
 function TiebreakerStep({
-  tiebreaker, onChange, onNext,
+  tiebreaker, onChange,
 }: {
   tiebreaker: string;
   onChange: (v: string) => void;
-  onNext: () => void;
 }) {
   return (
     <Box sx={{ maxWidth: 400, width: '100%', textAlign: 'center' }}>
@@ -378,27 +419,22 @@ function TiebreakerStep({
         fullWidth
         sx={{ mb: 3 }}
       />
-      <Button variant="contained" size="large" fullWidth onClick={onNext}>
-        Review Picks
-      </Button>
     </Box>
   );
 }
 
 function ReviewStep({
-  ordered, picks, matchups, countryCodeMap, tiebreaker,
+  ordered, picks, countryCodeMap, tiebreaker,
   filledCount, totalMatchups, onSave,
 }: {
   ordered: KnockoutMatchup[];
   picks: Record<string, string>;
-  matchups: KnockoutMatchup[];
   countryCodeMap: Record<string, string>;
   tiebreaker: string;
   filledCount: number;
   totalMatchups: number;
   onSave: () => void;
 }) {
-  // Group picks by round for summary
   const byRound = new Map<number, Array<{ id: string; pick: string | undefined }>>();
   for (const m of ordered) {
     const list = byRound.get(m.round) ?? [];
@@ -434,7 +470,7 @@ function ReviewStep({
         </Box>
       ))}
 
-      <Button variant="contained" size="large" fullWidth sx={{ mt: 2 }} onClick={onSave}>
+      <Button variant="contained" size="large" fullWidth sx={{ mt: 2, minHeight: 48 }} onClick={onSave}>
         Save Knockout Picks
       </Button>
     </Box>

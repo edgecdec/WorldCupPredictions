@@ -247,7 +247,7 @@
       "title": "Create GroupPrediction component",
       "spec": "specs/bracket.md",
       "priority": 23,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-006"
       ],

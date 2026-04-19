@@ -198,3 +198,11 @@
 - Tiebreaker is sanitized (rounded, non-negative)
 - GET already returned knockout_picks and tiebreaker — no changes needed
 - Lessons: The existing route was well-structured, just needed the new action handler appended. Kept the same pattern as saveGroups for consistency.
+
+## TASK-023: Create GroupPrediction component (2026-04-18)
+- Created src/components/bracket/GroupPrediction.tsx with reorderable team list
+- Uses MUI Card, IconButtons for up/down arrows, Chip for pot seed, FIFA ranking display
+- Props: groupName, teams, order, onChange, disabled
+- Component is ~90 lines, well under the 150-line limit
+- No naming conflict with GroupPrediction type in types/index.ts since component is default export
+- Lesson: The bracket/ directory didn't exist yet — needed to create it first

@@ -9,6 +9,7 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useAuth } from '@/hooks/useAuth';
 import AuthForm from '@/components/auth/AuthForm';
+import PhaseGate from '@/components/common/PhaseGate';
 import type {
   BracketData, TournamentResults, GroupPrediction, KnockoutMatchup,
   UserPrediction,
@@ -24,7 +25,9 @@ interface PredictionWithUser extends UserPrediction {
 export default function WhoPickedPage() {
   return (
     <Suspense fallback={<Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>}>
-      <WhoPickedContent />
+      <PhaseGate pathname="/whopicked">
+        <WhoPickedContent />
+      </PhaseGate>
     </Suspense>
   );
 }

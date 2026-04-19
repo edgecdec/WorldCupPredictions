@@ -957,7 +957,7 @@
       "title": "Hide pages based on tournament phase, admin bypass",
       "spec": "specs/tournament-structure.md",
       "priority": 42,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-009",
         "TASK-011"

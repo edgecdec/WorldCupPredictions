@@ -7,6 +7,7 @@ import {
 } from '@mui/material';
 import { useAuth } from '@/hooks/useAuth';
 import AuthForm from '@/components/auth/AuthForm';
+import PhaseGate from '@/components/common/PhaseGate';
 import type {
   LeaderboardEntry, BracketData, TournamentResults, GroupPrediction, KnockoutMatchup,
 } from '@/types';
@@ -19,7 +20,9 @@ const USER_COLORS = ['#42a5f5', '#ef5350', '#66bb6a', '#ffa726'] as const;
 export default function ComparePage() {
   return (
     <Suspense fallback={<Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>}>
-      <CompareContent />
+      <PhaseGate pathname="/compare">
+        <CompareContent />
+      </PhaseGate>
     </Suspense>
   );
 }

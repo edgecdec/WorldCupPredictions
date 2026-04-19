@@ -644,3 +644,14 @@
 - User search uses debounced LIKE query (300ms delay)
 - Verified via Nova Act: Group Management section visible on admin page with table and controls
 - Lessons: Nova Act ActResult doesn't have `.response` or `.successful` — the agent's think logs confirm success. Use the returned text from `return()` calls instead.
+
+## TASK-086: Hide pages based on tournament phase, admin bypass (2026-04-19)
+- Created `src/lib/tournamentPhase.ts` with `getPhase()` returning 'pre-tournament' | 'group-stage' | 'knockout' | 'complete'
+- Created `src/components/common/PhaseGate.tsx` — reusable wrapper that shows lock message for restricted pages
+- Updated Navbar to grey out restricted links with tooltips showing when they unlock
+- Wrapped leaderboard, stats, whopicked, and compare pages with PhaseGate
+- Admin users (is_admin=true) bypass all restrictions
+- Phase detection: pre-tournament (before lock_time_groups), group-stage (between locks), knockout (after lock_time_knockout), complete (Final has a winner)
+- Nova Act verified: non-admin user sees "Not Yet Available" + lock icon on /leaderboard; admin user sees full content
+- Lesson: The test user `ralphtest` is admin, so always register a fresh non-admin user for phase gate testing
+- Lesson: MUI Tooltip on disabled Button needs a wrapping `<span>` to work properly

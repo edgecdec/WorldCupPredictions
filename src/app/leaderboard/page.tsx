@@ -13,6 +13,7 @@ import { useAuth } from '@/hooks/useAuth';
 import AuthForm from '@/components/auth/AuthForm';
 import ScoringBreakdownDialog from '@/components/common/ScoringBreakdownDialog';
 import GroupChat from '@/components/common/GroupChat';
+import PhaseGate from '@/components/common/PhaseGate';
 import type {
   LeaderboardEntry, ScoringSettings, BracketData, TournamentResults, UserPrediction,
 } from '@/types';
@@ -38,7 +39,9 @@ const SORTABLE_COLUMNS: { key: SortKey; label: string; align: 'left' | 'right' }
 export default function LeaderboardPage() {
   return (
     <Suspense fallback={<Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>}>
-      <LeaderboardContent />
+      <PhaseGate pathname="/leaderboard">
+        <LeaderboardContent />
+      </PhaseGate>
     </Suspense>
   );
 }

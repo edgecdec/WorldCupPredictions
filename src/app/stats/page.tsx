@@ -12,6 +12,7 @@ import PercentIcon from '@mui/icons-material/Percent';
 import BalanceIcon from '@mui/icons-material/Balance';
 import { useAuth } from '@/hooks/useAuth';
 import AuthForm from '@/components/auth/AuthForm';
+import PhaseGate from '@/components/common/PhaseGate';
 import type { StatsResponse } from '@/app/api/stats/route';
 
 interface GroupOption { id: string; name: string }
@@ -19,7 +20,9 @@ interface GroupOption { id: string; name: string }
 export default function StatsPage() {
   return (
     <Suspense fallback={<Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>}>
-      <StatsContent />
+      <PhaseGate pathname="/stats">
+        <StatsContent />
+      </PhaseGate>
     </Suspense>
   );
 }

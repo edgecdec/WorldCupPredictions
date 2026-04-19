@@ -769,6 +769,40 @@
         "TASK-013"
       ],
       "description": "Add country flag images next to every team name throughout the app. Use flag CDN (e.g. https://flagcdn.com/w40/{country-code}.png or emoji flags). Add a countryCode field to the Team interface (ISO 3166-1 alpha-2 lowercase, e.g. 'mx' for Mexico, 'br' for Brazil, 'us' for USA). Update WORLD_CUP_2026_DATA with correct country codes for all 48 teams. Create src/components/common/TeamFlag.tsx \u2014 a small reusable component that renders a flag image (20x15px or similar) given a country code. Use it in: GroupPrediction (next to each team name), ThirdPlacePicker (next to each chip), Matchup (next to each team), KnockoutBracket, leaderboard pick breakdowns, compare page, who-picked-whom, and anywhere else a team name appears. Fall back to emoji flag if image fails to load."
+    },
+    {
+      "id": "TASK-070",
+      "title": "Simple Mode: create step-by-step group predictions flow",
+      "spec": "specs/bracket.md",
+      "priority": 46,
+      "status": "open",
+      "dependencies": [
+        "TASK-025"
+      ],
+      "description": "Create src/components/bracket/SimpleMode.tsx \u2014 full-screen modal overlay for guided predictions. For group stage: show one group at a time with 4 teams displayed as large tappable cards. User taps teams in order (1st, 2nd, 3rd, 4th) to set their predicted finish. After ordering a group, auto-advance to next group. Progress bar shows 'Group 3 of 12'. After all 12 groups, show the ThirdPlacePicker (select 8 advancing). Add 'Fill Step-by-Step' button on the /bracket page that launches SimpleMode. Exit button returns to normal view with picks preserved."
+    },
+    {
+      "id": "TASK-071",
+      "title": "Simple Mode: create step-by-step knockout predictions flow",
+      "spec": "specs/bracket.md",
+      "priority": 46,
+      "status": "open",
+      "dependencies": [
+        "TASK-032",
+        "TASK-070"
+      ],
+      "description": "Extend SimpleMode for knockout bracket. Show one matchup at a time: two large team cards (flag, name, FIFA ranking) side by side. Tap to pick winner. Auto-advance to next matchup. Progress bar shows 'Match 8 of 31'. Games flow in bracket order (R32 first, then R16 as they become available, etc). Back button to revisit previous pick. If changing a pick triggers cascade clearing, show a warning. After all 31 picks, prompt for tiebreaker (total goals in Final). Review screen showing mini bracket summary, then Save button. Add 'Fill Step-by-Step' button on /bracket/knockout page."
+    },
+    {
+      "id": "TASK-072",
+      "title": "Simple Mode: mobile styling and touch optimization",
+      "spec": "specs/bracket.md",
+      "priority": 47,
+      "status": "open",
+      "dependencies": [
+        "TASK-071"
+      ],
+      "description": "Ensure SimpleMode is fully optimized for mobile. Team cards should be large touch targets (min 48px height). Swipe gestures: swipe left to skip, swipe right to go back. Progress bar and navigation buttons are thumb-friendly at bottom of screen. Matchup cards stack vertically on narrow screens. Flag images are prominent. Animations: brief highlight (300ms) on pick before advancing. The entire flow should feel like a native app quiz/survey experience."
     }
   ]
 }

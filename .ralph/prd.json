@@ -421,7 +421,7 @@
       "title": "Create groups page UI",
       "spec": "specs/groups.md",
       "priority": 38,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-036",
         "TASK-037",

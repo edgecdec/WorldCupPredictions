@@ -339,3 +339,11 @@
 - Used KNOCKOUT_ROUNDS constant for round labels to avoid duplication
 - Used MUI TextField with type="number" and size="small" for compact layout
 - Lessons: Keep component stateless (controlled via value/onChange) for reuse in groups page dialog
+
+## TASK-038: Create groups page UI (2026-04-19)
+- Created src/app/groups/page.tsx with full groups management UI
+- Features: list groups as cards with name/members/invite code, create dialog with ScoringEditor, join dialog with invite code input, group cards link to /leaderboard?group=ID
+- Shows AuthForm for unauthenticated users
+- Join flow requires existing prediction (fetched from /api/picks)
+- Nova Act confirmed page renders correctly (shows login form for unauthenticated users)
+- Lessons: NovaAct uses `starting_page` not `starting_url`, and `ActResult` doesn't have a `.response` attribute — print the whole result object instead

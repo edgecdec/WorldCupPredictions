@@ -365,7 +365,7 @@
       "title": "Create MobileBracket with round tabs",
       "spec": "specs/bracket.md",
       "priority": 33,
-      "status": "open",
+      "status": "in_progress",
       "dependencies": [
         "TASK-031"
       ],
@@ -621,7 +621,7 @@
       "dependencies": [
         "TASK-053"
       ],
-      "description": "Add optional espnId: number field to the Team interface in src/types/index.ts. Update WORLD_CUP_2026_DATA in src/lib/bracketData.ts with ESPN team IDs for all 48 teams. IDs from ESPN API: Mexico=203, South Korea=451, Czechia=450, South Africa=467, Canada=206, Switzerland=475, Qatar=4398, Bosnia and Herzegovina=452, Brazil=205, Morocco=3575, Scotland=453, Haiti=2218, USA=660, Australia=454, Paraguay=439, Turkiye=456, Germany=481, Ecuador=2305, Ivory Coast=2296, Curacao=15050, Netherlands=487, Japan=457, Sweden=473, Tunisia=2306, Belgium=464, Egypt=2296, Iran=2311, New Zealand=5765, Spain=471, Uruguay=441, Saudi Arabia=2310, Cape Verde=4397, France=478, Senegal=2296, Norway=468, Iraq=2308, Argentina=440, Algeria=2296, Austria=459, Jordan=2309, Portugal=497, Colombia=2299, Uzbekistan=2312, DR Congo=2296, England=476, Croatia=488, Ghana=2296, Panama=2225. Verify IDs by cross-referencing with ESPN standings API: https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standings. Also update the tournament in the DB with the new bracket_data including espnIds."
+      "description": "Add espnId: number field to the Team interface in src/types/index.ts (required, not optional). Update WORLD_CUP_2026_DATA in src/lib/bracketData.ts with verified ESPN team IDs for all 48 teams. Correct IDs from ESPN standings API: Mexico=203, Czechia=450, South Korea=451, South Africa=467, Canada=206, Bosnia and Herzegovina=452, Switzerland=475, Qatar=4398, Brazil=205, Scotland=580, Haiti=2654, Morocco=2869, Paraguay=210, Turkiye=465, Australia=628, USA=660, Ecuador=209, Germany=481, Ivory Coast=4789, Curacao=11678, Netherlands=449, Sweden=466, Japan=627, Tunisia=659, Belgium=459, Iran=469, Egypt=2620, New Zealand=2666, Spain=164, Uruguay=212, Saudi Arabia=655, Cape Verde=2597, Norway=464, France=478, Senegal=654, Iraq=4375, Argentina=202, Austria=474, Algeria=624, Jordan=2917, Colombia=208, Portugal=482, Uzbekistan=2570, DR Congo=2850, England=448, Croatia=477, Panama=2659, Ghana=4469. ESPN IDs should be the PRIMARY key for matching teams across ESPN sync, scoring, and all lookups \u2014 never rely on name matching. Add a getTeamByEspnId(data, espnId) utility to bracketData.ts. Update the tournament in the DB with bracket_data including espnIds."
     },
     {
       "id": "TASK-057",

@@ -263,3 +263,48 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });
 }
+
+export async function PUT(req: NextRequest) {
+  const authUser = getAuthUser(req);
+  if (!authUser) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  const { group_id, scoring_settings } = await req.json();
+  if (!group_id || !scoring_settings) {
+    return NextResponse.json({ error: "group_id and scoring_settings required" }, { status: 400 });
+  }
+
+  const db = getDb();
+  const group = db.prepare("SELECT * FROM groups WHERE id = ?").get(group_id) as GroupRow | undefined;
+  if (!group) {
+    return NextResponse.json({ error: "Group not found" }, { status: 404 });
+  }
+
+  // Only creator can edit (or admin for Everyone group)
+  const isCreator = group.created_by === authUser.userId;
+  const isAdminForEveryone = group_id === EVERYONE_GROUP_ID && authUser.isAdmin;
+  if (!isCreator && !isAdminForEveryone) {
+    return NextResponse.json({ error: "Only the group creator can edit settings" }, { status: 403 });
+  }
+
+  // Check tournament lock time
+  const tournament = db
+    .prepare("SELECT lock_time_groups FROM tournaments ORDER BY year DESC LIMIT 1")
+    .get() as { lock_time_groups: string } | undefined;
+  if (tournament && new Date(tournament.lock_time_groups) <= new Date()) {
+    return NextResponse.json({ error: "Cannot edit scoring after groups lock" }, { status: 400 });
+  }
+
+  const err = validateScoringSettings(scoring_settings);
+  if (err) {
+    return NextResponse.json({ error: err }, { status: 400 });
+  }
+
+  db.prepare("UPDATE groups SET scoring_settings = ? WHERE id = ?").run(
+    JSON.stringify(scoring_settings),
+    group_id
+  );
+
+  return NextResponse.json({ ok: true });
+}

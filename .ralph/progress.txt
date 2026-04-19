@@ -522,3 +522,11 @@
 - The endpoint guards against re-syncing if group results already exist.
 - Nova Act verified the button is visible on the admin page.
 - Lesson: Always check git history before creating files — they may already exist from prior iterations.
+
+## TASK-063: Add edit scoring settings for group admins on groups page (2026-04-19)
+- Added PUT handler to /api/groups for updating scoring_settings (creator-only, lock_time check)
+- Added settings gear icon on group cards for creators (and admin for Everyone group)
+- Added Edit Scoring dialog with ScoringEditor pre-filled with current settings
+- Added compact scoring summary chip (KO: x/x/x/x/x/x) on each group card with tooltip
+- Nova Act verified: chips visible, gear icon works, dialog opens with correct fields, cancel closes
+- Lesson: Nova Act ActResult doesn't have a .response attribute — just print the result object directly

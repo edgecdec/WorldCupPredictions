@@ -697,7 +697,7 @@
       "title": "Add edit scoring settings for group admins on groups page",
       "spec": "specs/groups.md",
       "priority": 43,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-038"
       ],

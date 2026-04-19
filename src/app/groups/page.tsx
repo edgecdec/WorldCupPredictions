@@ -3,13 +3,14 @@ import { useEffect, useState, useCallback } from "react";
 import {
   Container, Typography, Button, TextField, Box, Paper, IconButton,
   Snackbar, Alert, Chip, Dialog, DialogTitle, DialogContent, DialogActions,
-  CircularProgress,
+  CircularProgress, Tooltip,
 } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import GroupIcon from "@mui/icons-material/Group";
 import AddIcon from "@mui/icons-material/Add";
 import LoginIcon from "@mui/icons-material/Login";
 import PublicIcon from "@mui/icons-material/Public";
+import SettingsIcon from "@mui/icons-material/Settings";
 import { useAuth } from "@/hooks/useAuth";
 import AuthForm from "@/components/auth/AuthForm";
 import ScoringEditor from "@/components/common/ScoringEditor";
@@ -48,6 +49,11 @@ export default function GroupsPage() {
   const [joinCode, setJoinCode] = useState("");
   const [joining, setJoining] = useState(false);
   const [prediction, setPrediction] = useState<UserPrediction | null>(null);
+
+  // Edit scoring dialog state
+  const [editGroup, setEditGroup] = useState<GroupInfo | null>(null);
+  const [editScoring, setEditScoring] = useState<ScoringSettings>(DEFAULT_SCORING);
+  const [saving, setSaving] = useState(false);
 
   const showSnack = (msg: string, severity: "success" | "error" = "success") => {
     setSnackSeverity(severity);
@@ -142,6 +148,35 @@ export default function GroupsPage() {
     showSnack("Invite link copied!");
   };
 
+  const openEditScoring = (g: GroupInfo) => {
+    setEditGroup(g);
+    setEditScoring(g.scoring_settings);
+  };
+
+  const handleSaveScoring = async () => {
+    if (!editGroup) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/groups", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ group_id: editGroup.id, scoring_settings: editScoring }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setEditGroup(null);
+      showSnack("Scoring settings updated!");
+      loadGroups();
+    } catch (e: unknown) {
+      showSnack(e instanceof Error ? e.message : "Failed to update settings", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const scoringSummary = (s: ScoringSettings) =>
+    `KO: ${s.knockout.pointsPerRound.join("/")}`;
+
   if (authLoading) return null;
   if (!user) {
     return (
@@ -181,22 +216,33 @@ export default function GroupsPage() {
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
           {[...groups].sort((a, b) => (a.id === "everyone" ? -1 : b.id === "everyone" ? 1 : 0)).map((g) => {
             const isEveryone = g.id === "everyone";
+            const canEdit = g.created_by === user.id || (isEveryone && user.is_admin);
             return (
             <Paper key={g.id} sx={{ p: 2 }}>
               <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   {isEveryone && <PublicIcon color="primary" />}
                   <Box>
-                    <Typography variant="h6" component="a" href={`/leaderboard?group=${g.id}`}
-                      sx={{ textDecoration: "none", color: "text.primary", "&:hover": { color: "primary.main" } }}>
-                      {g.name}
-                    </Typography>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Typography variant="h6" component="a" href={`/leaderboard?group=${g.id}`}
+                        sx={{ textDecoration: "none", color: "text.primary", "&:hover": { color: "primary.main" } }}>
+                        {g.name}
+                      </Typography>
+                      <Tooltip title={scoringSummary(g.scoring_settings)}>
+                        <Chip label={scoringSummary(g.scoring_settings)} size="small" variant="outlined" />
+                      </Tooltip>
+                    </Box>
                     <Typography variant="body2" color="text.secondary">
                       {g.member_count} member{g.member_count !== 1 ? "s" : ""}{!isEveryone ? ` · Created by ${g.creator_name}` : ""}
                     </Typography>
                   </Box>
                 </Box>
                 <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                  {canEdit && (
+                    <IconButton size="small" onClick={() => openEditScoring(g)} title="Edit scoring settings">
+                      <SettingsIcon fontSize="small" />
+                    </IconButton>
+                  )}
                   {!isEveryone && (
                     <>
                       <Chip label={g.invite_code} size="small" variant="outlined" />
@@ -271,6 +317,22 @@ export default function GroupsPage() {
           <Button onClick={() => setJoinOpen(false)}>Cancel</Button>
           <Button variant="contained" onClick={handleJoin} disabled={joining || !joinCode.trim() || !prediction}>
             {joining ? "Joining…" : "Join"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit Scoring Dialog */}
+      <Dialog open={!!editGroup} onClose={() => setEditGroup(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Edit Scoring — {editGroup?.name}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 1 }}>
+            <ScoringEditor value={editScoring} onChange={setEditScoring} />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditGroup(null)}>Cancel</Button>
+          <Button variant="contained" onClick={handleSaveScoring} disabled={saving}>
+            {saving ? "Saving…" : "Save"}
           </Button>
         </DialogActions>
       </Dialog>

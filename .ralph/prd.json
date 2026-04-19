@@ -113,7 +113,7 @@
       "title": "Create tournament GET API",
       "spec": "specs/tournament-structure.md",
       "priority": 11,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-001"
       ],

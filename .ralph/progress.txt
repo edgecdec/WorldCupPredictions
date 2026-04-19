@@ -82,3 +82,10 @@
 - Syncs to targetDate prop changes via useEffect dependency
 - Uses MUI theme tokens only (primary.main, text.secondary, error.main)
 - Lessons: Keep component simple — extracted calcTimeLeft as pure function, used UNIT_LABELS constant array to avoid inline strings. padStart(2, "0") for consistent display.
+
+## TASK-011: Create tournament GET API (2026-04-18)
+- Created src/app/api/tournaments/route.ts with GET handler
+- Returns most recent tournament by year DESC, parsing bracket_data and results_data from JSON strings
+- Returns {ok: true, tournament: null} when no tournament exists
+- Build and tsc pass clean. Deployed and verified 200.
+- Lesson: Simple API routes are straightforward — just parse the JSON string columns from SQLite before returning.

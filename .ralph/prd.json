@@ -708,11 +708,22 @@
       "title": "Fix: auto-join creator to group on creation",
       "spec": "specs/groups.md",
       "priority": 37,
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "TASK-036"
       ],
       "description": "Bug: When a user creates a group, they are not added to group_members, so the group doesn't appear in their group list. Fix the 'create' action in src/app/api/groups/route.ts: after inserting the group, find the user's prediction (SELECT id FROM predictions WHERE user_id = ?) and if it exists, INSERT into group_members (group_id, prediction_id). If the user has no prediction yet, still create the group but log that they'll be added when they create a prediction. Also fix existing orphaned groups: the groups 'Testing', 'Test', 'Test2' created by edgecdec need their prediction added to group_members. Add a migration in db.ts initDb() that auto-assigns creators to their own groups if not already members."
+    },
+    {
+      "id": "TASK-065",
+      "title": "Highlight advancing/eliminated teams on group predictions page",
+      "spec": "specs/bracket.md",
+      "priority": 44,
+      "status": "open",
+      "dependencies": [
+        "TASK-025"
+      ],
+      "description": "On the /bracket group predictions page, visually indicate which teams the user is predicting to advance vs not advance. In each GroupPrediction card: teams predicted 1st or 2nd get a subtle green background (theme: success.main with low alpha). Teams predicted 3rd that are picked as one of the 8 advancing third-place teams also get green. Teams predicted 3rd but NOT picked to advance get a neutral/amber background. Teams predicted 4th get a subtle red/dimmed background (theme: error.main with low alpha). This makes it immediately clear at a glance which teams the user expects to go through. The ThirdPlacePicker selection should dynamically update the 3rd-place team colors in the group cards (green if selected, amber if not). Use MUI theme tokens for colors \u2014 no hardcoded hex."
     }
   ]
 }

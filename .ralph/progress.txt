@@ -455,3 +455,9 @@
 - Added auto-migration in db.ts `migrateEspnIds()` that updates existing tournament bracket_data with espnIds on server restart
 - Updated test fixtures in tests/scoring.test.ts to include espnId field
 - Lesson: When adding a required field to a shared type, grep for all test fixtures that construct that type — they'll break too
+
+## TASK-064: Fix auto-join creator to group on creation (2026-04-19)
+- Added auto-join logic in groups route POST create action: after inserting group, finds creator's prediction and adds to group_members
+- Added `migrateCreatorsToOwnGroups()` in db.ts initDb() to fix existing orphaned groups (Testing, Test, Test2)
+- Updated groups GET query to include groups where user is creator (UNION clause) so groups show even before prediction exists
+- Lesson: Task was already implemented and committed in a previous iteration but status wasn't updated to done — always verify git log before re-implementing

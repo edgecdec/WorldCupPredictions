@@ -32,3 +32,10 @@
 - Added DELETE handler to /api/auth that clears the token cookie with max-age=0
 - Both getAuthUser and clearTokenCookie already existed in auth.ts — just needed to import and use them
 - Lesson: Check existing utilities before writing new code — auth.ts already had everything needed
+
+## TASK-005: Create useAuth hook and AuthProvider (2026-04-18)
+- Created src/hooks/useAuth.tsx with AuthProvider context and useAuth() hook.
+- Follows March Madness pattern: context with user/loading state, login/register/logout callbacks.
+- Inlined fetch calls instead of separate api helper — keeps it minimal for now.
+- Build and tsc pass. Deploy verified on server.
+- Lesson: No api.ts abstraction needed yet — can extract later if fetch patterns repeat across many hooks.

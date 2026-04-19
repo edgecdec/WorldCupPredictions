@@ -387,7 +387,7 @@
       "title": "Create admin page - knockout results entry",
       "spec": "specs/tournament-structure.md",
       "priority": 35,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-034",
         "TASK-031"

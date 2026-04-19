@@ -14,7 +14,8 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { WORLD_CUP_2026_DATA } from "@/lib/bracketData";
 import GroupResultsEditor from "@/components/admin/GroupResultsEditor";
-import type { Tournament, BracketData, GroupStageResults } from "@/types";
+import KnockoutResultsEditor from "@/components/admin/KnockoutResultsEditor";
+import type { Tournament, BracketData, GroupStageResults, KnockoutMatchup, KnockoutResults } from "@/types";
 
 const SEED_TOURNAMENT_NAME = "FIFA World Cup";
 const SEED_TOURNAMENT_YEAR = 2026;
@@ -26,7 +27,11 @@ interface TournamentResponse {
   tournament:
     | (Omit<Tournament, "bracket_data" | "results_data"> & {
         bracket_data: BracketData | null;
-        results_data: { groupStage?: GroupStageResults } | null;
+        results_data: {
+          groupStage?: GroupStageResults;
+          knockoutBracket?: KnockoutMatchup[];
+          knockout?: KnockoutResults;
+        } | null;
       })
     | null;
 }
@@ -208,6 +213,14 @@ export default function AdminPage() {
         <GroupResultsEditor
           bracketData={tournament.bracket_data}
           existingResults={tournament.results_data?.groupStage ?? null}
+          onSaved={fetchTournament}
+        />
+      )}
+
+      {tournament?.results_data?.knockoutBracket && (
+        <KnockoutResultsEditor
+          matchups={tournament.results_data.knockoutBracket}
+          existingResults={tournament.results_data.knockout ?? null}
           onSaved={fetchTournament}
         />
       )}

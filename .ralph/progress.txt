@@ -314,3 +314,10 @@
 - Merges knockout results into existing results_data, preserving groupStage and knockoutBracket
 - Minimal change: ~40 lines added to route.ts, no new files needed
 - Lesson: The existing pattern of action-based routing in the PUT handler made this straightforward to extend
+
+## TASK-035: Create admin page - knockout results entry (2026-04-19)
+- Created `src/components/admin/KnockoutResultsEditor.tsx` — reuses KnockoutBracket component with clicks setting results instead of user picks.
+- Uses cascadeClear to handle downstream result clearing when a match result changes.
+- Added to admin page below GroupResultsEditor, only visible when knockoutBracket exists in results_data.
+- Updated TournamentResponse type in admin page to include knockoutBracket and knockout fields.
+- Lesson: The KnockoutBracket `picks` prop doubles as the "selected" state — for admin results mode, pass results as picks and use onPick to set results. No need for a separate "admin mode" prop.

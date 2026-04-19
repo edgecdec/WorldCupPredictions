@@ -59,7 +59,7 @@
       "title": "Create ThemeRegistry, useThemeMode, globals.css",
       "spec": "specs/code-style.md",
       "priority": 6,
-      "status": "open",
+      "status": "done",
       "dependencies": [],
       "description": "Create src/components/common/ThemeRegistry.tsx (MUI ThemeProvider + Emotion cache, dark/light). Create src/hooks/useThemeMode.tsx (localStorage, default dark). Create src/app/globals.css (resets). Soccer palette: primary green #2e7d32, secondary gold #ffc107."
     },

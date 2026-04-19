@@ -39,3 +39,13 @@
 - Inlined fetch calls instead of separate api helper — keeps it minimal for now.
 - Build and tsc pass. Deploy verified on server.
 - Lesson: No api.ts abstraction needed yet — can extract later if fetch patterns repeat across many hooks.
+
+## TASK-006: Create ThemeRegistry, useThemeMode, globals.css
+- Date: 2026-04-18
+- Status: done
+- Files: src/hooks/useThemeMode.tsx, src/components/common/ThemeRegistry.tsx, src/app/globals.css
+- Lessons:
+  - Followed March Madness ThemeRegistry pattern exactly — context provider wrapping ThemeProvider+CssBaseline.
+  - Soccer palette: primary #2e7d32 (green), secondary #ffc107 (gold). Named constants, no inline hex.
+  - globals.css kept minimal: box-sizing reset, body height, font smoothing, link reset.
+  - No Emotion cache setup needed — MUI 7 handles it automatically with ThemeProvider.

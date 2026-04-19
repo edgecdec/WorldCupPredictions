@@ -831,7 +831,7 @@
       "title": "Site admin: add any user to any group from admin page",
       "spec": "specs/groups.md",
       "priority": 47,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-016",
         "TASK-036"

@@ -12,8 +12,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
-  const { name, year, lock_time_groups, lock_time_knockout, bracket_data } =
-    await request.json();
+  const body = await request.json();
+
+  if (body.action === "add_to_group") {
+    return addUserToGroup(body);
+  }
+
+  if (body.action === "list_groups") {
+    return listAllGroups();
+  }
+
+  if (body.action === "search_users") {
+    return searchUsers(body);
+  }
+
+  const { name, year, lock_time_groups, lock_time_knockout, bracket_data } = body;
 
   if (!name || !year) {
     return NextResponse.json(
@@ -205,4 +218,79 @@ function saveKnockoutResults(body: { knockoutResults: KnockoutResults }) {
   );
 
   return NextResponse.json({ ok: true, results: updatedResults });
+}
+
+function listAllGroups() {
+  const db = getDb();
+  const groups = db
+    .prepare(
+      `SELECT g.id, g.name, g.invite_code, COALESCE(u.username, 'System') as creator_name,
+        (SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = g.id) as member_count
+       FROM groups g
+       LEFT JOIN users u ON g.created_by = u.id
+       ORDER BY g.name`
+    )
+    .all() as { id: string; name: string; invite_code: string; creator_name: string; member_count: number }[];
+  return NextResponse.json({ ok: true, groups });
+}
+
+function searchUsers(body: { query: string }) {
+  const query = body.query?.trim();
+  if (!query) {
+    return NextResponse.json({ ok: true, users: [] });
+  }
+  const db = getDb();
+  const users = db
+    .prepare("SELECT id, username FROM users WHERE username LIKE ? LIMIT 20")
+    .all(`%${query}%`) as { id: string; username: string }[];
+  return NextResponse.json({ ok: true, users });
+}
+
+function addUserToGroup(body: { group_id: string; username: string }) {
+  const { group_id, username } = body;
+  if (!group_id || !username) {
+    return NextResponse.json({ ok: false, error: "group_id and username required" }, { status: 400 });
+  }
+
+  const db = getDb();
+  const group = db.prepare("SELECT id, name FROM groups WHERE id = ?").get(group_id) as
+    | { id: string; name: string }
+    | undefined;
+  if (!group) {
+    return NextResponse.json({ ok: false, error: "Group not found" }, { status: 404 });
+  }
+
+  const user = db.prepare("SELECT id FROM users WHERE username = ?").get(username) as
+    | { id: string }
+    | undefined;
+  if (!user) {
+    return NextResponse.json({ ok: false, error: `User '${username}' not found` }, { status: 404 });
+  }
+
+  const prediction = db
+    .prepare("SELECT id FROM predictions WHERE user_id = ? LIMIT 1")
+    .get(user.id) as { id: string } | undefined;
+  if (!prediction) {
+    return NextResponse.json(
+      { ok: false, error: `User '${username}' has no prediction yet` },
+      { status: 400 }
+    );
+  }
+
+  const existing = db
+    .prepare("SELECT 1 FROM group_members WHERE group_id = ? AND prediction_id = ?")
+    .get(group_id, prediction.id);
+  if (existing) {
+    return NextResponse.json(
+      { ok: false, error: `User '${username}' is already in this group` },
+      { status: 400 }
+    );
+  }
+
+  db.prepare("INSERT INTO group_members (group_id, prediction_id) VALUES (?, ?)").run(
+    group_id,
+    prediction.id
+  );
+
+  return NextResponse.json({ ok: true });
 }

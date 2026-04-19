@@ -637,3 +637,10 @@
 - Added PeopleIcon button on group cards for group creators (next to settings icon).
 - Nova Act confirmed: people icon visible on group cards, feature deployed and working.
 - Lesson: Nova Act ActResult has only `metadata` attribute, no `response`. Use workflow status (SUCCEEDED/FAILED) and think logs to verify behavior.
+
+## TASK-075: Site admin add any user to any group from admin page (2026-04-19)
+- Added `add_to_group`, `list_groups`, `search_users` actions to POST /api/admin
+- Created GroupManagement.tsx component with group table (sortable), group selector, user search autocomplete, and "Add to Group" button
+- User search uses debounced LIKE query (300ms delay)
+- Verified via Nova Act: Group Management section visible on admin page with table and controls
+- Lessons: Nova Act ActResult doesn't have `.response` or `.successful` — the agent's think logs confirm success. Use the returned text from `return()` calls instead.

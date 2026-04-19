@@ -18,6 +18,8 @@ interface GroupPredictionProps {
   onChange: (groupName: string, newOrder: string[]) => void;
   disabled?: boolean;
   advancingThirdPlaceTeams?: string[];
+  actualOrder?: [string, string, string, string];
+  actualAdvancingThird?: string[];
 }
 
 function moveItem(arr: string[], from: number, to: number): string[] {
@@ -27,7 +29,20 @@ function moveItem(arr: string[], from: number, to: number): string[] {
   return next;
 }
 
-function getRowBgColor(position: number, teamName: string, advancingThird: string[], theme: Theme): string {
+function getRowBgColor(position: number, teamName: string, advancingThird: string[], theme: Theme, actualOrder?: [string, string, string, string], actualAdvancingThird?: string[]): string {
+  // Results mode: compare prediction vs actual
+  if (actualOrder) {
+    const actualPos = actualOrder.indexOf(teamName);
+    if (actualPos === -1) return 'transparent';
+    const exactMatch = actualPos === position;
+    // "Advancing" means: 1st/2nd always advance, 3rd advances if in actualAdvancingThird
+    const predAdvances = position <= 1 || (position === 2 && advancingThird.includes(teamName));
+    const actualAdvances = actualPos <= 1 || (actualPos === 2 && (actualAdvancingThird ?? []).includes(teamName));
+    if (exactMatch) return alpha(theme.palette.success.main, HIGHLIGHT_ALPHA);
+    if (predAdvances === actualAdvances) return alpha(theme.palette.warning.main, HIGHLIGHT_ALPHA);
+    return alpha(theme.palette.error.main, HIGHLIGHT_ALPHA);
+  }
+  // Prediction mode: show advance/eliminate colors
   if (position <= 1) return alpha(theme.palette.success.main, HIGHLIGHT_ALPHA);
   if (position === 2) {
     return advancingThird.includes(teamName)
@@ -37,7 +52,7 @@ function getRowBgColor(position: number, teamName: string, advancingThird: strin
   return alpha(theme.palette.error.main, HIGHLIGHT_ALPHA);
 }
 
-export default function GroupPrediction({ groupName, teams, order, onChange, disabled, advancingThirdPlaceTeams = [] }: GroupPredictionProps) {
+export default function GroupPrediction({ groupName, teams, order, onChange, disabled, advancingThirdPlaceTeams = [], actualOrder, actualAdvancingThird }: GroupPredictionProps) {
   const teamMap = new Map(teams.map((t) => [t.name, t]));
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropTarget, setDropTarget] = useState<number | null>(null);
@@ -131,7 +146,7 @@ export default function GroupPrediction({ groupName, teams, order, onChange, dis
                   py: 0.5,
                   px: 1,
                   borderRadius: 1,
-                  bgcolor: (theme: Theme) => getRowBgColor(i, name, advancingThirdPlaceTeams, theme),
+                  bgcolor: (theme: Theme) => getRowBgColor(i, name, advancingThirdPlaceTeams, theme, actualOrder, actualAdvancingThird),
                   opacity: isDragging ? 0.4 : 1,
                   borderTop: isDropTarget ? (theme: Theme) => `${DROP_INDICATOR_HEIGHT}px solid ${theme.palette.primary.main}` : 'none',
                   cursor: disabled ? 'default' : 'grab',
@@ -148,6 +163,15 @@ export default function GroupPrediction({ groupName, teams, order, onChange, dis
                 <Typography variant="body2" sx={{ flex: 1 }}>
                   {team.name}
                 </Typography>
+                {actualOrder && (() => {
+                  const actualPos = actualOrder.indexOf(name);
+                  if (actualPos === -1) return null;
+                  const predAdvances = i <= 1 || (i === 2 && advancingThirdPlaceTeams.includes(name));
+                  const actualAdvances = actualPos <= 1 || (actualPos === 2 && (actualAdvancingThird ?? []).includes(name));
+                  if (actualPos === i) return <Typography component="span" sx={{ fontSize: '0.7rem', color: 'success.main' }}>✓</Typography>;
+                  if (predAdvances === actualAdvances) return <Typography component="span" sx={{ fontSize: '0.7rem', color: 'warning.main' }}>~</Typography>;
+                  return <Typography component="span" sx={{ fontSize: '0.7rem', color: 'error.main' }}>✗</Typography>;
+                })()}
                 <Chip label={`Pot ${team.pot}`} size="small" variant="outlined" />
                 <Typography variant="caption" color="text.secondary" sx={{ minWidth: 20, textAlign: 'right' }}>
                   #{team.fifaRanking}

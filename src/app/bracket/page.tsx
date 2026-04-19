@@ -99,6 +99,13 @@ export default function BracketPage() {
     [thirdPlacePicks, thirdPlaceTeams],
   );
 
+  const groupStageResults = (tournament?.results_data as TournamentResults | undefined)?.groupStage;
+  const groupResultsMap = useMemo(() => {
+    if (!groupStageResults?.groupResults) return new Map<string, [string, string, string, string]>();
+    return new Map(groupStageResults.groupResults.map((gr) => [gr.groupName, gr.order]));
+  }, [groupStageResults]);
+  const actualAdvancingThird = groupStageResults?.advancingThirdPlace;
+
   const isLocked = Boolean(
     tournament?.lock_time_groups && new Date() > new Date(tournament.lock_time_groups),
   );
@@ -226,6 +233,8 @@ export default function BracketPage() {
                   onChange={handleGroupChange}
                   disabled={disabled}
                   advancingThirdPlaceTeams={validThirdPicks}
+                  actualOrder={groupResultsMap.get(g.name)}
+                  actualAdvancingThird={actualAdvancingThird}
                 />
               ))}
             </Box>

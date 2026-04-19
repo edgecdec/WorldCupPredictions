@@ -125,6 +125,10 @@ export default function PublicBracketPage() {
   const results = tournament?.results_data as TournamentResults | undefined;
   const matchups = results?.knockoutBracket || [];
   const decodedUsername = decodeURIComponent(username);
+  const groupResultsMap = new Map(
+    (results?.groupStage?.groupResults ?? []).map((gr) => [gr.groupName, gr.order]),
+  );
+  const actualAdvancingThird = results?.groupStage?.advancingThirdPlace;
 
   return (
     <Box sx={{ maxWidth: 1600, mx: 'auto', px: 2, py: 3 }}>
@@ -166,6 +170,8 @@ export default function PublicBracketPage() {
                   onChange={() => {}}
                   disabled
                   advancingThirdPlaceTeams={thirdPlacePicks}
+                  actualOrder={groupResultsMap.get(g.name)}
+                  actualAdvancingThird={actualAdvancingThird}
                 />
               ))}
             </Box>

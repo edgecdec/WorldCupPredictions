@@ -786,7 +786,7 @@
       "title": "Simple Mode: create step-by-step knockout predictions flow",
       "spec": "specs/bracket.md",
       "priority": 46,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-032",
         "TASK-070"

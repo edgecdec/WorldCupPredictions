@@ -598,3 +598,14 @@
 - Added "Fill Step-by-Step" button on /bracket page next to autofill buttons
 - Exit preserves all picks back to the main bracket page
 - Lessons: Keep SimpleMode state self-contained; pass initial values as props and return final values via onClose callback to avoid complex state sync.
+
+## TASK-071: Simple Mode step-by-step knockout predictions flow (2026-04-19)
+- Created `src/components/bracket/SimpleKnockoutMode.tsx` — full-screen dialog with step-by-step matchup picking
+- Flow: R32→R16→QF→SF→3RD→FINAL in bracket order, then tiebreaker prompt, then review screen with round-by-round summary
+- Resolves later-round teams dynamically from picks (feeders), handles 3RD place match (SF losers)
+- Cascade warning: if changing a pick would clear downstream picks, shows confirmation dialog before applying
+- Added "Fill Step-by-Step" button on knockout page next to autofill buttons
+- Built teamRankingsMap alongside existing countryCodeMap for team ranking display
+- Nova Act confirmed knockout page loads correctly (shows "group results not entered" since no results exist yet — expected)
+- Lesson: The 3RD place match needs special handling since its teams are SF losers, not winners. Used getSFLoser helper.
+- Lesson: Nova Act ActResult uses `.output` not `.response` for return values.

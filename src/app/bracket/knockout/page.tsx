@@ -13,6 +13,8 @@ import type { Tournament, TournamentResults, KnockoutMatchup, BracketData } from
 import PrintExportButtons from '@/components/common/PrintExportButtons';
 import AutofillButtons, { AutofillStrategy } from '@/components/common/AutofillButtons';
 import { chalkKnockout, randomKnockout, smartKnockout } from '@/lib/autofill';
+import TouchAppIcon from '@mui/icons-material/TouchApp';
+import SimpleKnockoutMode from '@/components/bracket/SimpleKnockoutMode';
 
 export default function KnockoutPage() {
   const { user, loading: authLoading } = useAuth();
@@ -24,6 +26,7 @@ export default function KnockoutPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [simpleMode, setSimpleMode] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -78,10 +81,12 @@ export default function KnockoutPage() {
   const bracketData = tournament?.bracket_data as BracketData | undefined;
 
   const countryCodeMap: Record<string, string> = {};
+  const teamRankingsMap: Record<string, number> = {};
   if (bracketData?.groups) {
     for (const g of bracketData.groups) {
       for (const t of g.teams) {
         if (t.countryCode) countryCodeMap[t.name] = t.countryCode;
+        teamRankingsMap[t.name] = t.fifaRanking;
       }
     }
   }
@@ -185,9 +190,12 @@ export default function KnockoutPage() {
       {success && <Alert severity="success" sx={{ my: 2 }} onClose={() => setSuccess('')}>{success}</Alert>}
 
       {!disabled && (
-        <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
           <Typography variant="body2" color="text.secondary">Autofill:</Typography>
           <AutofillButtons onAutofill={handleAutofill} disabled={disabled} />
+          <Button variant="outlined" startIcon={<TouchAppIcon />} onClick={() => setSimpleMode(true)}>
+            Fill Step-by-Step
+          </Button>
         </Box>
       )}
 
@@ -234,6 +242,22 @@ export default function KnockoutPage() {
           {saving ? 'Saving…' : 'Save Knockout Picks'}
         </Button>
       </Box>
+
+      {hasKnockoutBracket && !disabled && (
+        <SimpleKnockoutMode
+          open={simpleMode}
+          onClose={(newPicks, newTiebreaker) => {
+            setPicks(newPicks);
+            setTiebreaker(newTiebreaker);
+            setSimpleMode(false);
+          }}
+          matchups={matchups}
+          initialPicks={picks}
+          initialTiebreaker={tiebreaker}
+          countryCodeMap={countryCodeMap}
+          teamRankings={teamRankingsMap}
+        />
+      )}
     </Box>
   );
 }

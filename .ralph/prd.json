@@ -843,7 +843,7 @@
       "title": "Expand simulator to include group stage simulation",
       "spec": "specs/bracket.md",
       "priority": 44,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-046"
       ],

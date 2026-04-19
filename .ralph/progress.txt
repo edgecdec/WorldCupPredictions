@@ -684,3 +684,12 @@
 - Integrated below countdown on home page, only shows when tournament exists and user is logged in
 - Nova Act confirmed timeline visible with correct phases and descriptions
 - Lesson: Nova Act ActResult doesn't have a `.response` attribute — the return value is in the agent logs. For future tests, just check `result.metadata` or use a simpler pass/fail approach.
+
+## TASK-076: Expand simulator to include group stage simulation (2026-04-19)
+- Created `src/components/bracket/GroupSimulator.tsx` — reusable component with 12 GroupPrediction cards, ThirdPlacePicker, and "If Current Results Hold" ESPN auto-fill button.
+- Rewrote `src/app/simulate/page.tsx` to add Group Stage / Knockout tabs. Auto-detects tournament phase: shows group tab first if no knockout bracket exists, knockout tab if it does.
+- Group stage sim generates a knockout bracket on-the-fly via `generateKnockoutBracket()` when all 12 groups + 8 third-place picks are set, enabling seamless transition to knockout sim.
+- Leaderboard sidebar recalculates live using `scoreTotalPrediction()` with hypothetical group results.
+- "If Current Results Hold" button fetches `/api/scores?type=standings` and auto-fills group orders + best 8 third-place teams from ESPN data.
+- Lesson: Reusing existing GroupPrediction and ThirdPlacePicker components kept the implementation minimal. The key insight was that `generateKnockoutBracket` can be called client-side with hypothetical results to produce a bracket without needing server-side state.
+- Lesson: When 3rd-place team changes due to group reorder, must remove the old 3rd-place team from thirdPlacePicks to avoid stale selections.

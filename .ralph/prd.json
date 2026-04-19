@@ -643,7 +643,7 @@
       "dependencies": [
         "TASK-057"
       ],
-      "description": "Create src/hooks/useLiveScores.ts \u2014 hook that calls fetchLiveScores() every 30 seconds when there are active matches, returns {games: LiveGame[], loading: boolean}. Only poll when tournament is in progress (between start and end dates). Create src/components/bracket/LiveScores.tsx \u2014 compact card grid showing in-progress and recent match scores. Each card shows team flags/names, score, match status/clock. Add LiveScores to the home page when matches are in progress."
+      "description": "Create src/hooks/useLiveScores.ts \u2014 hook that calls fetchLiveScores() every 30 seconds when there are active matches, returns {games: LiveGame[], loading: boolean}. Only poll when tournament is in progress (between start and end dates). Create src/components/bracket/LiveScores.tsx \u2014 compact card grid showing in-progress and recent match scores. Each card shows team flags/names, score, match status/clock. Add LiveScores to the home page when matches are in progress. Each live score card should link to the ESPN match page (https://www.espn.com/soccer/match/_/gameId/{espnGameId}) so users can click through for full match details, lineups, and commentary."
     },
     {
       "id": "TASK-059",

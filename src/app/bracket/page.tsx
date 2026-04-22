@@ -20,6 +20,8 @@ import { chalkGroups, randomGroups, smartGroups, chalkThirdPlace, randomThirdPla
 import ScoringRulesSummary from '@/components/common/ScoringRulesSummary';
 import OnboardingGuide, { ONBOARDING_STORAGE_KEY } from '@/components/common/OnboardingGuide';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import { useAutosave } from '@/hooks/useAutosave';
+import AutosaveIndicator from '@/components/common/AutosaveIndicator';
 
 const REQUIRED_THIRD_PLACE = 8;
 
@@ -38,6 +40,7 @@ export default function BracketPage() {
   const [simpleMode, setSimpleMode] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [lockedGroup, setLockedGroup] = useState<string | null>(null);
+  const [dataLoaded, setDataLoaded] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -93,6 +96,7 @@ export default function BracketPage() {
         setError('Failed to load data');
       } finally {
         setLoading(false);
+        setDataLoaded(true);
       }
     }
     if (!authLoading) load();
@@ -168,6 +172,41 @@ export default function BracketPage() {
   const tournamentStarted = isLocked;
   const disabled = !user || isLocked || !!lockedGroup;
 
+  const autosaveDataJson = useMemo(
+    () => JSON.stringify({ groupOrders, thirdPlacePicks: validThirdPicks, bracketName }),
+    [groupOrders, validThirdPicks, bracketName],
+  );
+
+  const doSave = useCallback(async (): Promise<boolean> => {
+    if (!bracketData) return false;
+    const groupPredictions: GroupPredictionType[] = bracketData.groups.map((g) => ({
+      groupName: g.name,
+      order: (groupOrders[g.name] || g.teams.map((t) => t.name)) as [string, string, string, string],
+    }));
+    const res = await fetch('/api/picks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'save_groups',
+        bracket_name: bracketName,
+        group_predictions: groupPredictions,
+        third_place_picks: validThirdPicks,
+      }),
+    });
+    return res.ok;
+  }, [bracketData, groupOrders, bracketName, validThirdPicks]);
+
+  const { status: autosaveStatus, markSaved } = useAutosave({
+    dataJson: dataLoaded ? autosaveDataJson : '',
+    disabled,
+    saveFn: doSave,
+  });
+
+  // Mark initial load as saved baseline
+  useEffect(() => {
+    if (dataLoaded) markSaved(autosaveDataJson);
+  }, [dataLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleSave = async () => {
     if (!bracketData || disabled) return;
     if (validThirdPicks.length !== REQUIRED_THIRD_PLACE) {
@@ -195,6 +234,7 @@ export default function BracketPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Save failed');
       setSuccess('Predictions saved!');
+      markSaved(autosaveDataJson);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed');
     } finally {
@@ -331,14 +371,15 @@ export default function BracketPage() {
           </Box>
 
           <Box className="no-print" sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+            <AutosaveIndicator status={autosaveStatus} />
             <Button
-              variant="contained"
-              size="large"
+              variant="outlined"
+              size="small"
               startIcon={<SaveIcon />}
               onClick={handleSave}
               disabled={disabled || saving}
             >
-              {saving ? 'Saving…' : 'Save Predictions'}
+              {saving ? 'Saving…' : 'Save'}
             </Button>
 
             {Boolean((tournament.results_data as TournamentResults)?.knockoutBracket) && (

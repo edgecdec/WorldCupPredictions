@@ -1024,7 +1024,7 @@
       "title": "Add autosave with debounce to predictions pages",
       "spec": "specs/bracket.md",
       "priority": 40,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-025",
         "TASK-032"

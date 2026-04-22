@@ -807,3 +807,12 @@
 - Updated /join/[code] page: removed the "need a bracket first" error, just joins directly.
 - Updated /groups page join dialog: removed prediction requirement check, changed warning to info message.
 - Lesson: The group_members table uses prediction_id (not user_id), so any group join flow must ensure a prediction exists first. Centralizing this in a single helper avoids duplication across join, create, and registration flows.
+
+## TASK-092: Add autosave with debounce to predictions pages (2026-04-21)
+- Created reusable `useAutosave` hook in `src/hooks/useAutosave.ts` with 2-second debounce, beforeunload warning, and status tracking (idle/unsaved/saving/saved/error).
+- Created `AutosaveIndicator` component showing status with icons (edit, spinner, checkmark, error).
+- Integrated into both `/bracket` (group predictions) and `/bracket/knockout` pages.
+- Used `dataLoaded` flag + `markSaved()` to prevent autosave from firing on initial data load.
+- De-emphasized manual Save button (outlined, small) since autosave handles it.
+- Key pattern: `saveFnRef` to avoid stale closures in the debounce timer, `savedRef` to track last-saved JSON for dirty detection.
+- Nova Act confirmed: small outlined Save button visible, "Saved" indicator shown correctly.

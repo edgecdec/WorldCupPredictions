@@ -18,6 +18,8 @@ import TouchAppIcon from '@mui/icons-material/TouchApp';
 import SimpleKnockoutMode from '@/components/bracket/SimpleKnockoutMode';
 import MiniBracket from '@/components/bracket/MiniBracket';
 import ScoringRulesSummary from '@/components/common/ScoringRulesSummary';
+import { useAutosave } from '@/hooks/useAutosave';
+import AutosaveIndicator from '@/components/common/AutosaveIndicator';
 
 export default function KnockoutPage() {
   const { user, loading: authLoading } = useAuth();
@@ -31,6 +33,7 @@ export default function KnockoutPage() {
   const [success, setSuccess] = useState('');
   const [simpleMode, setSimpleMode] = useState(false);
   const [lockedGroup, setLockedGroup] = useState<string | null>(null);
+  const [dataLoaded, setDataLoaded] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -68,6 +71,7 @@ export default function KnockoutPage() {
         setError('Failed to load data');
       } finally {
         setLoading(false);
+        setDataLoaded(true);
       }
     }
     if (!authLoading) load();
@@ -120,6 +124,35 @@ export default function KnockoutPage() {
   );
   const disabled = !user || isLocked || !!lockedGroup;
 
+  const autosaveDataJson = useMemo(
+    () => JSON.stringify({ picks, tiebreaker }),
+    [picks, tiebreaker],
+  );
+
+  const doSave = useCallback(async (): Promise<boolean> => {
+    const res = await fetch('/api/picks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'save_knockout',
+        knockout_picks: picks,
+        tiebreaker: tiebreaker ? parseInt(tiebreaker, 10) : null,
+      }),
+    });
+    return res.ok;
+  }, [picks, tiebreaker]);
+
+  const { status: autosaveStatus, markSaved } = useAutosave({
+    dataJson: dataLoaded ? autosaveDataJson : '',
+    disabled,
+    saveFn: doSave,
+  });
+
+  // Mark initial load as saved baseline
+  useEffect(() => {
+    if (dataLoaded) markSaved(autosaveDataJson);
+  }, [dataLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleSave = async () => {
     if (disabled) return;
     setSaving(true);
@@ -138,6 +171,7 @@ export default function KnockoutPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Save failed');
       setSuccess('Knockout picks saved!');
+      markSaved(autosaveDataJson);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed');
     } finally {
@@ -255,14 +289,15 @@ export default function KnockoutPage() {
             slotProps={{ htmlInput: { min: 0 } }}
             sx={{ width: 280 }}
           />
+          <AutosaveIndicator status={autosaveStatus} />
           <Button
-            variant="contained"
-            size="large"
+            variant="outlined"
+            size="small"
             startIcon={<SaveIcon />}
             onClick={handleSave}
             disabled={disabled || saving}
           >
-            {saving ? 'Saving…' : 'Save Knockout Picks'}
+            {saving ? 'Saving…' : 'Save'}
           </Button>
         </Box>
       )}

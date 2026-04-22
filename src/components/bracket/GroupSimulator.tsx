@@ -3,7 +3,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { Box, Button, Typography, Grid, Paper, CircularProgress } from '@mui/material';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import GroupPrediction from '@/components/bracket/GroupPrediction';
-import ThirdPlacePicker from '@/components/bracket/ThirdPlacePicker';
+import ThirdPlacePicker, { type ThirdPlaceTeamDetail } from '@/components/bracket/ThirdPlacePicker';
 import type { BracketData, GroupStageResults } from '@/types';
 import type { GroupTable } from '@/lib/espnSync';
 
@@ -43,6 +43,16 @@ export default function GroupSimulator({ bracketData, onChange, initialResults }
 
   const [loadingEspn, setLoadingEspn] = useState(false);
   const countryCodeMap = useMemo(() => buildCountryCodeMap(bracketData), [bracketData]);
+
+  const thirdPlaceTeamDetails = useMemo(() => {
+    const details: Record<string, ThirdPlaceTeamDetail> = {};
+    for (const g of bracketData.groups) {
+      for (const t of g.teams) {
+        details[t.name] = { countryCode: t.countryCode, pot: t.pot, fifaRanking: t.fifaRanking, groupName: g.name };
+      }
+    }
+    return details;
+  }, [bracketData]);
 
   const thirdPlaceTeams = useMemo(
     () => bracketData.groups.map((g) => groupOrders[g.name]?.[2] ?? g.teams[2].name),
@@ -162,6 +172,7 @@ export default function GroupSimulator({ bracketData, onChange, initialResults }
           selected={thirdPlacePicks}
           onChange={handleThirdPlaceChange}
           countryCodeMap={countryCodeMap}
+          teamDetails={thirdPlaceTeamDetails}
         />
       </Paper>
     </Box>

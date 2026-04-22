@@ -7,7 +7,7 @@ import UndoIcon from '@mui/icons-material/Undo';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import type { BracketData, Group } from '@/types';
 import TeamFlag from '@/components/common/TeamFlag';
-import ThirdPlacePicker from '@/components/bracket/ThirdPlacePicker';
+import ThirdPlacePicker, { type ThirdPlaceTeamDetail } from '@/components/bracket/ThirdPlacePicker';
 import useSwipe from '@/hooks/useSwipe';
 
 const REQUIRED_THIRD_PLACE = 8;
@@ -54,6 +54,16 @@ export default function SimpleMode({ open, onClose, bracketData, initialGroupOrd
       return order ? order[2] : g.teams[2].name;
     });
   }, [groups, groupOrders]);
+
+  const thirdPlaceTeamDetails = useMemo(() => {
+    const details: Record<string, ThirdPlaceTeamDetail> = {};
+    for (const g of groups) {
+      for (const t of g.teams) {
+        details[t.name] = { countryCode: t.countryCode, pot: t.pot, fifaRanking: t.fifaRanking, groupName: g.name };
+      }
+    }
+    return details;
+  }, [groups]);
 
   const handlePickTeam = useCallback((teamName: string) => {
     setLastPicked(teamName);
@@ -149,6 +159,7 @@ export default function SimpleMode({ open, onClose, bracketData, initialGroupOrd
                 selected={thirdPlacePicks}
                 onChange={setThirdPlacePicks}
                 countryCodeMap={countryCodeMap}
+                teamDetails={thirdPlaceTeamDetails}
               />
             </Box>
           ) : (

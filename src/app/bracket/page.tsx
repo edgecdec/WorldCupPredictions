@@ -7,7 +7,7 @@ import ShareIcon from '@mui/icons-material/Share';
 import LockIcon from '@mui/icons-material/Lock';
 import Link from 'next/link';
 import GroupPrediction from '@/components/bracket/GroupPrediction';
-import ThirdPlacePicker from '@/components/bracket/ThirdPlacePicker';
+import ThirdPlacePicker, { type ThirdPlaceTeamDetail } from '@/components/bracket/ThirdPlacePicker';
 import GroupStandings from '@/components/bracket/GroupStandings';
 import CountdownTimer from '@/components/common/CountdownTimer';
 import { useAuth } from '@/hooks/useAuth';
@@ -136,6 +136,17 @@ export default function BracketPage() {
       }
     }
     return map;
+  }, [bracketData]);
+
+  const thirdPlaceTeamDetails = useMemo(() => {
+    if (!bracketData) return {};
+    const details: Record<string, ThirdPlaceTeamDetail> = {};
+    for (const g of bracketData.groups) {
+      for (const t of g.teams) {
+        details[t.name] = { countryCode: t.countryCode, pot: t.pot, fifaRanking: t.fifaRanking, groupName: g.name };
+      }
+    }
+    return details;
   }, [bracketData]);
 
   // Remove stale third-place picks when teams change
@@ -314,6 +325,7 @@ export default function BracketPage() {
                 onChange={setThirdPlacePicks}
                 disabled={disabled}
                 countryCodeMap={countryCodeMap}
+                teamDetails={thirdPlaceTeamDetails}
               />
             </Box>
           </Box>

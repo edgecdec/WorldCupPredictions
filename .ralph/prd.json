@@ -991,7 +991,7 @@
       "title": "Redesign ThirdPlacePicker as ordered list with full team info",
       "spec": "specs/bracket.md",
       "priority": 40,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-024"
       ],

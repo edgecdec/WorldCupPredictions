@@ -6,7 +6,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ShareIcon from '@mui/icons-material/Share';
 import Link from 'next/link';
 import GroupPrediction from '@/components/bracket/GroupPrediction';
-import ThirdPlacePicker from '@/components/bracket/ThirdPlacePicker';
+import ThirdPlacePicker, { type ThirdPlaceTeamDetail } from '@/components/bracket/ThirdPlacePicker';
 import KnockoutBracket from '@/components/bracket/KnockoutBracket';
 import MobileBracket from '@/components/bracket/MobileBracket';
 import { useAuth } from '@/hooks/useAuth';
@@ -135,10 +135,12 @@ export default function PublicBracketPage() {
   );
   const actualAdvancingThird = results?.groupStage?.advancingThirdPlace;
   const countryCodeMap: Record<string, string> = {};
+  const thirdPlaceTeamDetails: Record<string, ThirdPlaceTeamDetail> = {};
   if (bracketData?.groups) {
     for (const g of bracketData.groups) {
       for (const t of g.teams) {
         if (t.countryCode) countryCodeMap[t.name] = t.countryCode;
+        thirdPlaceTeamDetails[t.name] = { countryCode: t.countryCode, pot: t.pot, fifaRanking: t.fifaRanking, groupName: g.name };
       }
     }
   }
@@ -200,6 +202,7 @@ export default function PublicBracketPage() {
                   onChange={() => {}}
                   disabled
                   countryCodeMap={countryCodeMap}
+                  teamDetails={thirdPlaceTeamDetails}
                 />
               </Box>
             )}

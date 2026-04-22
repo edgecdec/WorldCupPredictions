@@ -790,3 +790,11 @@
 - Added "Regenerate Bracket" button on admin page (visible when group stage results exist)
 - Minimal change: one new function in admin route, one handler + one Card section in admin page
 - Lesson: Nova Act `ActResult` has no `response` attribute — the return value from `return("Yes")` is not directly accessible as a field. For future tests, just check `result.metadata` or use a simpler assertion pattern.
+
+## TASK-089: Redesign ThirdPlacePicker as ordered list with full team info
+- Date: 2026-04-21
+- Redesigned ThirdPlacePicker from toggleable Chips to a vertical list with checkboxes, flags, team names, group labels, pot chips, and FIFA rankings.
+- Added `teamDetails` prop (Record<string, ThirdPlaceTeamDetail>) to pass full team info. Falls back to chip layout when teamDetails not provided (backward compatible).
+- Updated all 5 callers: /bracket page, /bracket/[username], /profile/[username], GroupSimulator, SimpleMode.
+- Lesson: Exporting the ThirdPlaceTeamDetail interface from the component file keeps the type co-located with its consumer and avoids polluting the shared types file for a component-specific concern.
+- Lesson: Nova Act tests on this site need to handle the onboarding tutorial popup — use a dedicated step with max_steps=10 to dismiss it before testing the actual feature.

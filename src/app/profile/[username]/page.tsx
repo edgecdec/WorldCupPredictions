@@ -11,7 +11,7 @@ import GroupsIcon from '@mui/icons-material/Groups';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import Link from 'next/link';
 import GroupPrediction from '@/components/bracket/GroupPrediction';
-import ThirdPlacePicker from '@/components/bracket/ThirdPlacePicker';
+import ThirdPlacePicker, { type ThirdPlaceTeamDetail } from '@/components/bracket/ThirdPlacePicker';
 import KnockoutBracket from '@/components/bracket/KnockoutBracket';
 import MobileBracket from '@/components/bracket/MobileBracket';
 import MiniBracket from '@/components/bracket/MiniBracket';
@@ -137,10 +137,12 @@ export default function ProfilePage() {
   }
 
   const countryCodeMap: Record<string, string> = {};
+  const thirdPlaceTeamDetails: Record<string, ThirdPlaceTeamDetail> = {};
   if (bracketData?.groups) {
     for (const g of bracketData.groups) {
       for (const t of g.teams) {
         if (t.countryCode) countryCodeMap[t.name] = t.countryCode;
+        thirdPlaceTeamDetails[t.name] = { countryCode: t.countryCode, pot: t.pot, fifaRanking: t.fifaRanking, groupName: g.name };
       }
     }
   }
@@ -326,6 +328,7 @@ export default function ProfilePage() {
                 onChange={() => {}}
                 disabled
                 countryCodeMap={countryCodeMap}
+                teamDetails={thirdPlaceTeamDetails}
               />
             </Box>
           )}

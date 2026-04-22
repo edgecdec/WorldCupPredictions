@@ -1007,6 +1007,41 @@
         "TASK-032"
       ],
       "description": "Two issues with /bracket/knockout: (1) When knockout bracket hasn't been generated yet, the page shows a blocking message and hides everything. Instead, always show the bracket page structure with an info banner at the top saying 'The knockout bracket will be available after the group stage ends on [date]. Come back then to fill out your picks!' but still let users see the empty bracket layout so they understand what's coming. If the bracket IS generated, show it normally. (2) When users click to pick a winner in a matchup, the bracket should visually update immediately \u2014 the winning team should appear in the next round's matchup slot. Verify that the KnockoutBracket component properly propagates picks through the bracket visually (winner of R32-1 appears as teamA or teamB in the corresponding R16 matchup). Debug by checking if the Matchup component receives updated teamA/teamB props when upstream picks change. Test with Nova Act: log in, go to /bracket/knockout, pick a winner in an R32 match, verify the team appears in the R16 slot."
+    },
+    {
+      "id": "TASK-091",
+      "title": "Auto-create prediction when user joins a group without one",
+      "spec": "specs/groups.md",
+      "priority": 40,
+      "status": "open",
+      "dependencies": [
+        "TASK-036"
+      ],
+      "description": "When a user tries to join a group (via /join/[code] or the join dialog) and they don't have a prediction yet, automatically create an empty prediction for them instead of showing an error. In the groups API join handler: if no prediction exists for the user, create one with empty group_predictions, empty third_place_picks, empty knockout_picks, and a default bracket_name (e.g. the user's username). Then add that prediction to the group. Also do this in the Everyone group auto-join during registration. This removes the friction of 'you need to create a bracket first' \u2014 users can join groups immediately and fill in their picks later."
+    },
+    {
+      "id": "TASK-092",
+      "title": "Add autosave with debounce to predictions pages",
+      "spec": "specs/bracket.md",
+      "priority": 40,
+      "status": "open",
+      "dependencies": [
+        "TASK-025",
+        "TASK-032"
+      ],
+      "description": "Add autosave to both /bracket (group predictions) and /bracket/knockout pages, following the March Madness pattern. Use a 2-second debounce: when picks change, wait 2 seconds of inactivity then auto-save via POST /api/picks. Show a status indicator in the corner: 'Saved \u2713' (green), 'Saving...' (yellow spinner), 'Unsaved changes' (orange). Don't autosave if picks are empty (no changes made yet). Don't autosave if locked. Track saved state with a ref comparing current picks JSON to last saved JSON. Auto-create the prediction on first save if one doesn't exist yet (the API should handle upsert). Remove or de-emphasize the manual Save button since autosave handles it \u2014 keep it as a fallback but make it less prominent."
+    },
+    {
+      "id": "TASK-093",
+      "title": "Show leaderboard before event with completion status, hide pick details",
+      "spec": "specs/scoring.md",
+      "priority": 41,
+      "status": "open",
+      "dependencies": [
+        "TASK-039",
+        "TASK-086"
+      ],
+      "description": "Before the tournament starts, the leaderboard should be visible but show different info than during the tournament. Show: username, bracket name, and a completion status column. Completion status: for group stage, show 'X/12 groups filled' and 'X/8 third-place picks'. Use a progress bar or checkmarks. Show \u2705 if all groups are ordered and 8 third-place teams selected, \u26a0\ufe0f if partially complete, \u274c if empty. Do NOT show any details about what teams they picked \u2014 no scores, no pick breakdowns, no compare access. This lets users see who's in their group and who still needs to fill out their predictions, without revealing anyone's picks before lock time. After lock_time_groups passes, switch to showing actual scores and enable pick visibility. Same pattern for knockout phase: show 'X/31 knockout picks' completion before lock_time_knockout."
     }
   ]
 }

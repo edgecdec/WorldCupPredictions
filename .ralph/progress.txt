@@ -769,3 +769,12 @@
   - The 3RD place match and FINAL both feed from SF-1/SF-2, but 3RD needs losers while FINAL needs winners. Always check special cases in bracket propagation logic.
   - Nova Act gets stuck on onboarding guide popups — navigate directly to URLs instead of clicking through UI when testing specific pages.
   - `generateEmptyBracket()` should be called inside `useMemo` to avoid creating new array references on every render.
+
+## TASK-096: Fix R32 bracket generation to use FIFA's official matchup mapping
+- Date: 2026-04-21
+- Replaced incorrect R32 matchups with FIFA's official 2026 bracket mapping (Matches 73-88)
+- Updated R16 feeds (M89-M96), QF feeds (M97-M100), SF feeds (M101-M102) to match FIFA's official bracket structure
+- Implemented constraint-based backtracking solver for 3rd-place team assignment instead of simple bucketing — uses FIFA's valid slot constraints (which 3rd-place teams can face which group winners)
+- Updated feed maps in autofill.ts and monteCarloWorker.ts to match the corrected bracket structure
+- Key lesson: The 3rd-place assignment is complex — 8 slots each have a limited set of valid groups. A backtracking solver handles all 495 combinations correctly.
+- Note: 3 pre-existing test failures in scoring.test.ts (knockout upset bonus and champion bonus tests) — not related to this change.

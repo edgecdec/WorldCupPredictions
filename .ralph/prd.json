@@ -1070,7 +1070,7 @@
       "title": "Fix R32 bracket generation to use FIFA's official matchup mapping",
       "spec": "specs/tournament-structure.md",
       "priority": 38,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-026"
       ],

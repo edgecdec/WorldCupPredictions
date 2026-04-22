@@ -27,19 +27,26 @@ interface SimResultMsg {
   results?: Array<{ key: string; avgScore: number; avgPlace: number; winPct: number }>;
 }
 
-// Feeder map: matchupId -> [feederA, feederB]
+// Feeder map: matchupId -> [feederA, feederB] — FIFA 2026 official bracket
 const R16_FEEDS: [string, string, string][] = [
-  ['R16-1', 'R32-1', 'R32-2'], ['R16-2', 'R32-3', 'R32-4'],
-  ['R16-3', 'R32-5', 'R32-6'], ['R16-4', 'R32-7', 'R32-8'],
-  ['R16-5', 'R32-9', 'R32-10'], ['R16-6', 'R32-11', 'R32-12'],
-  ['R16-7', 'R32-13', 'R32-14'], ['R16-8', 'R32-15', 'R32-16'],
+  ['R16-1', 'R32-2', 'R32-5'],   // M89: W74 vs W77
+  ['R16-2', 'R32-1', 'R32-3'],   // M90: W73 vs W75
+  ['R16-3', 'R32-4', 'R32-6'],   // M91: W76 vs W78
+  ['R16-4', 'R32-7', 'R32-8'],   // M92: W79 vs W80
+  ['R16-5', 'R32-11', 'R32-12'], // M93: W83 vs W84
+  ['R16-6', 'R32-9', 'R32-10'],  // M94: W81 vs W82
+  ['R16-7', 'R32-14', 'R32-16'], // M95: W86 vs W88
+  ['R16-8', 'R32-13', 'R32-15'], // M96: W85 vs W87
 ];
 const QF_FEEDS: [string, string, string][] = [
-  ['QF-1', 'R16-1', 'R16-2'], ['QF-2', 'R16-3', 'R16-4'],
-  ['QF-3', 'R16-5', 'R16-6'], ['QF-4', 'R16-7', 'R16-8'],
+  ['QF-1', 'R16-1', 'R16-2'], // M97
+  ['QF-2', 'R16-5', 'R16-6'], // M98
+  ['QF-3', 'R16-3', 'R16-4'], // M99
+  ['QF-4', 'R16-7', 'R16-8'], // M100
 ];
 const SF_FEEDS: [string, string, string][] = [
-  ['SF-1', 'QF-1', 'QF-2'], ['SF-2', 'QF-3', 'QF-4'],
+  ['SF-1', 'QF-1', 'QF-2'], // M101
+  ['SF-2', 'QF-3', 'QF-4'], // M102
 ];
 const SPECIAL_FEEDS: [string, string, string][] = [
   ['3RD', 'SF-1', 'SF-2'], ['FINAL', 'SF-1', 'SF-2'],

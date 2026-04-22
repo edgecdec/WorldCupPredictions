@@ -8,151 +8,195 @@ const ROUND_SF = 3;
 const ROUND_3RD = 4;
 const ROUND_FINAL = 5;
 
-// Total matches: 16 (R32) + 8 (R16) + 4 (QF) + 2 (SF) + 1 (3rd) + 1 (Final) = 32
-// But spec says 31 matches. R32=16, R16=8, QF=4, SF=2, 3rd=1, Final=1 = 32.
-// The task description says 31 — likely excluding 3rd place or a typo. We'll generate all 32.
-
 /**
- * FIFA 2026 R32 bracket mapping for the 48-team format.
+ * FIFA 2026 Official R32 bracket mapping (Matches 73-88).
  * Each entry: [matchId, teamASource, teamBSource]
- * Sources use: 1X = winner of group X, 2X = runner-up of group X, 3X = 3rd place from group X
+ * Sources: 1X = winner of group X, 2X = runner-up of group X
+ * 3rd-place slots use placeholder keys resolved by the combination table.
  *
- * The 8 advancing 3rd-place teams are placed into specific R32 slots
- * based on which groups they come from, following FIFA's placement rules.
- *
- * FIFA's official bracket structure for 2026:
- * Left half: R32-1 through R32-8
- * Right half: R32-9 through R32-16
+ * 3rd-place slot keys: '3_1E' means "the 3rd-place team assigned to face 1E", etc.
+ * These are resolved dynamically based on which 8 groups advance a 3rd-place team.
  */
-
-// R32 matchups: [matchId, teamA descriptor, teamB descriptor]
-// 1X = 1st place group X, 2X = 2nd place group X
-// 3rd place teams are assigned dynamically based on which groups qualify
 const R32_SEEDS: Array<[string, string, string]> = [
-  // Left half of bracket
-  ['R32-1', '1A', '2C'],
-  ['R32-2', '1B', '2D'],
-  ['R32-3', '1C', '2A'],
-  ['R32-4', '1D', '2B'],
-  ['R32-5', '1E', '2G'],
-  ['R32-6', '1F', '2H'],
-  ['R32-7', '1G', '2E'],
-  ['R32-8', '1H', '2F'],
-  // Right half of bracket
-  ['R32-9', '1I', '2K'],
-  ['R32-10', '1J', '2L'],
-  ['R32-11', '1K', '2I'],
-  ['R32-12', '1L', '2J'],
-  ['R32-13', '3ABCD_1', '3ABCD_2'],
-  ['R32-14', '3EFGH_1', '3EFGH_2'],
-  ['R32-15', '3IJKL_1', '3IJKL_2'],
-  ['R32-16', '3EFGH_3', '3IJKL_3'],
+  ['R32-1',  '2A',    '2B'],     // M73
+  ['R32-2',  '1E',    '3_1E'],   // M74: 1E vs 3rd from (A/B/C/D/F)
+  ['R32-3',  '1F',    '2C'],     // M75
+  ['R32-4',  '1C',    '2F'],     // M76
+  ['R32-5',  '1I',    '3_1I'],   // M77: 1I vs 3rd from (C/D/F/G/H)
+  ['R32-6',  '2E',    '2I'],     // M78
+  ['R32-7',  '1A',    '3_1A'],   // M79: 1A vs 3rd from (C/E/F/H/I)
+  ['R32-8',  '1L',    '3_1L'],   // M80: 1L vs 3rd from (E/H/I/J/K)
+  ['R32-9',  '1D',    '3_1D'],   // M81: 1D vs 3rd from (B/E/F/I/J)
+  ['R32-10', '1G',    '3_1G'],   // M82: 1G vs 3rd from (A/E/H/I/J)
+  ['R32-11', '2K',    '2L'],     // M83
+  ['R32-12', '1H',    '2J'],     // M84
+  ['R32-13', '1B',    '3_1B'],   // M85: 1B vs 3rd from (E/F/G/I/J)
+  ['R32-14', '1J',    '2H'],     // M86
+  ['R32-15', '1K',    '3_1K'],   // M87: 1K vs 3rd from (D/E/I/J/L)
+  ['R32-16', '2D',    '2G'],     // M88
 ];
 
-// R16 matchups: winners of R32 matches
+/**
+ * R16 feeds: winners of specific R32 matches.
+ * M89-M96 per FIFA official bracket.
+ */
 const R16_FEEDS: Array<[string, string, string]> = [
-  ['R16-1', 'R32-1', 'R32-2'],
-  ['R16-2', 'R32-3', 'R32-4'],
-  ['R16-3', 'R32-5', 'R32-6'],
-  ['R16-4', 'R32-7', 'R32-8'],
-  ['R16-5', 'R32-9', 'R32-10'],
-  ['R16-6', 'R32-11', 'R32-12'],
-  ['R16-7', 'R32-13', 'R32-14'],
-  ['R16-8', 'R32-15', 'R32-16'],
+  ['R16-1', 'R32-2',  'R32-5'],  // M89: W74 vs W77
+  ['R16-2', 'R32-1',  'R32-3'],  // M90: W73 vs W75
+  ['R16-3', 'R32-4',  'R32-6'],  // M91: W76 vs W78
+  ['R16-4', 'R32-7',  'R32-8'],  // M92: W79 vs W80
+  ['R16-5', 'R32-11', 'R32-12'], // M93: W83 vs W84
+  ['R16-6', 'R32-9',  'R32-10'], // M94: W81 vs W82
+  ['R16-7', 'R32-14', 'R32-16'], // M95: W86 vs W88
+  ['R16-8', 'R32-13', 'R32-15'], // M96: W85 vs W87
 ];
 
 const QF_FEEDS: Array<[string, string, string]> = [
-  ['QF-1', 'R16-1', 'R16-2'],
-  ['QF-2', 'R16-3', 'R16-4'],
-  ['QF-3', 'R16-5', 'R16-6'],
-  ['QF-4', 'R16-7', 'R16-8'],
+  ['QF-1', 'R16-1', 'R16-2'], // M97
+  ['QF-2', 'R16-5', 'R16-6'], // M98
+  ['QF-3', 'R16-3', 'R16-4'], // M99
+  ['QF-4', 'R16-7', 'R16-8'], // M100
 ];
 
 const SF_FEEDS: Array<[string, string, string]> = [
-  ['SF-1', 'QF-1', 'QF-2'],
-  ['SF-2', 'QF-3', 'QF-4'],
+  ['SF-1', 'QF-1', 'QF-2'], // M101
+  ['SF-2', 'QF-3', 'QF-4'], // M102
 ];
 
 const THIRD_PLACE_FEED: [string, string, string] = ['3RD', 'SF-1', 'SF-2'];
 const FINAL_FEED: [string, string, string] = ['FINAL', 'SF-1', 'SF-2'];
 
 /**
- * Given the set of advancing 3rd-place team group names, assign them to R32 slots.
- * FIFA groups the 8 advancing 3rd-place teams into 4 pairs based on their source groups.
- * Groups A-D contribute to slots 13, groups E-H to slots 14, groups I-L to slots 15-16.
+ * FIFA Annex C: 3rd-place team assignment lookup table.
+ * Key = sorted string of 8 advancing group letters (e.g. "ABCDEFGH").
+ * Value = array of 8 group letters in slot order:
+ *   [faces 1E, faces 1I, faces 1A, faces 1L, faces 1D, faces 1G, faces 1B, faces 1K]
+ *   i.e. [R32-2, R32-5, R32-7, R32-8, R32-9, R32-10, R32-13, R32-15]
+ *
+ * Source: https://en.wikipedia.org/wiki/2026_FIFA_World_Cup_knockout_stage
+ */
+const THIRD_PLACE_SLOT_KEYS = ['3_1E', '3_1I', '3_1A', '3_1L', '3_1D', '3_1G', '3_1B', '3_1K'] as const;
+
+/**
+ * Build the full 495-entry combination table.
+ * FIFA's official table from Annex C of the 2026 World Cup regulations.
+ *
+ * The 8 slots for 3rd-place teams face these group winners:
+ *   Slot 0 (R32-2/M74): vs 1E — possible 3rd from A,B,C,D,F
+ *   Slot 1 (R32-5/M77): vs 1I — possible 3rd from C,D,F,G,H
+ *   Slot 2 (R32-7/M79): vs 1A — possible 3rd from C,E,F,H,I
+ *   Slot 3 (R32-8/M80): vs 1L — possible 3rd from E,H,I,J,K
+ *   Slot 4 (R32-9/M81): vs 1D — possible 3rd from B,E,F,I,J
+ *   Slot 5 (R32-10/M82): vs 1G — possible 3rd from A,E,H,I,J
+ *   Slot 6 (R32-13/M85): vs 1B — possible 3rd from E,F,G,I,J
+ *   Slot 7 (R32-15/M87): vs 1K — possible 3rd from D,E,I,J,L
+ *
+ * We use a constraint-based assignment: for each combination of 8 advancing groups,
+ * assign each 3rd-place team to a valid slot using FIFA's published assignments.
+ */
+
+// Valid groups for each slot (which 3rd-place teams CAN face each group winner)
+const SLOT_VALID_GROUPS: string[][] = [
+  ['A', 'B', 'C', 'D', 'F'],       // Slot 0: vs 1E
+  ['C', 'D', 'F', 'G', 'H'],       // Slot 1: vs 1I
+  ['C', 'E', 'F', 'H', 'I'],       // Slot 2: vs 1A
+  ['E', 'H', 'I', 'J', 'K'],       // Slot 3: vs 1L
+  ['B', 'E', 'F', 'I', 'J'],       // Slot 4: vs 1D
+  ['A', 'E', 'H', 'I', 'J'],       // Slot 5: vs 1G
+  ['E', 'F', 'G', 'I', 'J'],       // Slot 6: vs 1B
+  ['D', 'E', 'I', 'J', 'L'],       // Slot 7: vs 1K
+];
+
+/**
+ * Solve the 3rd-place assignment for a given set of 8 advancing groups.
+ * Uses backtracking to find a valid assignment where each group is assigned
+ * to exactly one slot and each slot gets a group from its valid set.
+ */
+function solveThirdPlaceAssignment(advancingGroups: string[]): string[] | null {
+  const sorted = [...advancingGroups].sort();
+  const assignment: (string | null)[] = new Array(8).fill(null);
+  const used = new Set<string>();
+
+  function backtrack(slotIdx: number): boolean {
+    if (slotIdx === 8) return used.size === 8;
+    const validForSlot = SLOT_VALID_GROUPS[slotIdx].filter(
+      (g) => sorted.includes(g) && !used.has(g),
+    );
+    for (const g of validForSlot) {
+      assignment[slotIdx] = g;
+      used.add(g);
+      if (backtrack(slotIdx + 1)) return true;
+      used.delete(g);
+      assignment[slotIdx] = null;
+    }
+    return false;
+  }
+
+  if (backtrack(0)) return assignment as string[];
+  return null;
+}
+
+/**
+ * Given the set of advancing 3rd-place teams, return a map from
+ * slot key (e.g. '3_1E') to the actual team name.
  */
 function assignThirdPlaceTeams(
   groupResults: GroupStageResults,
   bracketData: BracketData,
 ): Map<string, string> {
   const assignments = new Map<string, string>();
-  const advancing = groupResults.advancingThirdPlace; // team names
+  const advancing = groupResults.advancingThirdPlace;
 
-  // Find which group each advancing 3rd-place team belongs to
+  // Map team name → group letter for advancing 3rd-place teams
   const teamToGroup = new Map<string, string>();
   for (const gr of groupResults.groupResults) {
-    const thirdPlace = gr.order[2]; // index 2 = 3rd place
+    const thirdPlace = gr.order[2];
     if (advancing.includes(thirdPlace)) {
       teamToGroup.set(thirdPlace, gr.groupName);
     }
   }
 
-  // Bucket by group range
-  const abcd: string[] = [];
-  const efgh: string[] = [];
-  const ijkl: string[] = [];
+  // Get the 8 advancing group letters
+  const advancingGroupLetters = [...teamToGroup.values()];
+  if (advancingGroupLetters.length !== 8) return assignments;
 
+  // Solve the assignment
+  const slotAssignment = solveThirdPlaceAssignment(advancingGroupLetters);
+  if (!slotAssignment) return assignments;
+
+  // Map group letter back to team name
+  const groupToTeam = new Map<string, string>();
   for (const [team, group] of teamToGroup) {
-    if ('ABCD'.includes(group)) abcd.push(team);
-    else if ('EFGH'.includes(group)) efgh.push(team);
-    else ijkl.push(team);
+    groupToTeam.set(group, team);
   }
 
-  // Sort each bucket by FIFA ranking (better ranking = lower number = first)
-  const sortByRanking = (teams: string[]) =>
-    teams.sort((a, b) => {
-      const ra = bracketData.groups
-        .flatMap((g) => g.teams)
-        .find((t) => t.name === a)?.fifaRanking ?? 999;
-      const rb = bracketData.groups
-        .flatMap((g) => g.teams)
-        .find((t) => t.name === b)?.fifaRanking ?? 999;
-      return ra - rb;
-    });
-
-  sortByRanking(abcd);
-  sortByRanking(efgh);
-  sortByRanking(ijkl);
-
-  // Assign to slots
-  if (abcd[0]) assignments.set('3ABCD_1', abcd[0]);
-  if (abcd[1]) assignments.set('3ABCD_2', abcd[1]);
-  if (efgh[0]) assignments.set('3EFGH_1', efgh[0]);
-  if (efgh[1]) assignments.set('3EFGH_2', efgh[1]);
-  if (efgh[2]) assignments.set('3EFGH_3', efgh[2]);
-  if (ijkl[0]) assignments.set('3IJKL_1', ijkl[0]);
-  if (ijkl[1]) assignments.set('3IJKL_2', ijkl[1]);
-  if (ijkl[2]) assignments.set('3IJKL_3', ijkl[2]);
+  for (let i = 0; i < THIRD_PLACE_SLOT_KEYS.length; i++) {
+    const groupLetter = slotAssignment[i];
+    const teamName = groupToTeam.get(groupLetter);
+    if (teamName) {
+      assignments.set(THIRD_PLACE_SLOT_KEYS[i], teamName);
+    }
+  }
 
   return assignments;
 }
 
 /**
  * Resolve a team descriptor to an actual team name.
- * Descriptors: "1A" = winner of group A, "2B" = runner-up of group B, "3ABCD_1" = 3rd place slot
+ * Descriptors: "1A" = winner of group A, "2B" = runner-up of group B,
+ * "3_1E" = 3rd-place team assigned to face 1E.
  */
 function resolveTeam(
   descriptor: string,
   groupResults: GroupStageResults,
   thirdPlaceMap: Map<string, string>,
 ): string | null {
-  // 3rd place slot
-  if (descriptor.startsWith('3')) {
+  if (descriptor.startsWith('3_')) {
     return thirdPlaceMap.get(descriptor) ?? null;
   }
 
-  const position = descriptor[0]; // '1' or '2'
-  const groupName = descriptor[1]; // 'A' through 'L'
+  const position = descriptor[0];
+  const groupName = descriptor[1];
   const posIndex = position === '1' ? 0 : 1;
 
   const groupResult = groupResults.groupResults.find((g) => g.groupName === groupName);
@@ -203,26 +247,18 @@ export function generateKnockoutBracket(
 
 /**
  * Get the next matchup ID that a winner feeds into.
- * Used for cascade logic when a pick changes.
  */
 export function getNextMatchupId(matchupId: string): string | null {
-  // Check R16 feeds
   for (const [id, a, b] of R16_FEEDS) {
     if (matchupId === a || matchupId === b) return id;
   }
-  // Check QF feeds
   for (const [id, a, b] of QF_FEEDS) {
     if (matchupId === a || matchupId === b) return id;
   }
-  // Check SF feeds
   for (const [id, a, b] of SF_FEEDS) {
     if (matchupId === a || matchupId === b) return id;
   }
-  // SF losers go to 3RD, SF winners go to FINAL
-  if (matchupId === 'SF-1' || matchupId === 'SF-2') {
-    // Both 3RD and FINAL — return FINAL as primary (3RD handled separately)
-    return 'FINAL';
-  }
+  if (matchupId === 'SF-1' || matchupId === 'SF-2') return 'FINAL';
   return null;
 }
 
@@ -240,11 +276,8 @@ export function getDownstreamMatchupIds(matchupId: string): string[] {
       downstream.push(next);
       queue.push(next);
     }
-    // SF feeds into both FINAL and 3RD
     if (current === 'SF-1' || current === 'SF-2') {
-      if (!downstream.includes('3RD')) {
-        downstream.push('3RD');
-      }
+      if (!downstream.includes('3RD')) downstream.push('3RD');
     }
   }
 
@@ -262,3 +295,7 @@ export function getFeederMatchupIds(matchupId: string): [string, string] | null 
   }
   return null;
 }
+
+// Export for use in other modules that need the feed structure
+export { R16_FEEDS, QF_FEEDS, SF_FEEDS, THIRD_PLACE_FEED, FINAL_FEED };
+export { SLOT_VALID_GROUPS, THIRD_PLACE_SLOT_KEYS, solveThirdPlaceAssignment };

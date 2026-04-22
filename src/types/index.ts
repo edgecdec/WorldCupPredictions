@@ -133,6 +133,11 @@ export interface LeaderboardEntry {
   perfectGroups?: number;
   hotStreak?: number;
   contrarianPicks?: number;
+  completion?: {
+    groupsFilled: number;
+    thirdPlaceFilled: number;
+    knockoutFilled: number;
+  };
   prediction?: {
     id: string;
     user_id: string;

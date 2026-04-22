@@ -822,3 +822,9 @@
 - MUI Stepper's StepContent is designed to collapse for non-active steps — use StepLabel's `optional` prop for always-visible secondary text.
 - Nova Act confirmed all 4 phases now show dates: Predictions Open (Now–Jun 10), Group Stage (Jun 10–Jun 29), Knockout Predictions (Around Jun 29), Knockout Stage (Jun 29–Jul 19).
 - Lesson: Nova Act's ActResult doesn't expose the agent's return() value as a field — only metadata. Verify features by reading the agent's thinking output instead of asserting on response attributes.
+
+## TASK-093: Show leaderboard before event with completion status, hide pick details
+- Date: 2026-04-21
+- Changes: Removed /leaderboard from PRE_TOURNAMENT_RESTRICTED so it's accessible pre-tournament. Added phase detection to leaderboard API using getPhase(). Pre-tournament: API returns completion data (groupsFilled, thirdPlaceFilled, knockoutFilled) without scores or pick details. Added CompletionTable component showing progress bars with checkmark/warning/X icons and X/N counts. ScoreTable only shown after tournament starts. Admin bypasses all restrictions.
+- Lessons: The PhaseGate component was blocking the entire leaderboard page pre-tournament. Better approach: let the page load but change what data is shown based on phase. The API is the right place to enforce data hiding (don't send pick details pre-tournament) rather than relying solely on client-side gating.
+- Nova Act verified: Table shows User, Bracket, Groups (12/12 ✓), 3rd Place Picks (0/8 ⚠), Knockout (0/31 ⚠) with progress bars.

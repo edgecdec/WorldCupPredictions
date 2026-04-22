@@ -1103,7 +1103,7 @@
       "title": "Fix Final and 3rd place match display on knockout bracket",
       "spec": "specs/bracket.md",
       "priority": 38,
-      "status": "open",
+      "status": "done",
       "dependencies": [],
       "description": "The Final and 3rd place match are not displaying correctly on the knockout bracket page. Debug by: (1) Check if computeEffectiveMatchups correctly propagates SF winners to FINAL and SF losers to 3RD. (2) Check if the KnockoutBracket component renders the Final and 3rd place matchups \u2014 they may be filtered out or not receiving the correct teamA/teamB. (3) Verify the Matchup component handles the case where teamA/teamB are null (teams not yet determined because SF picks haven't been made). (4) Test the full flow: pick all R32 winners, then R16, QF, SF \u2014 verify the Final shows the two SF winners and 3rd place shows the two SF losers. Fix any issues found. Test with Nova Act: log in, go to /bracket/knockout, make picks through to SF, verify Final and 3rd place populate correctly."
     },

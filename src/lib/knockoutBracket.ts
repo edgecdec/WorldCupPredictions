@@ -293,7 +293,7 @@ export function getDownstreamMatchupIds(matchupId: string): string[] {
  * Get the two feeder matchup IDs for a given matchup.
  */
 export function getFeederMatchupIds(matchupId: string): [string, string] | null {
-  const allFeeds = [...R16_FEEDS, ...QF_FEEDS, ...SF_FEEDS, [THIRD_PLACE_FEED], [FINAL_FEED]];
+  const allFeeds = [...R16_FEEDS, ...QF_FEEDS, ...SF_FEEDS, THIRD_PLACE_FEED, FINAL_FEED];
   for (const feed of allFeeds) {
     const [id, a, b] = feed as [string, string, string];
     if (id === matchupId) return [a, b];

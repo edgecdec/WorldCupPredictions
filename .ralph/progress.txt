@@ -837,3 +837,9 @@
 - Kept the upset bonus formula explanation at the bottom
 - Nova Act verified both group stage and knockout pages show correct formatting
 - Lesson: Nova Act struggles with onboarding popups blocking navigation — navigate directly to target URL after login instead of clicking through
+
+## TASK-099: Fix Final and 3rd place match display on knockout bracket (2026-04-21)
+- Root cause: In `getFeederMatchupIds()` in knockoutBracket.ts, `THIRD_PLACE_FEED` and `FINAL_FEED` were wrapped in extra arrays: `[THIRD_PLACE_FEED]` and `[FINAL_FEED]`. Since these are already tuples `[string, string, string]`, wrapping them created nested arrays `[[string, string, string]]`. When iterating, destructuring `[id, a, b]` gave `id = [entire tuple]`, `a = undefined`, `b = undefined`, so `getFeederMatchupIds('FINAL')` and `getFeederMatchupIds('3RD')` always returned `null`.
+- Fix: Changed `[THIRD_PLACE_FEED], [FINAL_FEED]` to `THIRD_PLACE_FEED, FINAL_FEED` (no wrapping).
+- The `as [string, string, string]` TypeScript cast on the destructured value hid the runtime type error — be cautious with type assertions that suppress real bugs.
+- Lesson: When building arrays from mixed sources (spread arrays + individual elements), verify the nesting level. Unit test with inline JS was the fastest way to confirm the bug and fix.

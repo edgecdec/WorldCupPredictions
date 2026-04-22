@@ -985,6 +985,17 @@
         "TASK-058"
       ],
       "description": "In src/components/bracket/LiveScores.tsx, make each live score card clickable \u2014 link to the ESPN match page at https://www.espn.com/soccer/match/_/gameId/{espnGameId}. The game ID is available from the ESPN scoreboard API response (event.id). Open in a new tab. Add a small external link icon to indicate it's a link out. If the game ID isn't available, fall back to linking to https://www.espn.com/soccer/scoreboard/_/league/fifa.world."
+    },
+    {
+      "id": "TASK-089",
+      "title": "Redesign ThirdPlacePicker as ordered list with full team info",
+      "spec": "specs/bracket.md",
+      "priority": 40,
+      "status": "open",
+      "dependencies": [
+        "TASK-024"
+      ],
+      "description": "Redesign the ThirdPlacePicker component. Instead of toggleable Chips, show the 12 third-place teams as a vertical list ordered by group (A through L). Each row should display the same info as the GroupPrediction cards: flag, team name, pot seed chip, FIFA ranking, and the group they came from (e.g. 'Group A - 3rd'). Add a checkbox or toggle on each row to select/deselect that team as advancing. Selected teams get a green background (advancing), unselected get a dimmed/red background (eliminated). Keep the 8/12 counter prominently displayed. The list format makes it much clearer which teams are being picked since users can see all the context (ranking, group) rather than just a name chip. Maintain the same onChange(selected: string[]) API so the bracket page doesn't need changes."
     }
   ]
 }

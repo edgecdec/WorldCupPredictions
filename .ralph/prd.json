@@ -1013,7 +1013,7 @@
       "title": "Auto-create prediction when user joins a group without one",
       "spec": "specs/groups.md",
       "priority": 40,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-036"
       ],

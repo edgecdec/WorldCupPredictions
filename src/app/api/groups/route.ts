@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuid } from "uuid";
 import crypto from "crypto";
-import { getDb, EVERYONE_GROUP_ID } from "@/lib/db";
+import { getDb, EVERYONE_GROUP_ID, ensureUserPrediction } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import { DEFAULT_SCORING } from "@/types";
 import type { ScoringSettings } from "@/types";
@@ -190,14 +190,12 @@ export async function POST(req: NextRequest) {
        VALUES (?, ?, ?, ?, ?, ?)`
     ).run(id, name, inviteCode, authUser.userId, JSON.stringify(settings), maxBrackets);
 
-    // Auto-join creator's prediction to the new group
-    const creatorPrediction = db
-      .prepare("SELECT id FROM predictions WHERE user_id = ? LIMIT 1")
-      .get(authUser.userId) as { id: string } | undefined;
-    if (creatorPrediction) {
+    // Auto-join creator's prediction to the new group (create if needed)
+    const creatorPredictionId = ensureUserPrediction(db, authUser.userId, authUser.username);
+    if (creatorPredictionId) {
       db.prepare("INSERT OR IGNORE INTO group_members (group_id, prediction_id) VALUES (?, ?)").run(
         id,
-        creatorPrediction.id
+        creatorPredictionId
       );
     }
 
@@ -205,12 +203,18 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === "join") {
-    const { invite_code, prediction_id } = data;
+    const { invite_code } = data;
+    let { prediction_id } = data;
     if (!invite_code) {
       return NextResponse.json({ error: "Invite code required" }, { status: 400 });
     }
+
+    // Auto-create prediction if none provided
     if (!prediction_id) {
-      return NextResponse.json({ error: "Prediction ID required" }, { status: 400 });
+      prediction_id = ensureUserPrediction(db, authUser.userId, authUser.username);
+      if (!prediction_id) {
+        return NextResponse.json({ error: "No active tournament" }, { status: 400 });
+      }
     }
 
     const group = db.prepare("SELECT * FROM groups WHERE invite_code = ?").get(invite_code) as GroupRow | undefined;

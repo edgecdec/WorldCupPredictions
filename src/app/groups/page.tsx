@@ -122,10 +122,6 @@ export default function GroupsPage() {
 
   const handleJoin = async () => {
     if (!joinCode.trim()) return;
-    if (!prediction) {
-      showSnack("You need to create a bracket first before joining a group", "error");
-      return;
-    }
     setJoining(true);
     try {
       const res = await fetch("/api/groups", {
@@ -134,7 +130,6 @@ export default function GroupsPage() {
         body: JSON.stringify({
           action: "join",
           invite_code: joinCode.trim(),
-          prediction_id: prediction.id,
         }),
       });
       const data = await res.json();
@@ -350,14 +345,14 @@ export default function GroupsPage() {
             placeholder="Enter invite code"
           />
           {!prediction && (
-            <Alert severity="warning" sx={{ mt: 2 }}>
-              You need to create a bracket on the Predictions page before joining a group.
+            <Alert severity="info" sx={{ mt: 2 }}>
+              An empty bracket will be created for you automatically when you join.
             </Alert>
           )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setJoinOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleJoin} disabled={joining || !joinCode.trim() || !prediction}>
+          <Button variant="contained" onClick={handleJoin} disabled={joining || !joinCode.trim()}>
             {joining ? "Joining…" : "Join"}
           </Button>
         </DialogActions>

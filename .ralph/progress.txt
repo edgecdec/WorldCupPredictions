@@ -798,3 +798,12 @@
 - Updated all 5 callers: /bracket page, /bracket/[username], /profile/[username], GroupSimulator, SimpleMode.
 - Lesson: Exporting the ThirdPlaceTeamDetail interface from the component file keeps the type co-located with its consumer and avoids polluting the shared types file for a component-specific concern.
 - Lesson: Nova Act tests on this site need to handle the onboarding tutorial popup — use a dedicated step with max_steps=10 to dismiss it before testing the actual feature.
+
+## TASK-091: Auto-create prediction when user joins a group without one (2026-04-21)
+- Added `ensureUserPrediction()` helper to db.ts that creates an empty prediction for a user if none exists, and auto-assigns to Everyone group.
+- Updated `joinEveryoneGroup()` to actually create a prediction during registration (was previously a no-op).
+- Updated groups API `join` action: prediction_id is now optional; if not provided, auto-creates one.
+- Updated groups API `create` action: uses ensureUserPrediction for creator auto-join.
+- Updated /join/[code] page: removed the "need a bracket first" error, just joins directly.
+- Updated /groups page join dialog: removed prediction requirement check, changed warning to info message.
+- Lesson: The group_members table uses prediction_id (not user_id), so any group join flow must ensure a prediction exists first. Centralizing this in a single helper avoids duplication across join, create, and registration flows.

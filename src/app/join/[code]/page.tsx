@@ -48,21 +48,12 @@ export default function JoinGroupPage() {
   const handleJoin = async () => {
     setJoining(true);
     try {
-      // Get user's prediction
-      const pickRes = await fetch("/api/picks");
-      const pickData = await pickRes.json();
-      if (!pickData.prediction) {
-        setError("You need to create a bracket on the Predictions page first");
-        setJoining(false);
-        return;
-      }
       const res = await fetch("/api/groups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "join",
           invite_code: code,
-          prediction_id: pickData.prediction.id,
         }),
       });
       const data = await res.json();

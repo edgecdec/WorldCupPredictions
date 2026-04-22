@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
+import { v4 as uuidv4 } from "uuid";
 import { DEFAULT_SCORING } from "@/types";
 import { WORLD_CUP_2026_DATA } from "@/lib/bracketData";
 
@@ -163,11 +164,33 @@ export function ensureEveryoneGroup(db: Database.Database): string {
   return EVERYONE_GROUP_ID;
 }
 
+export function ensureUserPrediction(db: Database.Database, userId: string, username: string): string {
+  const tournament = db
+    .prepare("SELECT id FROM tournaments ORDER BY year DESC LIMIT 1")
+    .get() as { id: string } | undefined;
+  if (!tournament) return "";
+
+  const existing = db
+    .prepare("SELECT id FROM predictions WHERE user_id = ? AND tournament_id = ?")
+    .get(userId, tournament.id) as { id: string } | undefined;
+  if (existing) {
+    autoAssignPredictionToEveryone(db, existing.id);
+    return existing.id;
+  }
+
+  const id = uuidv4();
+  db.prepare(
+    `INSERT INTO predictions (id, user_id, tournament_id, bracket_name, group_predictions, third_place_picks, knockout_picks)
+     VALUES (?, ?, ?, ?, '[]', '[]', '{}')`
+  ).run(id, userId, tournament.id, username);
+  autoAssignPredictionToEveryone(db, id);
+  return id;
+}
+
 export function joinEveryoneGroup(db: Database.Database, userId: string) {
-  // No-op for now — group_members uses prediction_id, not user_id.
-  // Users join Everyone when they create a prediction via autoAssignPredictionToEveryone.
   ensureEveryoneGroup(db);
-  void userId;
+  const user = db.prepare("SELECT username FROM users WHERE id = ?").get(userId) as { username: string } | undefined;
+  if (user) ensureUserPrediction(db, userId, user.username);
 }
 
 export function autoAssignPredictionToEveryone(db: Database.Database, predictionId: string) {

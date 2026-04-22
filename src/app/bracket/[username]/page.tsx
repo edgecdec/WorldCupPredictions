@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Box, Typography, Alert, CircularProgress, Button, IconButton, Tooltip, Snackbar, useMediaQuery, useTheme } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -10,6 +10,7 @@ import ThirdPlacePicker from '@/components/bracket/ThirdPlacePicker';
 import KnockoutBracket from '@/components/bracket/KnockoutBracket';
 import MobileBracket from '@/components/bracket/MobileBracket';
 import { useAuth } from '@/hooks/useAuth';
+import { computeEffectiveMatchups } from '@/lib/bracketUtils';
 import type { Tournament, BracketData, TournamentResults, GroupPrediction as GroupPredictionType } from '@/types';
 import PrintExportButtons from '@/components/common/PrintExportButtons';
 
@@ -124,6 +125,10 @@ export default function PublicBracketPage() {
   const bracketData = tournament?.bracket_data as BracketData | undefined;
   const results = tournament?.results_data as TournamentResults | undefined;
   const matchups = results?.knockoutBracket || [];
+  const effectiveMatchups = useMemo(
+    () => matchups.length > 0 ? computeEffectiveMatchups(matchups, knockoutPicks) : [],
+    [matchups, knockoutPicks],
+  );
   const decodedUsername = decodeURIComponent(username);
   const groupResultsMap = new Map(
     (results?.groupStage?.groupResults ?? []).map((gr) => [gr.groupName, gr.order]),
@@ -205,9 +210,9 @@ export default function PublicBracketPage() {
           <>
             <Typography variant="h5" fontWeight="bold" sx={{ mb: 2 }}>Knockout Bracket</Typography>
             {isMobile ? (
-              <MobileBracket matchups={matchups} picks={knockoutPicks} readOnly results={results?.knockout} countryCodeMap={countryCodeMap} />
+              <MobileBracket matchups={effectiveMatchups} picks={knockoutPicks} readOnly results={results?.knockout} countryCodeMap={countryCodeMap} />
             ) : (
-              <KnockoutBracket matchups={matchups} picks={knockoutPicks} readOnly results={results?.knockout} countryCodeMap={countryCodeMap} />
+              <KnockoutBracket matchups={effectiveMatchups} picks={knockoutPicks} readOnly results={results?.knockout} countryCodeMap={countryCodeMap} />
             )}
           </>
         )}

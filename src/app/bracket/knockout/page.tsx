@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Box, Button, Typography, Alert, CircularProgress, TextField, useMediaQuery, useTheme } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -9,7 +9,7 @@ import KnockoutBracket from '@/components/bracket/KnockoutBracket';
 import MobileBracket from '@/components/bracket/MobileBracket';
 import CountdownTimer from '@/components/common/CountdownTimer';
 import { useAuth } from '@/hooks/useAuth';
-import { cascadeClear } from '@/lib/bracketUtils';
+import { cascadeClear, computeEffectiveMatchups } from '@/lib/bracketUtils';
 import type { Tournament, TournamentResults, KnockoutMatchup, BracketData } from '@/types';
 import PrintExportButtons from '@/components/common/PrintExportButtons';
 import AutofillButtons, { AutofillStrategy } from '@/components/common/AutofillButtons';
@@ -103,8 +103,13 @@ export default function KnockoutPage() {
   }, [bracketData, matchups]);
 
   const results = tournament?.results_data as TournamentResults | undefined;
-  const hasGroupResults = Boolean(results?.groupStage);
   const hasKnockoutBracket = matchups.length > 0;
+
+  // Compute effective matchups with picks propagated into downstream slots
+  const effectiveMatchups = useMemo(
+    () => hasKnockoutBracket ? computeEffectiveMatchups(matchups, picks) : [],
+    [matchups, picks, hasKnockoutBracket],
+  );
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -155,19 +160,9 @@ export default function KnockoutPage() {
     );
   }
 
-  if (!hasGroupResults || !hasKnockoutBracket) {
-    return (
-      <Box sx={{ textAlign: 'center', py: 8 }}>
-        <Typography variant="h5" gutterBottom>Knockout Bracket</Typography>
-        <Alert severity="info" sx={{ maxWidth: 500, mx: 'auto' }}>
-          Group stage results have not been entered yet. The knockout bracket will be available once the admin enters group stage results.
-        </Alert>
-        <Button component={Link} href="/bracket" startIcon={<ArrowBackIcon />} sx={{ mt: 2 }}>
-          Back to Group Predictions
-        </Button>
-      </Box>
-    );
-  }
+  const lockDate = tournament.lock_time_knockout
+    ? new Date(tournament.lock_time_knockout).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+    : null;
 
   return (
     <Box sx={{ maxWidth: 1600, mx: 'auto', px: 2, py: 3 }}>
@@ -178,10 +173,17 @@ export default function KnockoutPage() {
         <Typography variant="h4" fontWeight="bold" sx={{ flex: 1 }}>
           Knockout Predictions
         </Typography>
-        <PrintExportButtons targetRef={printRef} filename="knockout-bracket" />
+        {hasKnockoutBracket && <PrintExportButtons targetRef={printRef} filename="knockout-bracket" />}
       </Box>
 
-      {tournament.lock_time_knockout && (
+      {!hasKnockoutBracket && (
+        <Alert severity="info" sx={{ my: 2 }}>
+          The knockout bracket will be available after the group stage ends
+          {lockDate ? ` on ${lockDate}` : ''}. Come back then to fill out your picks!
+        </Alert>
+      )}
+
+      {hasKnockoutBracket && tournament.lock_time_knockout && (
         <CountdownTimer targetDate={tournament.lock_time_knockout} label="Knockout picks lock in" />
       )}
 
@@ -200,15 +202,15 @@ export default function KnockoutPage() {
       {error && <Alert severity="error" sx={{ my: 2 }} onClose={() => setError('')}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ my: 2 }} onClose={() => setSuccess('')}>{success}</Alert>}
 
-      <ScoringRulesSummary mode="knockout" />
+      {hasKnockoutBracket && <ScoringRulesSummary mode="knockout" />}
 
-      {Object.keys(picks).length > 0 && (
+      {hasKnockoutBracket && Object.keys(picks).length > 0 && (
         <Box sx={{ mb: 2, maxWidth: 500 }}>
-          <MiniBracket matchups={matchups} picks={picks} countryCodeMap={countryCodeMap} results={results?.knockout} />
+          <MiniBracket matchups={effectiveMatchups} picks={picks} countryCodeMap={countryCodeMap} results={results?.knockout} />
         </Box>
       )}
 
-      {!disabled && (
+      {hasKnockoutBracket && !disabled && (
         <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
           <Typography variant="body2" color="text.secondary">Autofill:</Typography>
           <AutofillButtons onAutofill={handleAutofill} disabled={disabled} />
@@ -218,49 +220,61 @@ export default function KnockoutPage() {
         </Box>
       )}
 
-      <Box ref={printRef}>
-        {isMobile ? (
-          <MobileBracket
-            matchups={matchups}
-            picks={picks}
-            onPick={disabled ? undefined : handlePick}
-            readOnly={disabled}
-            results={results?.knockout}
-            countryCodeMap={countryCodeMap}
-          />
-        ) : (
-          <KnockoutBracket
-            matchups={matchups}
-            picks={picks}
-            onPick={disabled ? undefined : handlePick}
-            readOnly={disabled}
-            results={results?.knockout}
-            countryCodeMap={countryCodeMap}
-          />
-        )}
-      </Box>
+      {hasKnockoutBracket && (
+        <>
+          <Box ref={printRef}>
+            {isMobile ? (
+              <MobileBracket
+                matchups={effectiveMatchups}
+                picks={picks}
+                onPick={disabled ? undefined : handlePick}
+                readOnly={disabled}
+                results={results?.knockout}
+                countryCodeMap={countryCodeMap}
+              />
+            ) : (
+              <KnockoutBracket
+                matchups={effectiveMatchups}
+                picks={picks}
+                onPick={disabled ? undefined : handlePick}
+                readOnly={disabled}
+                results={results?.knockout}
+                countryCodeMap={countryCodeMap}
+              />
+            )}
+          </Box>
 
-      <Box className="no-print" sx={{ display: 'flex', alignItems: 'center', gap: 3, mt: 3, flexWrap: 'wrap' }}>
-        <TextField
-          label="Tiebreaker: Total goals in Final"
-          type="number"
-          value={tiebreaker}
-          onChange={(e) => setTiebreaker(e.target.value)}
-          disabled={disabled}
-          size="small"
-          slotProps={{ htmlInput: { min: 0 } }}
-          sx={{ width: 280 }}
-        />
-        <Button
-          variant="contained"
-          size="large"
-          startIcon={<SaveIcon />}
-          onClick={handleSave}
-          disabled={disabled || saving}
-        >
-          {saving ? 'Saving…' : 'Save Knockout Picks'}
-        </Button>
-      </Box>
+          <Box className="no-print" sx={{ display: 'flex', alignItems: 'center', gap: 3, mt: 3, flexWrap: 'wrap' }}>
+            <TextField
+              label="Tiebreaker: Total goals in Final"
+              type="number"
+              value={tiebreaker}
+              onChange={(e) => setTiebreaker(e.target.value)}
+              disabled={disabled}
+              size="small"
+              slotProps={{ htmlInput: { min: 0 } }}
+              sx={{ width: 280 }}
+            />
+            <Button
+              variant="contained"
+              size="large"
+              startIcon={<SaveIcon />}
+              onClick={handleSave}
+              disabled={disabled || saving}
+            >
+              {saving ? 'Saving…' : 'Save Knockout Picks'}
+            </Button>
+          </Box>
+        </>
+      )}
+
+      {!hasKnockoutBracket && (
+        <Box sx={{ textAlign: 'center', py: 4 }}>
+          <Button component={Link} href="/bracket" variant="contained">
+            Back to Group Predictions
+          </Button>
+        </Box>
+      )}
 
       {hasKnockoutBracket && !disabled && (
         <SimpleKnockoutMode

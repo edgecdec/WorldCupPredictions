@@ -1,5 +1,5 @@
 import { KnockoutMatchup } from '@/types';
-import { getDownstreamMatchupIds } from '@/lib/knockoutBracket';
+import { getDownstreamMatchupIds, getFeederMatchupIds } from '@/lib/knockoutBracket';
 
 // Round index constants
 const ROUND_R32 = 0;
@@ -59,4 +59,33 @@ export function getMatchupsByRound(
     byRound.set(m.round, list);
   }
   return byRound;
+}
+
+/**
+ * Compute effective matchups by propagating user picks into downstream teamA/teamB slots.
+ * When a user picks a winner for R32-1, that team appears as teamA in R16-1, etc.
+ */
+export function computeEffectiveMatchups(
+  matchups: KnockoutMatchup[],
+  picks: Record<string, string>,
+): KnockoutMatchup[] {
+  const matchupMap = new Map(matchups.map((m) => [m.id, { ...m }]));
+
+  // Process rounds in order so earlier picks propagate forward
+  const sorted = [...matchupMap.values()].sort((a, b) => a.round - b.round);
+
+  for (const m of sorted) {
+    if (m.round === ROUND_R32) continue; // R32 teams come from group results, already set
+    const feeders = getFeederMatchupIds(m.id);
+    if (!feeders) continue;
+    const [feederA, feederB] = feeders;
+    const effective = matchupMap.get(m.id)!;
+    // teamA = winner of feeder A (from actual results or user pick)
+    const feederAMatchup = matchupMap.get(feederA);
+    const feederBMatchup = matchupMap.get(feederB);
+    effective.teamA = feederAMatchup?.winner ?? picks[feederA] ?? m.teamA;
+    effective.teamB = feederBMatchup?.winner ?? picks[feederB] ?? m.teamB;
+  }
+
+  return [...matchupMap.values()];
 }

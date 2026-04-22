@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import {
   Box, Typography, CircularProgress, Alert, Button, Paper, Chip,
@@ -17,6 +17,7 @@ import MobileBracket from '@/components/bracket/MobileBracket';
 import MiniBracket from '@/components/bracket/MiniBracket';
 import TeamFlag from '@/components/common/TeamFlag';
 import { useAuth } from '@/hooks/useAuth';
+import { computeEffectiveMatchups } from '@/lib/bracketUtils';
 import type { Tournament, BracketData, TournamentResults, GroupPrediction as GroupPredictionType } from '@/types';
 
 interface ProfileGroup {
@@ -116,6 +117,12 @@ export default function ProfilePage() {
   const results = tournament?.results_data as TournamentResults | undefined;
   const matchups = results?.knockoutBracket ?? [];
   const pred = profile.prediction;
+
+  const knockoutPicks = pred?.knockoutPicks ?? {};
+  const effectiveMatchups = useMemo(
+    () => matchups.length > 0 ? computeEffectiveMatchups(matchups, knockoutPicks) : [],
+    [matchups, knockoutPicks],
+  );
 
   const groupOrders: Record<string, string[]> = {};
   if (bracketData?.groups && pred) {
@@ -277,7 +284,7 @@ export default function ProfilePage() {
       {/* Mini Bracket Progression */}
       {pred && matchups.length > 0 && Object.keys(pred.knockoutPicks).length > 0 && (
         <Box sx={{ mb: 3, maxWidth: 500 }}>
-          <MiniBracket matchups={matchups} picks={pred.knockoutPicks} countryCodeMap={countryCodeMap} results={results?.knockout} />
+          <MiniBracket matchups={effectiveMatchups} picks={pred.knockoutPicks} countryCodeMap={countryCodeMap} results={results?.knockout} />
         </Box>
       )}
 
@@ -335,9 +342,9 @@ export default function ProfilePage() {
             </Typography>
           )}
           {isMobile ? (
-            <MobileBracket matchups={matchups} picks={pred.knockoutPicks} readOnly results={results?.knockout} countryCodeMap={countryCodeMap} />
+            <MobileBracket matchups={effectiveMatchups} picks={pred.knockoutPicks} readOnly results={results?.knockout} countryCodeMap={countryCodeMap} />
           ) : (
-            <KnockoutBracket matchups={matchups} picks={pred.knockoutPicks} readOnly results={results?.knockout} countryCodeMap={countryCodeMap} />
+            <KnockoutBracket matchups={effectiveMatchups} picks={pred.knockoutPicks} readOnly results={results?.knockout} countryCodeMap={countryCodeMap} />
           )}
         </>
       )}

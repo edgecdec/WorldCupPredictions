@@ -778,3 +778,9 @@
 - Updated feed maps in autofill.ts and monteCarloWorker.ts to match the corrected bracket structure
 - Key lesson: The 3rd-place assignment is complex — 8 slots each have a limited set of valid groups. A backtracking solver handles all 495 combinations correctly.
 - Note: 3 pre-existing test failures in scoring.test.ts (knockout upset bonus and champion bonus tests) — not related to this change.
+
+## TASK-097: Fix 3rd place match and Final to correctly use SF winners/losers
+- Date: 2026-04-21
+- Changes: knockoutBracket.ts (getNextMatchupIds returns both FINAL and 3RD for SF matches, simplified getDownstreamMatchupIds), bracketUtils.ts (cascadeClear now clears 3RD pick when SF loser changes), KnockoutBracket.tsx (Final gets gold border and larger label, 3rd place gets reduced opacity)
+- Key insight: computeEffectiveMatchups already correctly handled 3RD (resolveLoser) and FINAL (resolveWinner). The main bugs were: (1) getNextMatchupId only returned FINAL for SF matches, (2) cascadeClear only cleared the old winner from downstream but not the old loser from 3RD
+- Lesson: When cascade clearing picks, SF matches are special because they feed both a winner (to FINAL) and a loser (to 3RD). Need to track both when clearing.

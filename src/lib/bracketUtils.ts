@@ -37,6 +37,7 @@ export function generateEmptyBracket(): KnockoutMatchup[] {
  * Clear all downstream picks that depend on the old winner of a changed matchup.
  * When a user changes their pick for a matchup, any later-round picks that had
  * the old winner must be removed since that team can no longer advance.
+ * For SF matches, also clears the 3RD pick since the loser changes too.
  */
 export function cascadeClear(
   picks: Record<string, string>,
@@ -49,8 +50,22 @@ export function cascadeClear(
   const updated = { ...picks };
   const downstream = getDownstreamMatchupIds(changedMatchupId);
 
+  // Determine the old loser for SF matches (needed for 3RD place clearing)
+  let oldLoser: string | null = null;
+  const isSF = changedMatchupId === 'SF-1' || changedMatchupId === 'SF-2';
+  if (isSF) {
+    const sfMatchup = matchups.find((m) => m.id === changedMatchupId);
+    if (sfMatchup?.teamA && sfMatchup?.teamB) {
+      oldLoser = oldWinner === sfMatchup.teamA ? sfMatchup.teamB : sfMatchup.teamA;
+    }
+  }
+
   for (const matchupId of downstream) {
     if (updated[matchupId] === oldWinner) {
+      delete updated[matchupId];
+    }
+    // 3RD place match has the loser, not the winner
+    if (matchupId === '3RD' && oldLoser && updated[matchupId] === oldLoser) {
       delete updated[matchupId];
     }
   }

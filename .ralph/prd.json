@@ -1081,7 +1081,7 @@
       "title": "Fix 3rd place match and Final to correctly use SF winners/losers",
       "spec": "specs/bracket.md",
       "priority": 39,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-096"
       ],

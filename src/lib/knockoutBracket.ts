@@ -246,20 +246,27 @@ export function generateKnockoutBracket(
 }
 
 /**
- * Get the next matchup ID that a winner feeds into.
+ * Get the next matchup IDs that a winner/loser feeds into.
+ * SF matches feed into both FINAL (winner) and 3RD (loser).
  */
-export function getNextMatchupId(matchupId: string): string | null {
+export function getNextMatchupIds(matchupId: string): string[] {
   for (const [id, a, b] of R16_FEEDS) {
-    if (matchupId === a || matchupId === b) return id;
+    if (matchupId === a || matchupId === b) return [id];
   }
   for (const [id, a, b] of QF_FEEDS) {
-    if (matchupId === a || matchupId === b) return id;
+    if (matchupId === a || matchupId === b) return [id];
   }
   for (const [id, a, b] of SF_FEEDS) {
-    if (matchupId === a || matchupId === b) return id;
+    if (matchupId === a || matchupId === b) return [id];
   }
-  if (matchupId === 'SF-1' || matchupId === 'SF-2') return 'FINAL';
-  return null;
+  if (matchupId === 'SF-1' || matchupId === 'SF-2') return ['FINAL', '3RD'];
+  return [];
+}
+
+/** @deprecated Use getNextMatchupIds instead */
+export function getNextMatchupId(matchupId: string): string | null {
+  const ids = getNextMatchupIds(matchupId);
+  return ids[0] ?? null;
 }
 
 /**
@@ -271,13 +278,11 @@ export function getDownstreamMatchupIds(matchupId: string): string[] {
 
   while (queue.length > 0) {
     const current = queue.shift()!;
-    const next = getNextMatchupId(current);
-    if (next && !downstream.includes(next)) {
-      downstream.push(next);
-      queue.push(next);
-    }
-    if (current === 'SF-1' || current === 'SF-2') {
-      if (!downstream.includes('3RD')) downstream.push('3RD');
+    for (const next of getNextMatchupIds(current)) {
+      if (!downstream.includes(next)) {
+        downstream.push(next);
+        queue.push(next);
+      }
     }
   }
 

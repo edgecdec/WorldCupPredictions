@@ -143,18 +143,20 @@ export default function KnockoutBracket({ matchups, picks, onPick, readOnly, res
         ))}
 
         {/* Center: Final + 3rd */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minWidth: 180, mx: 1, gap: 3 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minWidth: 200, mx: 1, gap: 3 }}>
           {finalMatchup && (
             <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="caption" sx={{ fontWeight: 700, color: 'warning.main' }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'warning.main', mb: 0.5 }}>
                 🏆 Final
               </Typography>
-              <Matchup matchup={finalMatchup} userPick={picks[finalMatchup.id]} onPick={handlePick} readOnly={readOnly} result={results?.[finalMatchup.id]} countryCodeMap={countryCodeMap} isChampionPick />
+              <Box sx={{ border: 2, borderColor: 'warning.main', borderRadius: 1, p: 0.5 }}>
+                <Matchup matchup={finalMatchup} userPick={picks[finalMatchup.id]} onPick={handlePick} readOnly={readOnly} result={results?.[finalMatchup.id]} countryCodeMap={countryCodeMap} isChampionPick />
+              </Box>
             </Box>
           )}
           {thirdMatchup && (
-            <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary' }}>
+            <Box sx={{ textAlign: 'center', opacity: 0.85 }}>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
                 🥉 3rd Place
               </Typography>
               <Matchup matchup={thirdMatchup} userPick={picks[thirdMatchup.id]} onPick={handlePick} readOnly={readOnly} result={results?.[thirdMatchup.id]} countryCodeMap={countryCodeMap} />

@@ -1042,6 +1042,17 @@
         "TASK-086"
       ],
       "description": "Before the tournament starts, the leaderboard should be visible but show different info than during the tournament. Show: username, bracket name, and a completion status column. Completion status: for group stage, show 'X/12 groups filled' and 'X/8 third-place picks'. Use a progress bar or checkmarks. Show \u2705 if all groups are ordered and 8 third-place teams selected, \u26a0\ufe0f if partially complete, \u274c if empty. Do NOT show any details about what teams they picked \u2014 no scores, no pick breakdowns, no compare access. This lets users see who's in their group and who still needs to fill out their predictions, without revealing anyone's picks before lock time. After lock_time_groups passes, switch to showing actual scores and enable pick visibility. Same pattern for knockout phase: show 'X/31 knockout picks' completion before lock_time_knockout."
+    },
+    {
+      "id": "TASK-094",
+      "title": "Show dates on all tournament timeline phases, not just current",
+      "spec": "specs/bracket.md",
+      "priority": 40,
+      "status": "open",
+      "dependencies": [
+        "TASK-087"
+      ],
+      "description": "The TournamentTimeline component on the home page currently only shows the date range for the active phase. Update it to show dates for ALL phases: (1) 'Predictions Open' \u2014 Now through Jun 10, (2) 'Group Stage' \u2014 Jun 11 \u2013 Jun 27, (3) 'Knockout Predictions' \u2014 Jun 27 \u2013 Jun 30, (4) 'Knockout Stage' \u2014 Jun 30 \u2013 Jul 19. Each phase should display its date range as subtitle text regardless of whether it's the current phase. Future phases should show the dates so users know exactly when they need to come back. Use the tournament's lock_time_groups and lock_time_knockout to derive the dates dynamically rather than hardcoding."
     }
   ]
 }

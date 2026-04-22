@@ -1130,7 +1130,7 @@
       "title": "Create generic bracket rendering component",
       "spec": "specs/bracket.md",
       "priority": 37,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-101"
       ],

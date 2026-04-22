@@ -1,9 +1,9 @@
 'use client';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Box, Typography } from '@mui/material';
 import Matchup from './Matchup';
 import { KnockoutMatchup } from '@/types';
-import { cascadeClear, getMatchupsByRound, ROUND_R32, ROUND_R16, ROUND_QF, ROUND_SF, ROUND_3RD, ROUND_FINAL, ROUND_LABELS } from '@/lib/bracketUtils';
+import { cascadeClear, getMatchupsByRound, ROUND_3RD, ROUND_LABELS } from '@/lib/bracketUtils';
 
 interface KnockoutBracketProps {
   matchups: KnockoutMatchup[];
@@ -14,22 +14,40 @@ interface KnockoutBracketProps {
   countryCodeMap?: Record<string, string>;
 }
 
-// Left half: R32-1..R32-8, R16-1..R16-4, QF-1..QF-2, SF-1
-// Right half: R32-9..R32-16, R16-5..R16-8, QF-3..QF-4, SF-2
-const LEFT_IDS: Record<number, string[]> = {
-  [ROUND_R32]: ['R32-1', 'R32-2', 'R32-3', 'R32-4', 'R32-5', 'R32-6', 'R32-7', 'R32-8'],
-  [ROUND_R16]: ['R16-1', 'R16-2', 'R16-3', 'R16-4'],
-  [ROUND_QF]: ['QF-1', 'QF-2'],
-  [ROUND_SF]: ['SF-1'],
-};
-const RIGHT_IDS: Record<number, string[]> = {
-  [ROUND_R32]: ['R32-9', 'R32-10', 'R32-11', 'R32-12', 'R32-13', 'R32-14', 'R32-15', 'R32-16'],
-  [ROUND_R16]: ['R16-5', 'R16-6', 'R16-7', 'R16-8'],
-  [ROUND_QF]: ['QF-3', 'QF-4'],
-  [ROUND_SF]: ['SF-2'],
-};
-
 const CONNECTOR_COLOR = 'divider';
+
+/** Derive the bracket structure from matchups: normal rounds, final, 3rd place. */
+function deriveBracketStructure(matchups: KnockoutMatchup[]) {
+  const byRound = getMatchupsByRound(matchups);
+  const thirdMatchup = byRound.get(ROUND_3RD)?.[0] ?? null;
+
+  // Normal rounds are all rounds except the special 3RD round (round 4)
+  const normalRounds = [...byRound.keys()]
+    .filter((r) => r !== ROUND_3RD)
+    .sort((a, b) => a - b);
+
+  if (normalRounds.length === 0) return { leftRounds: [], rightRounds: [], finalMatchup: null, thirdMatchup };
+
+  // The last normal round is the Final
+  const finalRound = normalRounds[normalRounds.length - 1];
+  const finalMatchup = byRound.get(finalRound)?.[0] ?? null;
+
+  // Rounds before the final get split into left/right halves
+  const bracketRounds = normalRounds.slice(0, -1);
+
+  // For each round, split matchups into left half (first half) and right half (second half)
+  const leftRounds: { round: number; ids: string[] }[] = [];
+  const rightRounds: { round: number; ids: string[] }[] = [];
+
+  for (const round of bracketRounds) {
+    const roundMatchups = byRound.get(round) ?? [];
+    const half = Math.ceil(roundMatchups.length / 2);
+    leftRounds.push({ round, ids: roundMatchups.slice(0, half).map((m) => m.id) });
+    rightRounds.push({ round, ids: roundMatchups.slice(half).map((m) => m.id) });
+  }
+
+  return { leftRounds, rightRounds, finalMatchup, thirdMatchup };
+}
 
 function RoundColumn({
   matchups,
@@ -87,57 +105,39 @@ function RoundLabel({ label }: { label: string }) {
 }
 
 export default function KnockoutBracket({ matchups, picks, onPick, readOnly, results, countryCodeMap }: KnockoutBracketProps) {
-  const byRound = getMatchupsByRound(matchups);
-  const allMatchups = matchups;
+  const { leftRounds, rightRounds, finalMatchup, thirdMatchup } = useMemo(
+    () => deriveBracketStructure(matchups),
+    [matchups],
+  );
 
   const handlePick = useCallback(
     (matchupId: string, team: string) => {
       if (!onPick) return;
-      const cleared = cascadeClear(picks, matchupId, allMatchups);
-      // The parent should set picks to { ...cleared, [matchupId]: team }
-      // But since onPick is per-matchup, we need to communicate the cascade.
-      // We call onPick which the parent handles with cascade logic.
       onPick(matchupId, team);
     },
-    [onPick, picks, allMatchups],
+    [onPick],
   );
-
-  const leftRounds = [ROUND_R32, ROUND_R16, ROUND_QF, ROUND_SF] as const;
-  const rightRounds = [ROUND_SF, ROUND_QF, ROUND_R16, ROUND_R32] as const;
-
-  // Center matchups: Final and 3rd place
-  const finalMatchup = (byRound.get(ROUND_FINAL) ?? [])[0];
-  const thirdMatchup = (byRound.get(ROUND_3RD) ?? [])[0];
 
   return (
     <Box sx={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', pb: 2 }}>
-      {/* Round labels */}
-      <Box sx={{ display: 'flex', alignItems: 'flex-end', minWidth: 'fit-content', mb: 0.5 }}>
-        {/* Left labels */}
-        {leftRounds.map((r) => (
-          <Box key={`ll-${r}`} sx={{ minWidth: 160, flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
-            <RoundLabel label={ROUND_LABELS[r]} />
-          </Box>
-        ))}
-        {/* Connector spacers for left */}
-        {/* We need to interleave spacers — simpler to just put labels above the bracket */}
-      </Box>
-
       <Box sx={{ display: 'flex', alignItems: 'stretch', minWidth: 'fit-content', minHeight: 500 }}>
-        {/* Left half: R32 → R16 → QF → SF */}
-        {leftRounds.map((round, i) => (
+        {/* Left half: earliest round → SF */}
+        {leftRounds.map(({ round, ids }, i) => (
           <Box key={`left-${round}`} sx={{ display: 'contents' }}>
-            <RoundColumn
-              matchups={byRound.get(round) ?? []}
-              ids={LEFT_IDS[round]}
-              picks={picks}
-              onPick={handlePick}
-              readOnly={readOnly}
-              results={results}
-              countryCodeMap={countryCodeMap}
-            />
+            <Box sx={{ display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+              <RoundLabel label={ROUND_LABELS[round] ?? `Round ${round}`} />
+              <RoundColumn
+                matchups={matchups}
+                ids={ids}
+                picks={picks}
+                onPick={handlePick}
+                readOnly={readOnly}
+                results={results}
+                countryCodeMap={countryCodeMap}
+              />
+            </Box>
             {i < leftRounds.length - 1 && (
-              <ConnectorColumn pairCount={LEFT_IDS[round].length / 2} direction="left" />
+              <ConnectorColumn pairCount={Math.floor(ids.length / 2)} direction="left" />
             )}
           </Box>
         ))}
@@ -164,21 +164,24 @@ export default function KnockoutBracket({ matchups, picks, onPick, readOnly, res
           )}
         </Box>
 
-        {/* Right half: SF → QF → R16 → R32 */}
-        {rightRounds.map((round, i) => (
+        {/* Right half: SF → earliest round (reversed) */}
+        {[...rightRounds].reverse().map(({ round, ids }, i) => (
           <Box key={`right-${round}`} sx={{ display: 'contents' }}>
             {i > 0 && (
-              <ConnectorColumn pairCount={RIGHT_IDS[round].length / 2} direction="right" />
+              <ConnectorColumn pairCount={Math.floor(ids.length / 2)} direction="right" />
             )}
-            <RoundColumn
-              matchups={byRound.get(round) ?? []}
-              ids={RIGHT_IDS[round]}
-              picks={picks}
-              onPick={handlePick}
-              readOnly={readOnly}
-              results={results}
-              countryCodeMap={countryCodeMap}
-            />
+            <Box sx={{ display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+              <RoundLabel label={ROUND_LABELS[round] ?? `Round ${round}`} />
+              <RoundColumn
+                matchups={matchups}
+                ids={ids}
+                picks={picks}
+                onPick={handlePick}
+                readOnly={readOnly}
+                results={results}
+                countryCodeMap={countryCodeMap}
+              />
+            </Box>
           </Box>
         ))}
       </Box>

@@ -860,3 +860,12 @@
 - Added 17 unit tests in tests/bracketEngine.test.ts — all pass.
 - Existing knockoutBracket.ts and bracketUtils.ts left untouched — TASK-102/103 will migrate consumers.
 - Lesson: Keeping the generic engine as a standalone module with no imports from the FIFA-specific code makes it cleanly reusable. The teamCount parameter is all that's needed to derive the entire bracket structure.
+
+## TASK-102: Create generic bracket rendering component (2026-04-21)
+- Refactored KnockoutBracket.tsx to derive layout generically from matchups instead of hardcoded LEFT_IDS/RIGHT_IDS
+- deriveBracketStructure() groups matchups by round, splits each round into left/right halves, identifies Final and 3RD
+- Works for any bracket size (8, 16, 32, 64 teams) — no hardcoded round constants in the component
+- Refactored MobileBracket.tsx to derive round tabs from matchups using deriveRoundOrder() instead of hardcoded ROUND_ORDER
+- Both components still use ROUND_LABELS and ROUND_3RD from bracketUtils for display labels and 3RD identification
+- The knockout page already passes computeEffectiveMatchups results to the components, so no changes needed there
+- Lesson: Keep the rendering component dumb — it receives already-propagated matchups and just renders them. The page/parent handles pick propagation via computeEffectiveMatchups.

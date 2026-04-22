@@ -1115,6 +1115,37 @@
       "status": "open",
       "dependencies": [],
       "description": "Add a 'Clear All Picks' button to the /bracket/knockout page that resets all knockout picks to empty. Use a MUI Button with a RestartAlt or Delete icon, placed near the save button area. Show a confirmation dialog before clearing ('Are you sure? This will remove all your knockout picks.'). On confirm, set picks to empty object {} and trigger autosave. Also add a 'Clear All' button to the /bracket group predictions page that resets all group orders to default (pot order) and clears third-place picks. Both buttons should be disabled when the bracket is locked."
+    },
+    {
+      "id": "TASK-101",
+      "title": "Create generic bracket engine: generation + feeder math",
+      "spec": "specs/bracket.md",
+      "priority": 37,
+      "status": "open",
+      "dependencies": [],
+      "description": "Refactor src/lib/knockoutBracket.ts and src/lib/bracketUtils.ts to use a generic bracket engine parameterized by team count. Create src/lib/bracketEngine.ts with: (1) generateGenericBracket(teamCount: number, includeThirdPlace?: boolean) \u2014 creates all matchups with IDs 'R{round}-{position}' plus optional '3RD'. Total rounds = log2(teamCount). (2) getFeederIds(matchupId) \u2014 returns [R{r-1}-{2p-1}, R{r-1}-{2p}] using pure math, no lookup tables. For '3RD', returns the two SF match IDs (losers). For 'FINAL' (last round), returns the two SF match IDs (winners). (3) getDownstreamIds(matchupId) \u2014 walks forward from a match to find all dependent matches. (4) getRoundLabel(round, totalRounds) \u2014 'Round of 32', 'Round of 16', 'Quarterfinals', 'Semifinals', 'Final'. (5) computeEffectiveMatchups(matchups, picks) \u2014 generic propagation: for each match after round 0, resolve teamA from winner of feeder A, teamB from winner of feeder B. For 3RD, resolve from LOSERS of the two SF feeders. This is the critical fix \u2014 when a user picks SF-1 winner, that winner must appear in the Final AND the loser must appear in 3RD. (6) cascadeClear(picks, changedMatchupId, matchups) \u2014 clear all downstream picks when a pick changes. Works for any bracket size. Keep the existing FIFA-specific R32 seeding logic in knockoutBracket.ts but have it output matchups using the generic ID scheme. Export everything for reuse."
+    },
+    {
+      "id": "TASK-102",
+      "title": "Create generic bracket rendering component",
+      "spec": "specs/bracket.md",
+      "priority": 37,
+      "status": "open",
+      "dependencies": [
+        "TASK-101"
+      ],
+      "description": "Refactor src/components/bracket/KnockoutBracket.tsx to render any size bracket generically. The component receives matchups and derives the layout from them: (1) Split matches into left half and right half. For N teams: left side has positions 1 to N/4 per round, right side has N/4+1 to N/2, rendered right-to-left. (2) Each round is a column. Match height doubles each round so matches align vertically with their feeders. Use flexbox with gap that doubles per round, or explicit positioning: matchY = average of its two feeder matchYs. (3) Center column: Final (prominent, gold border, trophy emoji, larger) + optional 3rd place match (smaller, secondary styling, bronze emoji). (4) Connector lines between rounds using CSS borders or SVG. Lines connect each match to its two feeders. (5) CRITICAL FIX: When rendering, use computeEffectiveMatchups from the generic engine so that picking an SF winner immediately shows that team in the Final box and the loser in the 3rd place box. The Matchup component must re-render when its teamA/teamB change from null to a team name. (6) Works for 8, 16, 32, 64 teams. The MobileBracket should also use the generic engine for round tabs."
+    },
+    {
+      "id": "TASK-103",
+      "title": "Migrate World Cup bracket to generic engine and fix SF\u2192Final/3RD propagation",
+      "spec": "specs/bracket.md",
+      "priority": 37,
+      "status": "open",
+      "dependencies": [
+        "TASK-102"
+      ],
+      "description": "Migrate the World Cup knockout bracket to use the generic bracket engine. (1) Update knockoutBracket.ts generateKnockoutBracket() to use generateGenericBracket(32, true) for the base structure, then populate R0 (R32) teams from the FIFA seeding logic. Keep the FIFA R32 mapping and 3rd-place combination table but output using generic IDs. (2) Update all references from old IDs (R32-1, R16-1, QF-1, SF-1, FINAL, 3RD) to new generic IDs (R0-1, R1-1, R2-1, R3-1, R4-1, 3RD). Or keep backward compatibility by mapping. (3) Verify the full pick flow works end-to-end: pick R32 winners \u2192 appear in R16 \u2192 pick R16 \u2192 appear in QF \u2192 ... \u2192 pick SF winners \u2192 winners appear in Final AND losers appear in 3rd place match. (4) Regenerate the bracket in the DB. (5) Test with Nova Act: log in, fill out the entire bracket, verify Final and 3rd place populate correctly when SF picks are made."
     }
   ]
 }

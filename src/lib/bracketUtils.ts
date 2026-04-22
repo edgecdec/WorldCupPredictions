@@ -1,7 +1,10 @@
 import { KnockoutMatchup } from '@/types';
-import { getDownstreamMatchupIds, getFeederMatchupIds } from '@/lib/knockoutBracket';
+import {
+  computeEffectiveMatchups as genericCompute,
+  cascadeClear as genericCascade,
+} from '@/lib/bracketEngine';
 
-// Round index constants
+// Round index constants (FIFA scheme: 3RD=4, FINAL=5)
 const ROUND_R32 = 0;
 const ROUND_R16 = 1;
 const ROUND_QF = 2;
@@ -20,9 +23,93 @@ const ROUND_LABELS: Record<number, string> = {
 
 export { ROUND_R32, ROUND_R16, ROUND_QF, ROUND_SF, ROUND_3RD, ROUND_FINAL, ROUND_LABELS };
 
+const TEAM_COUNT = 32;
+
+// Generic engine round: 0=R32,1=R16,2=QF,3=SF,4=Final; 3RD=totalRounds(5)
+// FIFA round:           0=R32,1=R16,2=QF,3=SF,4=3RD,5=Final
+const ROUND_PREFIX = ['R32', 'R16', 'QF', 'SF'] as const;
+
+/** Convert a FIFA matchup ID to a generic engine ID. */
+function toGenericId(fifaId: string): string {
+  if (fifaId === '3RD') return '3RD';
+  if (fifaId === 'FINAL') return 'R4-1';
+  for (let r = 0; r < ROUND_PREFIX.length; r++) {
+    const prefix = ROUND_PREFIX[r];
+    if (fifaId.startsWith(prefix + '-')) {
+      const pos = fifaId.slice(prefix.length + 1);
+      return `R${r}-${pos}`;
+    }
+  }
+  return fifaId;
+}
+
+/** Convert a generic engine ID to a FIFA matchup ID. */
+function toFifaId(genericId: string): string {
+  if (genericId === '3RD') return '3RD';
+  const match = genericId.match(/^R(\d+)-(\d+)$/);
+  if (!match) return genericId;
+  const round = parseInt(match[1], 10);
+  const pos = match[2];
+  if (round < ROUND_PREFIX.length) return `${ROUND_PREFIX[round]}-${pos}`;
+  if (round === 4) return 'FINAL';
+  return genericId;
+}
+
+/** Convert FIFA round number to generic engine round number. */
+function toGenericRound(fifaRound: number): number {
+  if (fifaRound === ROUND_3RD) return 5; // 3RD sits at totalRounds in generic
+  if (fifaRound === ROUND_FINAL) return 4;
+  return fifaRound;
+}
+
+/** Convert generic engine round number to FIFA round number. */
+function toFifaRound(genericRound: number): number {
+  if (genericRound === 5) return ROUND_3RD;
+  if (genericRound === 4) return ROUND_FINAL;
+  return genericRound;
+}
+
+/** Convert FIFA matchups to generic engine matchups. */
+function toGenericMatchups(matchups: KnockoutMatchup[]): KnockoutMatchup[] {
+  return matchups.map((m) => ({
+    ...m,
+    id: toGenericId(m.id),
+    round: toGenericRound(m.round),
+  }));
+}
+
+/** Convert generic engine matchups back to FIFA matchups. */
+function toFifaMatchups(matchups: KnockoutMatchup[]): KnockoutMatchup[] {
+  return matchups.map((m) => ({
+    ...m,
+    id: toFifaId(m.id),
+    round: toFifaRound(m.round),
+  }));
+}
+
+/** Convert a picks map from FIFA IDs to generic IDs. */
+function toGenericPicks(picks: Record<string, string>): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const [k, v] of Object.entries(picks)) {
+    result[toGenericId(k)] = v;
+  }
+  return result;
+}
+
+/** Convert a picks map from generic IDs to FIFA IDs. */
+function toFifaPicks(picks: Record<string, string>): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const [k, v] of Object.entries(picks)) {
+    result[toFifaId(k)] = v;
+  }
+  return result;
+}
+
 /** Generate an empty bracket skeleton with all 32 matchup slots but no teams. */
 export function generateEmptyBracket(): KnockoutMatchup[] {
-  const empty = (id: string, round: number): KnockoutMatchup => ({ id, round, teamA: null, teamB: null, winner: null });
+  const empty = (id: string, round: number): KnockoutMatchup => ({
+    id, round, teamA: null, teamB: null, winner: null,
+  });
   return [
     ...Array.from({ length: 16 }, (_, i) => empty(`R32-${i + 1}`, ROUND_R32)),
     ...Array.from({ length: 8 }, (_, i) => empty(`R16-${i + 1}`, ROUND_R16)),
@@ -35,47 +122,22 @@ export function generateEmptyBracket(): KnockoutMatchup[] {
 
 /**
  * Clear all downstream picks that depend on the old winner of a changed matchup.
- * When a user changes their pick for a matchup, any later-round picks that had
- * the old winner must be removed since that team can no longer advance.
- * For SF matches, also clears the 3RD pick since the loser changes too.
+ * Delegates to the generic bracket engine with ID translation.
  */
 export function cascadeClear(
   picks: Record<string, string>,
   changedMatchupId: string,
   matchups: KnockoutMatchup[],
 ): Record<string, string> {
-  const oldWinner = picks[changedMatchupId];
-  if (!oldWinner) return { ...picks };
-
-  const updated = { ...picks };
-  const downstream = getDownstreamMatchupIds(changedMatchupId);
-
-  // Determine the old loser for SF matches (needed for 3RD place clearing)
-  let oldLoser: string | null = null;
-  const isSF = changedMatchupId === 'SF-1' || changedMatchupId === 'SF-2';
-  if (isSF) {
-    const sfMatchup = matchups.find((m) => m.id === changedMatchupId);
-    if (sfMatchup?.teamA && sfMatchup?.teamB) {
-      oldLoser = oldWinner === sfMatchup.teamA ? sfMatchup.teamB : sfMatchup.teamA;
-    }
-  }
-
-  for (const matchupId of downstream) {
-    if (updated[matchupId] === oldWinner) {
-      delete updated[matchupId];
-    }
-    // 3RD place match has the loser, not the winner
-    if (matchupId === '3RD' && oldLoser && updated[matchupId] === oldLoser) {
-      delete updated[matchupId];
-    }
-  }
-
-  return updated;
+  const genMatchups = toGenericMatchups(matchups);
+  const genPicks = toGenericPicks(picks);
+  const genId = toGenericId(changedMatchupId);
+  const result = genericCascade(genPicks, genId, genMatchups, TEAM_COUNT);
+  return toFifaPicks(result);
 }
 
 /**
  * Group matchups by round index.
- * Returns a Map from round number to matchups in that round.
  */
 export function getMatchupsByRound(
   matchups: KnockoutMatchup[],
@@ -90,56 +152,18 @@ export function getMatchupsByRound(
 }
 
 /**
- * Resolve the winner of a feeder matchup: actual result first, then user pick.
- */
-function resolveWinner(feederMatchup: KnockoutMatchup | undefined, feederId: string, picks: Record<string, string>): string | null {
-  return feederMatchup?.winner ?? picks[feederId] ?? null;
-}
-
-/**
- * Resolve the loser of a feeder matchup (for 3rd place match).
- * Only possible when we know both teams and the winner.
- */
-function resolveLoser(feederMatchup: KnockoutMatchup | undefined, feederId: string, picks: Record<string, string>): string | null {
-  if (!feederMatchup?.teamA || !feederMatchup?.teamB) return null;
-  const winner = resolveWinner(feederMatchup, feederId, picks);
-  if (!winner) return null;
-  return winner === feederMatchup.teamA ? feederMatchup.teamB : feederMatchup.teamA;
-}
-
-/**
- * Compute effective matchups by propagating user picks into downstream teamA/teamB slots.
- * When a user picks a winner for R32-1, that team appears as teamA in R16-1, etc.
- * The 3RD place match receives the losers of the two SFs.
+ * Compute effective matchups by propagating user picks into downstream slots.
+ * Delegates to the generic bracket engine with ID translation.
  */
 export function computeEffectiveMatchups(
   matchups: KnockoutMatchup[],
   picks: Record<string, string>,
 ): KnockoutMatchup[] {
-  const matchupMap = new Map(matchups.map((m) => [m.id, { ...m }]));
-
-  // Process rounds in order so earlier picks propagate forward
-  const sorted = [...matchupMap.values()].sort((a, b) => a.round - b.round);
-
-  for (const m of sorted) {
-    if (m.round === ROUND_R32) continue; // R32 teams come from group results, already set
-    const feeders = getFeederMatchupIds(m.id);
-    if (!feeders) continue;
-    const [feederA, feederB] = feeders;
-    const effective = matchupMap.get(m.id)!;
-    const feederAMatchup = matchupMap.get(feederA);
-    const feederBMatchup = matchupMap.get(feederB);
-
-    if (m.id === '3RD') {
-      // 3rd place match: losers of the two semifinals
-      effective.teamA = resolveLoser(feederAMatchup, feederA, picks) ?? m.teamA;
-      effective.teamB = resolveLoser(feederBMatchup, feederB, picks) ?? m.teamB;
-    } else {
-      // Normal: winners advance
-      effective.teamA = resolveWinner(feederAMatchup, feederA, picks) ?? m.teamA;
-      effective.teamB = resolveWinner(feederBMatchup, feederB, picks) ?? m.teamB;
-    }
-  }
-
-  return [...matchupMap.values()];
+  const genMatchups = toGenericMatchups(matchups);
+  const genPicks = toGenericPicks(picks);
+  const result = genericCompute(genMatchups, genPicks, TEAM_COUNT);
+  return toFifaMatchups(result);
 }
+
+// Export mapping utilities for use by other modules
+export { toGenericId, toFifaId, toGenericRound, toFifaRound };

@@ -1141,7 +1141,7 @@
       "title": "Migrate World Cup bracket to generic engine and fix SF\u2192Final/3RD propagation",
       "spec": "specs/bracket.md",
       "priority": 37,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-102"
       ],

@@ -869,3 +869,12 @@
 - Both components still use ROUND_LABELS and ROUND_3RD from bracketUtils for display labels and 3RD identification
 - The knockout page already passes computeEffectiveMatchups results to the components, so no changes needed there
 - Lesson: Keep the rendering component dumb — it receives already-propagated matchups and just renders them. The page/parent handles pick propagation via computeEffectiveMatchups.
+
+## TASK-103: Migrate World Cup bracket to generic engine (2026-04-21)
+- Rewrote `bracketUtils.ts` to delegate `computeEffectiveMatchups` and `cascadeClear` to the generic bracket engine (`bracketEngine.ts`) via FIFA↔generic ID mapping functions.
+- Rewrote `knockoutBracket.ts` to use `generateGenericBracket(32, true)` for the skeleton, then map generic IDs (R0-1, R4-1) to FIFA IDs (R32-1, FINAL) and populate R32 teams from FIFA seeding.
+- Kept backward-compatible FIFA IDs (R32-*, R16-*, QF-*, SF-*, FINAL, 3RD) and round numbers (0-5) throughout the codebase — no changes needed to any consuming components, pages, or DB data.
+- Regenerated the knockout bracket in the production DB via the admin API.
+- Key lesson: when two ID schemes exist (generic R0-R4 vs FIFA R32/R16/QF/SF/FINAL), mapping at the boundary is much safer than changing all references. The round number swap (3RD=4/FINAL=5 in FIFA vs 3RD=5/FINAL=4 in generic) was the trickiest part.
+- Pre-existing test failures in scoring.test.ts (3 tests) were NOT caused by this migration — they fail on main before changes too.
+- Nova Act verified: bracket loads, R32 matchups show teams, picks are interactive.

@@ -1053,6 +1053,17 @@
         "TASK-087"
       ],
       "description": "The TournamentTimeline component on the home page currently only shows the date range for the active phase. Update it to show dates for ALL phases: (1) 'Predictions Open' \u2014 Now through Jun 10, (2) 'Group Stage' \u2014 Jun 11 \u2013 Jun 27, (3) 'Knockout Predictions' \u2014 Jun 27 \u2013 Jun 30, (4) 'Knockout Stage' \u2014 Jun 30 \u2013 Jul 19. Each phase should display its date range as subtitle text regardless of whether it's the current phase. Future phases should show the dates so users know exactly when they need to come back. Use the tournament's lock_time_groups and lock_time_knockout to derive the dates dynamically rather than hardcoding."
+    },
+    {
+      "id": "TASK-095",
+      "title": "Improve scoring rules display: bullet points and clearer round progression",
+      "spec": "specs/scoring.md",
+      "priority": 41,
+      "status": "open",
+      "dependencies": [
+        "TASK-084"
+      ],
+      "description": "Improve the ScoringRulesSummary component on the predictions pages. (1) Rewrite the scoring explanation as clear bullet points instead of dense text/tables. Group stage bullets: 'Correct advance/not advance: +1 per team', 'Exact finishing position: +1 per team', 'Upset bonus: +1 for each position above their seed you predicted (only if they finish at or above your prediction)', 'All advancement calls correct in a group: +1 bonus', 'Perfect group order: +2 bonus'. (2) For knockout round points, display the progression as R32: 3 \u2192 R16: 5 \u2192 QF: 8 \u2192 SF: 13 \u2192 Final: 21 as the main sequence, with '3rd Place Match: 13' shown separately in parentheses or as a note below, NOT inline as '3\u21925\u21928\u219213\u219213\u219221' which makes it look like SF and 3rd place are the same round. Something like 'R32: 3 \u2022 R16: 5 \u2022 QF: 8 \u2022 SF: 13 \u2022 Final: 21 (3rd place match: 13)'. (3) Show upset bonus explanation: 'Upset bonus = (FIFA ranking difference \u00f7 5) \u00d7 round multiplier' with the multiplier per round shown."
     }
   ]
 }

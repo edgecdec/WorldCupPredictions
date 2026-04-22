@@ -1064,6 +1064,39 @@
         "TASK-084"
       ],
       "description": "Improve the ScoringRulesSummary component on the predictions pages. (1) Rewrite the scoring explanation as clear bullet points instead of dense text/tables. Group stage bullets: 'Correct advance/not advance: +1 per team', 'Exact finishing position: +1 per team', 'Upset bonus: +1 for each position above their seed you predicted (only if they finish at or above your prediction)', 'All advancement calls correct in a group: +1 bonus', 'Perfect group order: +2 bonus'. (2) For knockout round points, display the progression as R32: 3 \u2192 R16: 5 \u2192 QF: 8 \u2192 SF: 13 \u2192 Final: 21 as the main sequence, with '3rd Place Match: 13' shown separately in parentheses or as a note below, NOT inline as '3\u21925\u21928\u219213\u219213\u219221' which makes it look like SF and 3rd place are the same round. Something like 'R32: 3 \u2022 R16: 5 \u2022 QF: 8 \u2022 SF: 13 \u2022 Final: 21 (3rd place match: 13)'. (3) Show upset bonus explanation: 'Upset bonus = (FIFA ranking difference \u00f7 5) \u00d7 round multiplier' with the multiplier per round shown."
+    },
+    {
+      "id": "TASK-096",
+      "title": "Fix R32 bracket generation to use FIFA's official matchup mapping",
+      "spec": "specs/tournament-structure.md",
+      "priority": 38,
+      "status": "open",
+      "dependencies": [
+        "TASK-026"
+      ],
+      "description": "The current knockoutBracket.ts has completely wrong R32 matchups. Replace with FIFA's official 2026 bracket mapping. The 16 R32 matches are: Match 73: 2A vs 2B, Match 74: 1E vs 3rd(A/B/C/D/F), Match 75: 1F vs 2C, Match 76: 1C vs 2F, Match 77: 1I vs 3rd(C/D/F/G/H), Match 78: 2E vs 2I, Match 79: 1A vs 3rd(C/E/F/H/I), Match 80: 1L vs 3rd(E/H/I/J/K), Match 81: 1D vs 3rd(B/E/F/I/J), Match 82: 1G vs 3rd(A/E/H/I/J), Match 83: 2K vs 2L, Match 84: 1H vs 2J, Match 85: 1B vs 3rd(E/F/G/I/J), Match 86: 1J vs 2H, Match 87: 1K vs 3rd(D/E/I/J/L), Match 88: 2D vs 2G. The 3rd-place team assignments depend on which 8 of 12 groups have advancing 3rd-place teams. FIFA published 495 combinations in Annex C of tournament regulations. Implement the lookup table from https://en.wikipedia.org/wiki/2026_FIFA_World_Cup_knockout_stage#Combinations_of_matches_in_the_round_of_32 \u2014 given the set of 8 advancing groups, look up which specific 3rd-place team faces each group winner (1A, 1B, 1D, 1E, 1G, 1I, 1K, 1L). The R16 feeds are: M89=W74vsW77, M90=W73vsW75, M91=W76vsW78, M92=W79vsW80, M93=W83vsW84, M94=W81vsW82, M95=W86vsW88, M96=W85vsW87. QF: M97=W89vsW90, M98=W93vsW94, M99=W91vsW92, M100=W95vsW96. SF: M101=W97vsW98, M102=W99vsW100. 3rd=L101vsL102. Final=W101vsW102."
+    },
+    {
+      "id": "TASK-097",
+      "title": "Fix 3rd place match and Final to correctly use SF winners/losers",
+      "spec": "specs/bracket.md",
+      "priority": 39,
+      "status": "open",
+      "dependencies": [
+        "TASK-096"
+      ],
+      "description": "The 3rd place match should show the LOSERS of the two semifinals, and the Final should show the WINNERS. Currently both feed from SF-1 and SF-2 identically. Fix the bracket propagation: when a user picks a SF winner, that team goes to the Final, and the OTHER team (the loser) goes to the 3rd place match. In KnockoutBracket component and bracketUtils: when propagating picks from SF to later rounds, the winner goes to FINAL and the loser goes to 3RD. In the bracket display, clearly label '3rd Place Match' and 'Final' with distinct visual treatment. The Final should be prominently displayed (larger, centered, gold border). The 3rd place match should be smaller/secondary. Also fix getNextMatchupId to return both FINAL (for winner) and 3RD (for loser) from SF matches."
+    },
+    {
+      "id": "TASK-098",
+      "title": "Regenerate knockout bracket in DB with corrected matchups",
+      "spec": "specs/tournament-structure.md",
+      "priority": 39,
+      "status": "open",
+      "dependencies": [
+        "TASK-096"
+      ],
+      "description": "After fixing the bracket generation code, regenerate the knockout bracket stored in the tournament's results_data in the database. The current bracket has incorrect matchups (teams from same group playing each other, duplicate teams). Call the corrected generateKnockoutBracket() with the existing group stage results and update the DB. Add a 'Regenerate Bracket' button on the admin page that re-runs bracket generation from current group results \u2014 useful when the generation code is fixed or group results are corrected."
     }
   ]
 }

@@ -1048,7 +1048,7 @@
       "title": "Show dates on all tournament timeline phases, not just current",
       "spec": "specs/bracket.md",
       "priority": 40,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-087"
       ],

@@ -25,6 +25,8 @@ interface Phase {
   dateRange: string;
 }
 
+const KNOCKOUT_END = "Jul 19";
+
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", {
     month: "short",
@@ -44,22 +46,20 @@ function getActiveStep(
   return 2;
 }
 
-export default function TournamentTimeline({
-  lockTimeGroups,
-  lockTimeKnockout,
-}: TournamentTimelineProps) {
-  const theme = useTheme();
-  const activeStep = getActiveStep(lockTimeGroups, lockTimeKnockout);
+function buildPhases(
+  lockTimeGroups: string | null,
+  lockTimeKnockout: string | null
+): Phase[] {
+  const groupDate = lockTimeGroups ? formatDate(lockTimeGroups) : null;
+  const koDate = lockTimeKnockout ? formatDate(lockTimeKnockout) : null;
 
-  const phases: Phase[] = [
+  return [
     {
       label: "Predictions Open",
       description:
         "Fill out your group predictions — rank all 12 groups and pick which 3rd-place teams advance.",
       icon: <EditNoteIcon />,
-      dateRange: lockTimeGroups
-        ? `Now – ${formatDate(lockTimeGroups)}`
-        : "Dates TBD",
+      dateRange: groupDate ? `Now – ${groupDate}` : "Dates TBD",
     },
     {
       label: "Group Stage",
@@ -67,31 +67,44 @@ export default function TournamentTimeline({
         "Watch matches and track your predictions vs live results. Knockout predictions open near the end.",
       icon: <GroupsIcon />,
       dateRange:
-        lockTimeGroups && lockTimeKnockout
-          ? `${formatDate(lockTimeGroups)} – ${formatDate(lockTimeKnockout)}`
-          : "Dates TBD",
+        groupDate && koDate ? `${groupDate} – ${koDate}` : "Dates TBD",
     },
     {
       label: "Knockout Predictions",
       description:
         "Come back to fill out your knockout bracket before the Round of 32 begins.",
       icon: <AccountTreeIcon />,
-      dateRange: lockTimeKnockout
-        ? `Around ${formatDate(lockTimeKnockout)}`
-        : "Dates TBD",
+      dateRange: koDate ? `Around ${koDate}` : "Dates TBD",
     },
     {
       label: "Knockout Stage",
       description:
         "Watch the bracket unfold from the Round of 32 through the Final. Track the leaderboard live!",
       icon: <EmojiEventsIcon />,
-      dateRange: lockTimeKnockout ? `${formatDate(lockTimeKnockout)} – Jul 19` : "Dates TBD",
+      dateRange: koDate ? `${koDate} – ${KNOCKOUT_END}` : "Dates TBD",
     },
   ];
+}
+
+export default function TournamentTimeline({
+  lockTimeGroups,
+  lockTimeKnockout,
+}: TournamentTimelineProps) {
+  const theme = useTheme();
+  const activeStep = getActiveStep(lockTimeGroups, lockTimeKnockout);
+  const phases = buildPhases(lockTimeGroups, lockTimeKnockout);
+
+  const dateColor =
+    theme.palette.mode === "dark" ? "primary.light" : "primary.dark";
 
   return (
     <Box sx={{ textAlign: "left", mt: 2 }}>
-      <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ textAlign: "center" }}>
+      <Typography
+        variant="subtitle1"
+        fontWeight="bold"
+        gutterBottom
+        sx={{ textAlign: "center" }}
+      >
         Tournament Timeline
       </Typography>
       <Stepper activeStep={activeStep} orientation="vertical" sx={{ pl: 1 }}>
@@ -99,6 +112,11 @@ export default function TournamentTimeline({
           <Step key={phase.label} completed={idx < activeStep}>
             <StepLabel
               icon={phase.icon}
+              optional={
+                <Typography variant="caption" sx={{ color: dateColor }}>
+                  {phase.dateRange}
+                </Typography>
+              }
               sx={{
                 "& .MuiStepLabel-label": {
                   fontWeight: idx === activeStep ? "bold" : "normal",
@@ -116,19 +134,6 @@ export default function TournamentTimeline({
             <StepContent>
               <Typography variant="body2" color="text.secondary">
                 {phase.description}
-              </Typography>
-              <Typography
-                variant="caption"
-                sx={{
-                  mt: 0.5,
-                  display: "block",
-                  color:
-                    theme.palette.mode === "dark"
-                      ? "primary.light"
-                      : "primary.dark",
-                }}
-              >
-                {phase.dateRange}
               </Typography>
             </StepContent>
           </Step>

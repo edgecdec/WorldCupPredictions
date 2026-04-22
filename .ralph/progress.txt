@@ -828,3 +828,12 @@
 - Changes: Removed /leaderboard from PRE_TOURNAMENT_RESTRICTED so it's accessible pre-tournament. Added phase detection to leaderboard API using getPhase(). Pre-tournament: API returns completion data (groupsFilled, thirdPlaceFilled, knockoutFilled) without scores or pick details. Added CompletionTable component showing progress bars with checkmark/warning/X icons and X/N counts. ScoreTable only shown after tournament starts. Admin bypasses all restrictions.
 - Lessons: The PhaseGate component was blocking the entire leaderboard page pre-tournament. Better approach: let the page load but change what data is shown based on phase. The API is the right place to enforce data hiding (don't send pick details pre-tournament) rather than relying solely on client-side gating.
 - Nova Act verified: Table shows User, Bracket, Groups (12/12 ✓), 3rd Place Picks (0/8 ⚠), Knockout (0/31 ⚠) with progress bars.
+
+## TASK-095: Improve scoring rules display with bullet points and clearer round progression
+- Date: 2026-04-21
+- Replaced Row/Chip layout with semantic `<ul>/<li>` bullet points for group stage scoring rules
+- Knockout round points now show main sequence (R32→Final) with 3rd place match in parentheses, not inline
+- Added round multipliers as a separate bullet under knockout rules
+- Kept the upset bonus formula explanation at the bottom
+- Nova Act verified both group stage and knockout pages show correct formatting
+- Lesson: Nova Act struggles with onboarding popups blocking navigation — navigate directly to target URL after login instead of clicking through

@@ -1,9 +1,9 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Accordion, AccordionSummary, AccordionDetails, Typography, Box, Chip } from '@mui/material';
+import { Accordion, AccordionSummary, AccordionDetails, Typography, Box } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import { ScoringSettings, DEFAULT_SCORING, KNOCKOUT_ROUNDS } from '@/types';
+import { ScoringSettings, DEFAULT_SCORING } from '@/types';
 
 const STORAGE_KEY = 'scoringRulesExpanded';
 
@@ -12,11 +12,10 @@ interface ScoringRulesSummaryProps {
   settings?: ScoringSettings;
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Bullet({ children }: { children: React.ReactNode }) {
   return (
-    <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.25 }}>
-      <Typography variant="body2" color="text.secondary">{label}</Typography>
-      <Chip label={value} size="small" variant="outlined" />
+    <Box component="li" sx={{ mb: 0.5 }}>
+      <Typography variant="body2" color="text.secondary">{children}</Typography>
     </Box>
   );
 }
@@ -35,6 +34,8 @@ export default function ScoringRulesSummary({ mode, settings }: ScoringRulesSumm
     localStorage.setItem(STORAGE_KEY, isExpanded ? 'true' : 'false');
   };
 
+  const ko = s.knockout;
+
   return (
     <Accordion expanded={expanded} onChange={handleChange} sx={{ mb: 2 }} disableGutters>
       <AccordionSummary expandIcon={<ExpandMoreIcon />}>
@@ -43,34 +44,39 @@ export default function ScoringRulesSummary({ mode, settings }: ScoringRulesSumm
       </AccordionSummary>
       <AccordionDetails sx={{ pt: 0 }}>
         {mode === 'group' ? (
-          <Box>
-            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-              Per team: predict finishing order 1–4. Teams finishing 1st/2nd advance automatically. 8 of 12 third-place teams also advance — pick which 8.
-            </Typography>
-            <Row label="Advance correct (predicted advance/not matches actual)" value={`+${s.groupStage.advanceCorrect}`} />
-            <Row label="Exact position (predicted position matches actual)" value={`+${s.groupStage.exactPosition}`} />
-            <Row label="Upset bonus (per place above seed, if team finishes at/above prediction)" value={`+${s.groupStage.upsetBonusPerPlace}/place`} />
-            <Row label="All 4 advance/not-advance correct in a group" value={`+${s.groupStage.advancementCorrectBonus}`} />
-            <Row label="Perfect group order (all 4 positions exact)" value={`+${s.groupStage.perfectOrderBonus}`} />
+          <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+            <Bullet>Correct advance/not advance: +{s.groupStage.advanceCorrect} per team</Bullet>
+            <Bullet>Exact finishing position: +{s.groupStage.exactPosition} per team</Bullet>
+            <Bullet>
+              Upset bonus: +{s.groupStage.upsetBonusPerPlace} for each position above their seed you predicted
+              (only if they finish at or above your prediction)
+            </Bullet>
+            <Bullet>All advancement calls correct in a group: +{s.groupStage.advancementCorrectBonus} bonus</Bullet>
+            <Bullet>Perfect group order (all 4 positions exact): +{s.groupStage.perfectOrderBonus} bonus</Bullet>
+            <Box component="li" sx={{ mt: 1, listStyle: 'none', ml: -2.5 }}>
+              <Typography variant="caption" color="text.secondary">
+                Teams finishing 1st/2nd advance automatically. 8 of 12 third-place teams also advance — pick which 8.
+              </Typography>
+            </Box>
           </Box>
         ) : (
           <Box>
-            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-              Pick the winner of each match. Points increase each round. Upset bonus when a lower-ranked team wins.
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              Points per correct pick: R32: {ko.pointsPerRound[0]} • R16: {ko.pointsPerRound[1]} • QF: {ko.pointsPerRound[2]} • SF: {ko.pointsPerRound[3]} • Final: {ko.pointsPerRound[5]}
+              {' '}(3rd place match: {ko.pointsPerRound[4]})
             </Typography>
-            {KNOCKOUT_ROUNDS.map((round, i) => (
-              <Row
-                key={round}
-                label={`${round} correct pick`}
-                value={`+${s.knockout.pointsPerRound[i]}  (upset ×${s.knockout.upsetMultiplierPerRound[i]})`}
-              />
-            ))}
-            {s.knockout.championBonus > 0 && (
-              <Row label="Champion bonus" value={`+${s.knockout.championBonus}`} />
-            )}
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-              Upset bonus = ⌊rank diff ÷ {s.knockout.upsetModulus}⌋ × round multiplier
-            </Typography>
+            <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+              <Bullet>
+                Upset bonus = ⌊FIFA ranking difference ÷ {ko.upsetModulus}⌋ × round multiplier
+              </Bullet>
+              <Bullet>
+                Round multipliers: R32: ×{ko.upsetMultiplierPerRound[0]} • R16: ×{ko.upsetMultiplierPerRound[1]} • QF: ×{ko.upsetMultiplierPerRound[2]} • SF: ×{ko.upsetMultiplierPerRound[3]} • Final: ×{ko.upsetMultiplierPerRound[5]}
+                {' '}(3rd place: ×{ko.upsetMultiplierPerRound[4]})
+              </Bullet>
+              {ko.championBonus > 0 && (
+                <Bullet>Champion bonus: +{ko.championBonus}</Bullet>
+              )}
+            </Box>
           </Box>
         )}
       </AccordionDetails>

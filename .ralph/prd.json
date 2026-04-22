@@ -1059,7 +1059,7 @@
       "title": "Improve scoring rules display: bullet points and clearer round progression",
       "spec": "specs/scoring.md",
       "priority": 41,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-084"
       ],

@@ -9,7 +9,7 @@ import KnockoutBracket from '@/components/bracket/KnockoutBracket';
 import MobileBracket from '@/components/bracket/MobileBracket';
 import CountdownTimer from '@/components/common/CountdownTimer';
 import { useAuth } from '@/hooks/useAuth';
-import { cascadeClear, computeEffectiveMatchups } from '@/lib/bracketUtils';
+import { cascadeClear, computeEffectiveMatchups, generateEmptyBracket } from '@/lib/bracketUtils';
 import type { Tournament, TournamentResults, KnockoutMatchup, BracketData } from '@/types';
 import PrintExportButtons from '@/components/common/PrintExportButtons';
 import AutofillButtons, { AutofillStrategy } from '@/components/common/AutofillButtons';
@@ -106,8 +106,9 @@ export default function KnockoutPage() {
   const hasKnockoutBracket = matchups.length > 0;
 
   // Compute effective matchups with picks propagated into downstream slots
+  // When no real bracket exists, use an empty skeleton for preview
   const effectiveMatchups = useMemo(
-    () => hasKnockoutBracket ? computeEffectiveMatchups(matchups, picks) : [],
+    () => hasKnockoutBracket ? computeEffectiveMatchups(matchups, picks) : generateEmptyBracket(),
     [matchups, picks, hasKnockoutBracket],
   );
 
@@ -220,58 +221,48 @@ export default function KnockoutPage() {
         </Box>
       )}
 
+      <Box ref={printRef} sx={!hasKnockoutBracket ? { opacity: 0.4, pointerEvents: 'none' } : undefined}>
+        {isMobile ? (
+          <MobileBracket
+            matchups={effectiveMatchups}
+            picks={picks}
+            onPick={disabled || !hasKnockoutBracket ? undefined : handlePick}
+            readOnly={disabled || !hasKnockoutBracket}
+            results={results?.knockout}
+            countryCodeMap={countryCodeMap}
+          />
+        ) : (
+          <KnockoutBracket
+            matchups={effectiveMatchups}
+            picks={picks}
+            onPick={disabled || !hasKnockoutBracket ? undefined : handlePick}
+            readOnly={disabled || !hasKnockoutBracket}
+            results={results?.knockout}
+            countryCodeMap={countryCodeMap}
+          />
+        )}
+      </Box>
+
       {hasKnockoutBracket && (
-        <>
-          <Box ref={printRef}>
-            {isMobile ? (
-              <MobileBracket
-                matchups={effectiveMatchups}
-                picks={picks}
-                onPick={disabled ? undefined : handlePick}
-                readOnly={disabled}
-                results={results?.knockout}
-                countryCodeMap={countryCodeMap}
-              />
-            ) : (
-              <KnockoutBracket
-                matchups={effectiveMatchups}
-                picks={picks}
-                onPick={disabled ? undefined : handlePick}
-                readOnly={disabled}
-                results={results?.knockout}
-                countryCodeMap={countryCodeMap}
-              />
-            )}
-          </Box>
-
-          <Box className="no-print" sx={{ display: 'flex', alignItems: 'center', gap: 3, mt: 3, flexWrap: 'wrap' }}>
-            <TextField
-              label="Tiebreaker: Total goals in Final"
-              type="number"
-              value={tiebreaker}
-              onChange={(e) => setTiebreaker(e.target.value)}
-              disabled={disabled}
-              size="small"
-              slotProps={{ htmlInput: { min: 0 } }}
-              sx={{ width: 280 }}
-            />
-            <Button
-              variant="contained"
-              size="large"
-              startIcon={<SaveIcon />}
-              onClick={handleSave}
-              disabled={disabled || saving}
-            >
-              {saving ? 'Saving…' : 'Save Knockout Picks'}
-            </Button>
-          </Box>
-        </>
-      )}
-
-      {!hasKnockoutBracket && (
-        <Box sx={{ textAlign: 'center', py: 4 }}>
-          <Button component={Link} href="/bracket" variant="contained">
-            Back to Group Predictions
+        <Box className="no-print" sx={{ display: 'flex', alignItems: 'center', gap: 3, mt: 3, flexWrap: 'wrap' }}>
+          <TextField
+            label="Tiebreaker: Total goals in Final"
+            type="number"
+            value={tiebreaker}
+            onChange={(e) => setTiebreaker(e.target.value)}
+            disabled={disabled}
+            size="small"
+            slotProps={{ htmlInput: { min: 0 } }}
+            sx={{ width: 280 }}
+          />
+          <Button
+            variant="contained"
+            size="large"
+            startIcon={<SaveIcon />}
+            onClick={handleSave}
+            disabled={disabled || saving}
+          >
+            {saving ? 'Saving…' : 'Save Knockout Picks'}
           </Button>
         </Box>
       )}

@@ -1002,7 +1002,7 @@
       "title": "Fix knockout bracket page: always show bracket, fix visual updates on pick",
       "spec": "specs/bracket.md",
       "priority": 39,
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "TASK-032"
       ],

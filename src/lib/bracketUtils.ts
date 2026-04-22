@@ -20,6 +20,19 @@ const ROUND_LABELS: Record<number, string> = {
 
 export { ROUND_R32, ROUND_R16, ROUND_QF, ROUND_SF, ROUND_3RD, ROUND_FINAL, ROUND_LABELS };
 
+/** Generate an empty bracket skeleton with all 32 matchup slots but no teams. */
+export function generateEmptyBracket(): KnockoutMatchup[] {
+  const empty = (id: string, round: number): KnockoutMatchup => ({ id, round, teamA: null, teamB: null, winner: null });
+  return [
+    ...Array.from({ length: 16 }, (_, i) => empty(`R32-${i + 1}`, ROUND_R32)),
+    ...Array.from({ length: 8 }, (_, i) => empty(`R16-${i + 1}`, ROUND_R16)),
+    ...Array.from({ length: 4 }, (_, i) => empty(`QF-${i + 1}`, ROUND_QF)),
+    empty('SF-1', ROUND_SF), empty('SF-2', ROUND_SF),
+    empty('3RD', ROUND_3RD),
+    empty('FINAL', ROUND_FINAL),
+  ];
+}
+
 /**
  * Clear all downstream picks that depend on the old winner of a changed matchup.
  * When a user changes their pick for a matchup, any later-round picks that had
@@ -62,8 +75,27 @@ export function getMatchupsByRound(
 }
 
 /**
+ * Resolve the winner of a feeder matchup: actual result first, then user pick.
+ */
+function resolveWinner(feederMatchup: KnockoutMatchup | undefined, feederId: string, picks: Record<string, string>): string | null {
+  return feederMatchup?.winner ?? picks[feederId] ?? null;
+}
+
+/**
+ * Resolve the loser of a feeder matchup (for 3rd place match).
+ * Only possible when we know both teams and the winner.
+ */
+function resolveLoser(feederMatchup: KnockoutMatchup | undefined, feederId: string, picks: Record<string, string>): string | null {
+  if (!feederMatchup?.teamA || !feederMatchup?.teamB) return null;
+  const winner = resolveWinner(feederMatchup, feederId, picks);
+  if (!winner) return null;
+  return winner === feederMatchup.teamA ? feederMatchup.teamB : feederMatchup.teamA;
+}
+
+/**
  * Compute effective matchups by propagating user picks into downstream teamA/teamB slots.
  * When a user picks a winner for R32-1, that team appears as teamA in R16-1, etc.
+ * The 3RD place match receives the losers of the two SFs.
  */
 export function computeEffectiveMatchups(
   matchups: KnockoutMatchup[],
@@ -80,11 +112,18 @@ export function computeEffectiveMatchups(
     if (!feeders) continue;
     const [feederA, feederB] = feeders;
     const effective = matchupMap.get(m.id)!;
-    // teamA = winner of feeder A (from actual results or user pick)
     const feederAMatchup = matchupMap.get(feederA);
     const feederBMatchup = matchupMap.get(feederB);
-    effective.teamA = feederAMatchup?.winner ?? picks[feederA] ?? m.teamA;
-    effective.teamB = feederBMatchup?.winner ?? picks[feederB] ?? m.teamB;
+
+    if (m.id === '3RD') {
+      // 3rd place match: losers of the two semifinals
+      effective.teamA = resolveLoser(feederAMatchup, feederA, picks) ?? m.teamA;
+      effective.teamB = resolveLoser(feederBMatchup, feederB, picks) ?? m.teamB;
+    } else {
+      // Normal: winners advance
+      effective.teamA = resolveWinner(feederAMatchup, feederA, picks) ?? m.teamA;
+      effective.teamB = resolveWinner(feederBMatchup, feederB, picks) ?? m.teamB;
+    }
   }
 
   return [...matchupMap.values()];

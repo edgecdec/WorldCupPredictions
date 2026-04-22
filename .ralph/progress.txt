@@ -757,3 +757,15 @@
 - KnockoutBracket.tsx and MobileBracket.tsx: pass `isChampionPick` to Final matchup.
 - No external animation libraries — pure CSS transitions/keyframes only.
 - Nova Act test skipped due to daily quota exceeded (external limitation).
+
+## TASK-090: Fix knockout bracket page - always show bracket, fix visual updates on pick
+- Date: 2026-04-21
+- Changes:
+  1. Added `generateEmptyBracket()` to bracketUtils.ts — creates a 32-matchup skeleton with all slots empty, used when no real knockout bracket exists yet.
+  2. Updated knockout page to always render the bracket structure (dimmed/read-only when no real bracket), with info banner above.
+  3. Fixed `computeEffectiveMatchups()` — the 3RD place match was incorrectly receiving SF winners instead of SF losers. Added `resolveLoser()` helper to propagate the correct teams.
+  4. Removed the separate "Back to Group Predictions" block since the bracket is always visible now.
+- Lessons:
+  - The 3RD place match and FINAL both feed from SF-1/SF-2, but 3RD needs losers while FINAL needs winners. Always check special cases in bracket propagation logic.
+  - Nova Act gets stuck on onboarding guide popups — navigate directly to URLs instead of clicking through UI when testing specific pages.
+  - `generateEmptyBracket()` should be called inside `useMemo` to avoid creating new array references on every render.

@@ -996,6 +996,17 @@
         "TASK-024"
       ],
       "description": "Redesign the ThirdPlacePicker component. Instead of toggleable Chips, show the 12 third-place teams as a vertical list ordered by group (A through L). Each row should display the same info as the GroupPrediction cards: flag, team name, pot seed chip, FIFA ranking, and the group they came from (e.g. 'Group A - 3rd'). Add a checkbox or toggle on each row to select/deselect that team as advancing. Selected teams get a green background (advancing), unselected get a dimmed/red background (eliminated). Keep the 8/12 counter prominently displayed. The list format makes it much clearer which teams are being picked since users can see all the context (ranking, group) rather than just a name chip. Maintain the same onChange(selected: string[]) API so the bracket page doesn't need changes."
+    },
+    {
+      "id": "TASK-090",
+      "title": "Fix knockout bracket page: always show bracket, fix visual updates on pick",
+      "spec": "specs/bracket.md",
+      "priority": 39,
+      "status": "open",
+      "dependencies": [
+        "TASK-032"
+      ],
+      "description": "Two issues with /bracket/knockout: (1) When knockout bracket hasn't been generated yet, the page shows a blocking message and hides everything. Instead, always show the bracket page structure with an info banner at the top saying 'The knockout bracket will be available after the group stage ends on [date]. Come back then to fill out your picks!' but still let users see the empty bracket layout so they understand what's coming. If the bracket IS generated, show it normally. (2) When users click to pick a winner in a matchup, the bracket should visually update immediately \u2014 the winning team should appear in the next round's matchup slot. Verify that the KnockoutBracket component properly propagates picks through the bracket visually (winner of R32-1 appears as teamA or teamB in the corresponding R16 matchup). Debug by checking if the Matchup component receives updated teamA/teamB props when upstream picks change. Test with Nova Act: log in, go to /bracket/knockout, pick a winner in an R32 match, verify the team appears in the R16 slot."
     }
   ]
 }

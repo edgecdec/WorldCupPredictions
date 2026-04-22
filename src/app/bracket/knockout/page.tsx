@@ -4,6 +4,8 @@ import { Box, Button, Typography, Alert, CircularProgress, TextField, useMediaQu
 import SaveIcon from '@mui/icons-material/Save';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import LockIcon from '@mui/icons-material/Lock';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import { Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from '@mui/material';
 import Link from 'next/link';
 import KnockoutBracket from '@/components/bracket/KnockoutBracket';
 import MobileBracket from '@/components/bracket/MobileBracket';
@@ -34,6 +36,7 @@ export default function KnockoutPage() {
   const [simpleMode, setSimpleMode] = useState(false);
   const [lockedGroup, setLockedGroup] = useState<string | null>(null);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -252,8 +255,33 @@ export default function KnockoutPage() {
           <Button variant="outlined" startIcon={<TouchAppIcon />} onClick={() => setSimpleMode(true)}>
             Fill Step-by-Step
           </Button>
+          <Button
+            variant="outlined"
+            color="error"
+            size="small"
+            startIcon={<RestartAltIcon />}
+            onClick={() => setConfirmClear(true)}
+            disabled={Object.keys(picks).length === 0}
+          >
+            Clear All Picks
+          </Button>
         </Box>
       )}
+
+      <Dialog open={confirmClear} onClose={() => setConfirmClear(false)}>
+        <DialogTitle>Clear All Knockout Picks?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            This will remove all your knockout picks. This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmClear(false)}>Cancel</Button>
+          <Button color="error" onClick={() => { setPicks({}); setConfirmClear(false); }}>
+            Clear All
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Box ref={printRef} sx={!hasKnockoutBracket ? { opacity: 0.4, pointerEvents: 'none' } : undefined}>
         {isMobile ? (

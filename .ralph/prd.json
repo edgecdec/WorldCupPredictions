@@ -1112,7 +1112,7 @@
       "title": "Add clear/reset picks button to knockout bracket page",
       "spec": "specs/bracket.md",
       "priority": 39,
-      "status": "open",
+      "status": "done",
       "dependencies": [],
       "description": "Add a 'Clear All Picks' button to the /bracket/knockout page that resets all knockout picks to empty. Use a MUI Button with a RestartAlt or Delete icon, placed near the save button area. Show a confirmation dialog before clearing ('Are you sure? This will remove all your knockout picks.'). On confirm, set picks to empty object {} and trigger autosave. Also add a 'Clear All' button to the /bracket group predictions page that resets all group orders to default (pot order) and clears third-place picks. Both buttons should be disabled when the bracket is locked."
     },

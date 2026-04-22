@@ -843,3 +843,11 @@
 - Fix: Changed `[THIRD_PLACE_FEED], [FINAL_FEED]` to `THIRD_PLACE_FEED, FINAL_FEED` (no wrapping).
 - The `as [string, string, string]` TypeScript cast on the destructured value hid the runtime type error — be cautious with type assertions that suppress real bugs.
 - Lesson: When building arrays from mixed sources (spread arrays + individual elements), verify the nesting level. Unit test with inline JS was the fastest way to confirm the bug and fix.
+
+## TASK-100: Add clear/reset picks buttons to bracket pages (2026-04-21)
+- Added "Clear All Picks" button (red outlined, RestartAltIcon) to knockout bracket page with confirmation dialog
+- Added "Clear All" button to group predictions page that resets group orders to default (pot order) and clears third-place picks
+- Both buttons disabled when bracket is locked
+- Knockout clear button disabled when no picks exist
+- Nova Act verified both buttons visible and functional on production
+- Lesson: MUI Dialog/DialogActions imports need to be added alongside Button imports when adding confirmation dialogs

@@ -1,10 +1,11 @@
 'use client';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Box, Button, Typography, Alert, CircularProgress, TextField, IconButton, Tooltip, Snackbar, Tabs, Tab } from '@mui/material';
+import { Box, Button, Typography, Alert, CircularProgress, TextField, IconButton, Tooltip, Snackbar, Tabs, Tab, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import ShareIcon from '@mui/icons-material/Share';
 import LockIcon from '@mui/icons-material/Lock';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import Link from 'next/link';
 import GroupPrediction from '@/components/bracket/GroupPrediction';
 import ThirdPlacePicker, { type ThirdPlaceTeamDetail } from '@/components/bracket/ThirdPlacePicker';
@@ -41,6 +42,7 @@ export default function BracketPage() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [lockedGroup, setLockedGroup] = useState<string | null>(null);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -331,8 +333,42 @@ export default function BracketPage() {
               </Button>
               <Typography variant="body2" color="text.secondary">Autofill:</Typography>
               <AutofillButtons onAutofill={handleAutofill} disabled={disabled} />
+              <Button
+                variant="outlined"
+                color="error"
+                size="small"
+                startIcon={<RestartAltIcon />}
+                onClick={() => setConfirmClear(true)}
+              >
+                Clear All
+              </Button>
             </Box>
           )}
+
+          <Dialog open={confirmClear} onClose={() => setConfirmClear(false)}>
+            <DialogTitle>Clear All Group Predictions?</DialogTitle>
+            <DialogContent>
+              <DialogContentText>
+                This will reset all group orders to default and clear your third-place picks. This action cannot be undone.
+              </DialogContentText>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setConfirmClear(false)}>Cancel</Button>
+              <Button color="error" onClick={() => {
+                if (bracketData) {
+                  const defaults: Record<string, string[]> = {};
+                  for (const g of bracketData.groups) {
+                    defaults[g.name] = g.teams.map((t) => t.name);
+                  }
+                  setGroupOrders(defaults);
+                }
+                setThirdPlacePicks([]);
+                setConfirmClear(false);
+              }}>
+                Clear All
+              </Button>
+            </DialogActions>
+          </Dialog>
 
           <Box ref={printRef}>
             <Box

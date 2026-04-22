@@ -851,3 +851,12 @@
 - Knockout clear button disabled when no picks exist
 - Nova Act verified both buttons visible and functional on production
 - Lesson: MUI Dialog/DialogActions imports need to be added alongside Button imports when adding confirmation dialogs
+
+## TASK-101: Create generic bracket engine (2026-04-21)
+- Created src/lib/bracketEngine.ts with 6 core functions: generateGenericBracket, getFeederIds, getDownstreamIds, getRoundLabel, computeEffectiveMatchups, cascadeClear.
+- All functions parameterized by teamCount — works for 8, 16, 32, 64 team brackets.
+- Feeder math is pure: R{r}-{p} fed by R{r-1}-{2p-1} and R{r-1}-{2p}. No lookup tables.
+- 3RD place match correctly receives SF losers, Final receives SF winners.
+- Added 17 unit tests in tests/bracketEngine.test.ts — all pass.
+- Existing knockoutBracket.ts and bracketUtils.ts left untouched — TASK-102/103 will migrate consumers.
+- Lesson: Keeping the generic engine as a standalone module with no imports from the FIFA-specific code makes it cleanly reusable. The teamCount parameter is all that's needed to derive the entire bracket structure.

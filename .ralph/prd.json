@@ -1121,7 +1121,7 @@
       "title": "Create generic bracket engine: generation + feeder math",
       "spec": "specs/bracket.md",
       "priority": 37,
-      "status": "open",
+      "status": "done",
       "dependencies": [],
       "description": "Refactor src/lib/knockoutBracket.ts and src/lib/bracketUtils.ts to use a generic bracket engine parameterized by team count. Create src/lib/bracketEngine.ts with: (1) generateGenericBracket(teamCount: number, includeThirdPlace?: boolean) \u2014 creates all matchups with IDs 'R{round}-{position}' plus optional '3RD'. Total rounds = log2(teamCount). (2) getFeederIds(matchupId) \u2014 returns [R{r-1}-{2p-1}, R{r-1}-{2p}] using pure math, no lookup tables. For '3RD', returns the two SF match IDs (losers). For 'FINAL' (last round), returns the two SF match IDs (winners). (3) getDownstreamIds(matchupId) \u2014 walks forward from a match to find all dependent matches. (4) getRoundLabel(round, totalRounds) \u2014 'Round of 32', 'Round of 16', 'Quarterfinals', 'Semifinals', 'Final'. (5) computeEffectiveMatchups(matchups, picks) \u2014 generic propagation: for each match after round 0, resolve teamA from winner of feeder A, teamB from winner of feeder B. For 3RD, resolve from LOSERS of the two SF feeders. This is the critical fix \u2014 when a user picks SF-1 winner, that winner must appear in the Final AND the loser must appear in 3RD. (6) cascadeClear(picks, changedMatchupId, matchups) \u2014 clear all downstream picks when a pick changes. Works for any bracket size. Keep the existing FIFA-specific R32 seeding logic in knockoutBracket.ts but have it output matchups using the generic ID scheme. Export everything for reuse."
     },

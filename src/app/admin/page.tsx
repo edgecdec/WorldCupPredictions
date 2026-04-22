@@ -169,6 +169,27 @@ export default function AdminPage() {
     }
   };
 
+  const handleRegenerateBracket = async () => {
+    setError("");
+    setSuccess("");
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/admin", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "regenerate_bracket" }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "Failed to regenerate bracket");
+      setSuccess("Knockout bracket regenerated from current group results!");
+      fetchTournament();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (authLoading || loading) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
@@ -262,6 +283,26 @@ export default function AdminPage() {
           existingResults={tournament.results_data.knockout ?? null}
           onSaved={fetchTournament}
         />
+      )}
+
+      {tournament?.results_data?.groupStage && (
+        <Card sx={{ mb: 4 }}>
+          <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "center" }}>
+            <Typography variant="h6">Regenerate Knockout Bracket</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Re-run bracket generation from current group stage results. Use after fixing bracket code or correcting group results.
+            </Typography>
+            <Button
+              variant="contained"
+              color="warning"
+              onClick={handleRegenerateBracket}
+              disabled={submitting}
+              startIcon={submitting ? <CircularProgress size={20} color="inherit" /> : null}
+            >
+              Regenerate Bracket
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
       <GroupManagement />

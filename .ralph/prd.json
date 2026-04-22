@@ -1092,7 +1092,7 @@
       "title": "Regenerate knockout bracket in DB with corrected matchups",
       "spec": "specs/tournament-structure.md",
       "priority": 39,
-      "status": "open",
+      "status": "done",
       "dependencies": [
         "TASK-096"
       ],

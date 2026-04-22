@@ -84,6 +84,10 @@ export async function PUT(request: Request) {
     return updateBracketData(body);
   }
 
+  if (action === "regenerate_bracket") {
+    return regenerateBracket();
+  }
+
   return NextResponse.json({ ok: false, error: "Unknown action" }, { status: 400 });
 }
 
@@ -104,6 +108,43 @@ function updateBracketData(body: { bracket_data: unknown }) {
     row.id,
   );
   return NextResponse.json({ ok: true });
+}
+
+function regenerateBracket() {
+  const db = getDb();
+  const row = db.prepare("SELECT * FROM tournaments ORDER BY year DESC LIMIT 1").get() as
+    | { id: string; bracket_data: string; results_data: string | null }
+    | undefined;
+
+  if (!row) {
+    return NextResponse.json({ ok: false, error: "No tournament found" }, { status: 404 });
+  }
+
+  const existingResults: TournamentResults = row.results_data
+    ? JSON.parse(row.results_data)
+    : {};
+
+  if (!existingResults.groupStage) {
+    return NextResponse.json(
+      { ok: false, error: "No group stage results to regenerate bracket from" },
+      { status: 400 },
+    );
+  }
+
+  const bracketData = parseBracketData(row.bracket_data);
+  const knockoutBracket = generateKnockoutBracket(existingResults.groupStage, bracketData);
+
+  const updatedResults: TournamentResults = {
+    ...existingResults,
+    knockoutBracket,
+  };
+
+  db.prepare("UPDATE tournaments SET results_data = ? WHERE id = ?").run(
+    JSON.stringify(updatedResults),
+    row.id,
+  );
+
+  return NextResponse.json({ ok: true, results: updatedResults });
 }
 
 function saveGroupResults(body: {

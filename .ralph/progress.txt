@@ -784,3 +784,9 @@
 - Changes: knockoutBracket.ts (getNextMatchupIds returns both FINAL and 3RD for SF matches, simplified getDownstreamMatchupIds), bracketUtils.ts (cascadeClear now clears 3RD pick when SF loser changes), KnockoutBracket.tsx (Final gets gold border and larger label, 3rd place gets reduced opacity)
 - Key insight: computeEffectiveMatchups already correctly handled 3RD (resolveLoser) and FINAL (resolveWinner). The main bugs were: (1) getNextMatchupId only returned FINAL for SF matches, (2) cascadeClear only cleared the old winner from downstream but not the old loser from 3RD
 - Lesson: When cascade clearing picks, SF matches are special because they feed both a winner (to FINAL) and a loser (to 3RD). Need to track both when clearing.
+
+## TASK-098: Regenerate knockout bracket in DB with corrected matchups (2026-04-21)
+- Added `regenerate_bracket` action to admin PUT endpoint that re-runs `generateKnockoutBracket()` from existing group stage results
+- Added "Regenerate Bracket" button on admin page (visible when group stage results exist)
+- Minimal change: one new function in admin route, one handler + one Card section in admin page
+- Lesson: Nova Act `ActResult` has no `response` attribute — the return value from `return("Yes")` is not directly accessible as a field. For future tests, just check `result.metadata` or use a simpler assertion pattern.

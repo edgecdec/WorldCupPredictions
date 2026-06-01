@@ -105,7 +105,18 @@ export default function BracketPage() {
   }, [authLoading, user]);
 
   const handleGroupChange = useCallback((groupName: string, newOrder: string[]) => {
-    setGroupOrders((prev) => ({ ...prev, [groupName]: newOrder }));
+    setGroupOrders((prev) => {
+      const oldOrder = prev[groupName];
+      const oldThird = oldOrder?.[2];
+      const newThird = newOrder[2];
+      if (oldThird && newThird && oldThird !== newThird) {
+        setThirdPlacePicks((picks) => {
+          if (!picks.includes(oldThird)) return picks;
+          return picks.map((t) => (t === oldThird ? newThird : t));
+        });
+      }
+      return { ...prev, [groupName]: newOrder };
+    });
   }, []);
 
   const bracketData = tournament?.bracket_data as BracketData | undefined;

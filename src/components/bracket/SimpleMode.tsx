@@ -76,7 +76,18 @@ export default function SimpleMode({ open, onClose, bracketData, initialGroupOrd
     setCurrentPicks(newPicks);
 
     if (newPicks.length === 4 && currentGroup) {
-      setGroupOrders((prev) => ({ ...prev, [currentGroup.name]: newPicks as unknown as string[] }));
+      setGroupOrders((prev) => {
+        const oldOrder = prev[currentGroup.name];
+        const oldThird = oldOrder?.[2];
+        const newThird = newPicks[2];
+        if (oldThird && newThird && oldThird !== newThird) {
+          setThirdPlacePicks((picks) => {
+            if (!picks.includes(oldThird)) return picks;
+            return picks.map((t) => (t === oldThird ? newThird : t));
+          });
+        }
+        return { ...prev, [currentGroup.name]: newPicks as unknown as string[] };
+      });
       setTimeout(() => {
         setStep((s) => s + 1);
         setCurrentPicks([]);

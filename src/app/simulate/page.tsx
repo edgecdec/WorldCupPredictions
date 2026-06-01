@@ -9,10 +9,12 @@ import LockIcon from '@mui/icons-material/Lock';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { useAuth } from '@/hooks/useAuth';
 import { useTournamentSim, GROUPS } from '@/hooks/useTournamentSim';
-import type { BracketSlotResult } from '@/hooks/useTournamentSim';
+import type { BracketSlotResult, PlayerEntry } from '@/hooks/useTournamentSim';
 import AuthForm from '@/components/auth/AuthForm';
 import TeamFlag from '@/components/common/TeamFlag';
 import { PELE_RATINGS } from '@/lib/peleRatings';
+import type { ScoringSettings, GroupPrediction } from '@/types';
+import { DEFAULT_SCORING } from '@/types';
 
 const GROUP_NAMES = Object.keys(GROUPS);
 const TAB_GROUPS = 0;
@@ -86,11 +88,20 @@ function BracketSlot({ slot, numSims }: { slot: BracketSlotResult | undefined; n
   );
 }
 
+interface SimApiEntry {
+  username: string;
+  bracket_name: string;
+  group_predictions: GroupPrediction[];
+  third_place_picks: string[];
+  knockout_picks: Record<string, string>;
+}
+
 export default function SimulatePage() {
   const { user, loading: authLoading } = useAuth();
-  const { results, progress, running, numSims, rerun } = useTournamentSim();
   const [activeTab, setActiveTab] = useState(TAB_GROUPS);
   const [tournamentStarted, setTournamentStarted] = useState(false);
+  const [players, setPlayers] = useState<PlayerEntry[] | undefined>(undefined);
+  const [scoring, setScoring] = useState<ScoringSettings>(DEFAULT_SCORING);
 
   useEffect(() => {
     fetch('/api/tournaments')
@@ -102,6 +113,29 @@ export default function SimulatePage() {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    fetch('/api/simulate?group_id=everyone')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.entries) {
+          const mapped: PlayerEntry[] = (d.entries as SimApiEntry[])
+            .filter((e) => e.group_predictions.length > 0)
+            .map((e) => ({
+              key: `${e.username}|${e.bracket_name}`,
+              group_predictions: e.group_predictions,
+              third_place_picks: e.third_place_picks,
+              knockout_picks: e.knockout_picks,
+            }));
+          setPlayers(mapped.length > 0 ? mapped : undefined);
+        }
+        if (d.scoring) setScoring(d.scoring);
+      })
+      .catch(() => {});
+  }, [user]);
+
+  const { results, progress, running, numSims, rerun } = useTournamentSim(players, scoring);
 
   const slotMap = useMemo(() => {
     if (!results) return new Map<string, BracketSlotResult>();
@@ -297,6 +331,53 @@ export default function SimulatePage() {
                 </Table>
               </TableContainer>
             </Box>
+          )}
+
+          {/* Expected Standings */}
+          {results.playerScores && results.playerScores.length > 0 && (
+            <Paper sx={{ p: 2, mt: 3 }}>
+              <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>
+                Expected Standings
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                Based on {numSims.toLocaleString()} simulated tournaments, here is how each player&apos;s picks are expected to perform.
+              </Typography>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ py: 0.5, px: 1 }}>#</TableCell>
+                      <TableCell sx={{ py: 0.5, px: 1 }}>Player</TableCell>
+                      <TableCell align="right" sx={{ py: 0.5, px: 1 }}>Avg Score</TableCell>
+                      <TableCell align="right" sx={{ py: 0.5, px: 1 }}>Avg Rank</TableCell>
+                      <TableCell align="right" sx={{ py: 0.5, px: 1 }}>Win %</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {results.playerScores.map((p, i) => {
+                      const [username, bracketName] = p.key.split('|');
+                      const isCurrentUser = username === user?.username;
+                      return (
+                        <TableRow key={p.key} sx={isCurrentUser ? { bgcolor: 'action.selected' } : undefined}>
+                          <TableCell sx={{ py: 0.5, px: 1 }}>{i + 1}</TableCell>
+                          <TableCell sx={{ py: 0.5, px: 1 }}>
+                            <Typography variant="body2" sx={{ fontWeight: isCurrentUser ? 700 : 400 }}>
+                              {username}{bracketName ? ` — ${bracketName}` : ''}
+                              {isCurrentUser && <Chip label="You" size="small" sx={{ ml: 0.5, height: 18, fontSize: '0.65rem' }} />}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="right" sx={{ py: 0.5, px: 1, fontWeight: 700 }}>{p.avgScore.toFixed(1)}</TableCell>
+                          <TableCell align="right" sx={{ py: 0.5, px: 1 }}>{p.avgRank.toFixed(1)}</TableCell>
+                          <TableCell align="right" sx={{ py: 0.5, px: 1, color: p.winPct > 0 ? 'success.main' : 'text.secondary', fontWeight: p.winPct > 0 ? 700 : 400 }}>
+                            {p.winPct > 0 ? `${p.winPct}%` : '—'}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
           )}
         </>
       )}

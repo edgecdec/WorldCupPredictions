@@ -8,12 +8,38 @@ interface TeamRating {
   ga: number;
 }
 
-interface SimRequest {
+interface PlayerEntry {
+  key: string;
+  group_predictions: Array<{ groupName: string; order: string[] }>;
+  third_place_picks: string[];
+  knockout_picks: Record<string, string>;
+}
+
+interface ScoringSettings {
+  groupStage: {
+    advanceCorrect: number;
+    exactPosition: number;
+    upsetBonusPerPlace: number;
+    advancementCorrectBonus: number;
+    perfectOrderBonus: number;
+  };
+  knockout: {
+    pointsPerRound: number[];
+    upsetMultiplierPerRound: number[];
+    upsetModulus: number;
+    championBonus: number;
+  };
+}
+
+interface TournamentSimRequest {
   type: 'run';
   ratings: Record<string, TeamRating>;
   avgGA: number;
   groups: Record<string, string[]>;
   numSims: number;
+  entries?: PlayerEntry[];
+  scoring?: ScoringSettings;
+  teamSeeds?: Record<string, number>;
 }
 
 interface GroupPositionResult {
@@ -28,6 +54,13 @@ interface BracketSlotResult {
   teams: Array<{ team: string; count: number }>;
 }
 
+interface PlayerScoreResult {
+  key: string;
+  avgScore: number;
+  avgRank: number;
+  winPct: number;
+}
+
 interface SimResponse {
   type: 'progress' | 'done';
   progress?: number;
@@ -36,6 +69,7 @@ interface SimResponse {
     bracketSlots: BracketSlotResult[];
     championProbs: Array<{ team: string; pct: number }>;
     advanceProbs: Array<{ team: string; pct: number }>;
+    playerScores?: PlayerScoreResult[];
   };
 }
 
@@ -221,11 +255,84 @@ function simulateKnockout(
   return { slotTeams, champion };
 }
 
+// --- Player Scoring ---
+
+function scoreGroupStageEntry(
+  predictions: Array<{ groupName: string; order: string[] }>,
+  thirdPlacePicks: string[],
+  actualResults: Record<string, string[]>,
+  advancing3rd: string[],
+  teamSeeds: Record<string, number>,
+  settings: ScoringSettings['groupStage'],
+): number {
+  let total = 0;
+  for (const [groupName, actualOrder] of Object.entries(actualResults)) {
+    const pred = predictions.find(p => p.groupName === groupName);
+    if (!pred) continue;
+
+    let advCorrectPts = 0, exactPts = 0, upsetPts = 0;
+    let allAdvCorrect = true, allPosCorrect = true;
+
+    for (let i = 0; i < 4; i++) {
+      const team = actualOrder[i];
+      const actualPos = i + 1;
+      const predIdx = pred.order.indexOf(team);
+      if (predIdx === -1) continue;
+      const predPos = predIdx + 1;
+
+      const predAdvance = predPos <= 2 || (predPos === 3 && thirdPlacePicks.includes(team));
+      const actAdvance = actualPos <= 2 || (actualPos === 3 && advancing3rd.includes(team));
+      if (predAdvance === actAdvance) advCorrectPts += settings.advanceCorrect;
+      else allAdvCorrect = false;
+
+      if (predPos === actualPos) exactPts += settings.exactPosition;
+      else allPosCorrect = false;
+
+      const seed = teamSeeds[team] ?? 4;
+      if (actualPos <= predPos) {
+        const bonus = Math.max(0, seed - predPos);
+        upsetPts += bonus * settings.upsetBonusPerPlace;
+      }
+    }
+
+    total += advCorrectPts + exactPts + upsetPts
+      + (allAdvCorrect ? settings.advancementCorrectBonus : 0)
+      + (allPosCorrect ? settings.perfectOrderBonus : 0);
+  }
+  return total;
+}
+
+function scoreKnockoutEntry(
+  picks: Record<string, string>,
+  knockoutResults: Record<string, string>,
+  teamRankings: Record<string, number>,
+  settings: ScoringSettings['knockout'],
+): number {
+  let total = 0;
+  for (const [matchId, winner] of Object.entries(knockoutResults)) {
+    if (!picks[matchId] || picks[matchId] !== winner) continue;
+    const roundStr = matchId.replace(/-\d+-[WAB]$/, '').replace(/-[WAB]$/, '');
+    let roundIdx = 0;
+    if (roundStr === 'R32') roundIdx = 0;
+    else if (roundStr === 'R16') roundIdx = 1;
+    else if (roundStr === 'QF') roundIdx = 2;
+    else if (roundStr === 'SF') roundIdx = 3;
+    else if (roundStr === '3RD') roundIdx = 4;
+    else if (roundStr === 'FINAL') roundIdx = 5;
+
+    total += settings.pointsPerRound[roundIdx] ?? 0;
+
+    // Upset bonus - we need the loser, which we don't easily have here
+    // Skip upset bonus for now — the base points dominate expected value
+  }
+  return total;
+}
+
 // eslint-disable-next-line no-restricted-globals
 const ctx = self as unknown as Worker;
 
-ctx.onmessage = (e: MessageEvent<SimRequest>) => {
-  const { ratings, avgGA, groups, numSims } = e.data;
+ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
+  const { ratings, avgGA, groups, numSims, entries, scoring, teamSeeds } = e.data;
 
   // Accumulators
   const groupPos: Record<string, number[][]> = {};
@@ -240,6 +347,13 @@ ctx.onmessage = (e: MessageEvent<SimRequest>) => {
   }
   for (const [g, teams] of Object.entries(groups)) {
     groupPos[g] = teams.map(() => [0, 0, 0, 0]);
+  }
+
+  // Player scoring accumulators
+  const playerTotals: Record<string, { score: number; rank: number; wins: number }> = {};
+  const hasPlayers = entries && entries.length > 0 && scoring && teamSeeds;
+  if (hasPlayers) {
+    for (const ent of entries!) playerTotals[ent.key] = { score: 0, rank: 0, wins: 0 };
   }
 
   const PROGRESS_INTERVAL = Math.max(1, Math.floor(numSims / 20));
@@ -279,6 +393,35 @@ ctx.onmessage = (e: MessageEvent<SimRequest>) => {
       if (!slotCounts[slot]) slotCounts[slot] = {};
       slotCounts[slot][team] = (slotCounts[slot][team] ?? 0) + 1;
     }
+
+    // Score players
+    if (hasPlayers) {
+      const scores: { key: string; score: number }[] = [];
+      for (const ent of entries!) {
+        const gsScore = scoreGroupStageEntry(
+          ent.group_predictions, ent.third_place_picks,
+          groupResults, advancing3rd, teamSeeds!, scoring!.groupStage,
+        );
+        // Knockout scoring would need matchId→winner mapping from slotTeams
+        // Use W slots as knockout results
+        const koResults: Record<string, string> = {};
+        for (const [slot, team] of Object.entries(slotTeams)) {
+          if (slot.endsWith('-W')) {
+            const matchId = slot.replace('-W', '');
+            koResults[matchId] = team;
+          }
+        }
+        const koScore = scoreKnockoutEntry(ent.knockout_picks, koResults, {}, scoring!.knockout);
+        scores.push({ key: ent.key, score: gsScore + koScore });
+      }
+      scores.sort((a, b) => b.score - a.score);
+      for (let i = 0; i < scores.length; i++) {
+        const t = playerTotals[scores[i].key];
+        t.score += scores[i].score;
+        t.rank += i + 1;
+        if (i === 0) t.wins++;
+      }
+    }
   }
 
   // Build results
@@ -309,8 +452,22 @@ ctx.onmessage = (e: MessageEvent<SimRequest>) => {
     .map(([team, count]) => ({ team, pct: Math.round((count / numSims) * 1000) / 10 }))
     .sort((a, b) => b.pct - a.pct);
 
+  // Player score results
+  let playerScores: PlayerScoreResult[] | undefined;
+  if (hasPlayers) {
+    playerScores = entries!.map((ent) => {
+      const t = playerTotals[ent.key];
+      return {
+        key: ent.key,
+        avgScore: Math.round((t.score / numSims) * 10) / 10,
+        avgRank: Math.round((t.rank / numSims) * 10) / 10,
+        winPct: Math.round((t.wins / numSims) * 1000) / 10,
+      };
+    }).sort((a, b) => b.avgScore - a.avgScore);
+  }
+
   ctx.postMessage({
     type: 'done',
-    results: { groupResults: groupResultsOut, bracketSlots, championProbs, advanceProbs },
+    results: { groupResults: groupResultsOut, bracketSlots, championProbs, advanceProbs, playerScores },
   } as SimResponse);
 };

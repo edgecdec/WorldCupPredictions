@@ -55,6 +55,11 @@ export default function SimpleMode({ open, onClose, bracketData, initialGroupOrd
     });
   }, [groups, groupOrders]);
 
+  const validThirdPlacePicks = useMemo(
+    () => thirdPlacePicks.filter((t) => thirdPlaceTeams.includes(t)),
+    [thirdPlacePicks, thirdPlaceTeams],
+  );
+
   const thirdPlaceTeamDetails = useMemo(() => {
     const details: Record<string, ThirdPlaceTeamDetail> = {};
     for (const g of groups) {
@@ -108,8 +113,8 @@ export default function SimpleMode({ open, onClose, bracketData, initialGroupOrd
   }, [isThirdPlaceStep, step, groups.length]);
 
   const handleExit = useCallback(() => {
-    onClose(groupOrders, thirdPlacePicks);
-  }, [onClose, groupOrders, thirdPlacePicks]);
+    onClose(groupOrders, validThirdPlacePicks);
+  }, [onClose, groupOrders, validThirdPlacePicks]);
 
   const swipeHandlers = useSwipe(handleSkip, handleBack);
 
@@ -156,7 +161,7 @@ export default function SimpleMode({ open, onClose, bracketData, initialGroupOrd
               </Typography>
               <ThirdPlacePicker
                 thirdPlaceTeams={thirdPlaceTeams}
-                selected={thirdPlacePicks}
+                selected={validThirdPlacePicks}
                 onChange={setThirdPlacePicks}
                 countryCodeMap={countryCodeMap}
                 teamDetails={thirdPlaceTeamDetails}
@@ -252,7 +257,7 @@ export default function SimpleMode({ open, onClose, bracketData, initialGroupOrd
             <Button
               variant="contained"
               onClick={handleExit}
-              disabled={thirdPlacePicks.filter((t) => thirdPlaceTeams.includes(t)).length !== REQUIRED_THIRD_PLACE}
+              disabled={validThirdPlacePicks.length !== REQUIRED_THIRD_PLACE}
               sx={{ minHeight: 48, minWidth: 120 }}
             >
               Done

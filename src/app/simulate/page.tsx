@@ -1,10 +1,11 @@
 'use client';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Container, Typography, Box, LinearProgress, Paper, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, Tooltip, Grid, Chip,
-  Tabs, Tab, IconButton,
+  Tabs, Tab, IconButton, Alert,
 } from '@mui/material';
+import LockIcon from '@mui/icons-material/Lock';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { useAuth } from '@/hooks/useAuth';
 import { useTournamentSim, GROUPS } from '@/hooks/useTournamentSim';
@@ -89,6 +90,18 @@ export default function SimulatePage() {
   const { user, loading: authLoading } = useAuth();
   const { results, progress, running, numSims, rerun } = useTournamentSim();
   const [activeTab, setActiveTab] = useState(TAB_GROUPS);
+  const [tournamentStarted, setTournamentStarted] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/tournaments')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.ok && d.tournament?.lock_time_groups) {
+          setTournamentStarted(new Date() >= new Date(d.tournament.lock_time_groups));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const slotMap = useMemo(() => {
     if (!results) return new Map<string, BracketSlotResult>();
@@ -105,6 +118,17 @@ export default function SimulatePage() {
       <Container maxWidth="sm" sx={{ mt: 4 }}>
         <Typography variant="h4" gutterBottom>Tournament Forecast</Typography>
         <AuthForm />
+      </Container>
+    );
+  }
+
+  if (!tournamentStarted && !user.is_admin) {
+    return (
+      <Container maxWidth="sm" sx={{ mt: 4 }}>
+        <Alert icon={<LockIcon />} severity="info" sx={{ mt: 2 }}>
+          The tournament forecast will be available once the group stage begins on June 11.
+          Check back then to see simulation-powered probabilities for every team and match!
+        </Alert>
       </Container>
     );
   }

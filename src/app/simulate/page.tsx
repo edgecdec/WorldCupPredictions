@@ -2,7 +2,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import {
   Container, Typography, Box, LinearProgress, Paper, Table, TableBody,
-  TableCell, TableContainer, TableHead, TableRow, Grid, Chip,
+  TableCell, TableContainer, TableHead, TableRow, TableSortLabel, Grid, Chip,
   Tabs, Tab, IconButton,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -110,16 +110,46 @@ function computeTeamOutlook(
   return rows;
 }
 
+type OutlookSortKey = 'team' | 'reachR32' | 'reachR16' | 'reachQF' | 'reachSF' | 'reachFinal' | 'champion' | 'pele';
+
+const OUTLOOK_COLUMNS: Array<{ key: OutlookSortKey; label: string; align: 'left' | 'right'; bold?: boolean; muted?: boolean }> = [
+  { key: 'team', label: 'Team', align: 'left' },
+  { key: 'reachR32', label: 'R32', align: 'right' },
+  { key: 'reachR16', label: 'R16', align: 'right' },
+  { key: 'reachQF', label: 'QF', align: 'right' },
+  { key: 'reachSF', label: 'SF', align: 'right' },
+  { key: 'reachFinal', label: 'Final', align: 'right' },
+  { key: 'champion', label: 'Champion', align: 'right', bold: true },
+  { key: 'pele', label: 'PELE', align: 'right', muted: true },
+];
+
 function TeamOutlookTable({ bracketSlots, advanceProbs, championProbs, numSims }: {
   bracketSlots: Array<{ slotId: string; teams: Array<{ team: string; count: number }> }>;
   advanceProbs: Array<{ team: string; pct: number }>;
   championProbs: Array<{ team: string; pct: number }>;
   numSims: number;
 }) {
-  const rows = useMemo(
-    () => computeTeamOutlook(bracketSlots, advanceProbs, championProbs, numSims),
-    [bracketSlots, advanceProbs, championProbs, numSims],
-  );
+  const [sortKey, setSortKey] = useState<OutlookSortKey>('champion');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
+  const handleSort = (key: OutlookSortKey) => {
+    if (sortKey === key) {
+      setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortDir(key === 'team' ? 'asc' : 'desc');
+    }
+  };
+
+  const rows = useMemo(() => {
+    const all = computeTeamOutlook(bracketSlots, advanceProbs, championProbs, numSims);
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return [...all].sort((a, b) => {
+      if (sortKey === 'team') return a.team.localeCompare(b.team) * dir;
+      if (sortKey === 'pele') return ((PELE_RATINGS[a.team]?.pele ?? 0) - (PELE_RATINGS[b.team]?.pele ?? 0)) * dir;
+      return (a[sortKey] - b[sortKey]) * dir;
+    });
+  }, [bracketSlots, advanceProbs, championProbs, numSims, sortKey, sortDir]);
 
   const fmt = (n: number) => n >= 0.05 ? n.toFixed(1) : '<0.1';
   const cellColor = (n: number) => {
@@ -138,14 +168,21 @@ function TeamOutlookTable({ bracketSlots, advanceProbs, championProbs, numSims }
         <Table size="small" stickyHeader>
           <TableHead>
             <TableRow>
-              <TableCell sx={{ py: 0.5 }}>Team</TableCell>
-              <TableCell align="right" sx={{ py: 0.5 }}>R32</TableCell>
-              <TableCell align="right" sx={{ py: 0.5 }}>R16</TableCell>
-              <TableCell align="right" sx={{ py: 0.5 }}>QF</TableCell>
-              <TableCell align="right" sx={{ py: 0.5 }}>SF</TableCell>
-              <TableCell align="right" sx={{ py: 0.5 }}>Final</TableCell>
-              <TableCell align="right" sx={{ py: 0.5, fontWeight: 700 }}>Champion</TableCell>
-              <TableCell align="right" sx={{ py: 0.5, color: 'text.secondary' }}>PELE</TableCell>
+              {OUTLOOK_COLUMNS.map((col) => (
+                <TableCell
+                  key={col.key}
+                  align={col.align}
+                  sx={{ py: 0.5, fontWeight: col.bold ? 700 : undefined, color: col.muted ? 'text.secondary' : undefined }}
+                >
+                  <TableSortLabel
+                    active={sortKey === col.key}
+                    direction={sortKey === col.key ? sortDir : 'desc'}
+                    onClick={() => handleSort(col.key)}
+                  >
+                    {col.label}
+                  </TableSortLabel>
+                </TableCell>
+              ))}
             </TableRow>
           </TableHead>
           <TableBody>
@@ -172,6 +209,183 @@ function TeamOutlookTable({ bracketSlots, advanceProbs, championProbs, numSims }
         </Table>
       </TableContainer>
     </Paper>
+  );
+}
+
+type GroupSortKey = 'team' | 'pos0' | 'pos1' | 'pos2' | 'pos3' | 'advance';
+
+const GROUP_COLUMNS: Array<{ key: GroupSortKey; label: string; align: 'left' | 'center'; bold?: boolean }> = [
+  { key: 'team', label: 'Team', align: 'left' },
+  { key: 'pos0', label: '1st', align: 'center' },
+  { key: 'pos1', label: '2nd', align: 'center' },
+  { key: 'pos2', label: '3rd', align: 'center' },
+  { key: 'pos3', label: '4th', align: 'center' },
+  { key: 'advance', label: 'Adv', align: 'center', bold: true },
+];
+
+function GroupForecastTable({ groupData, numSims }: {
+  groupData: Array<{ team: string; pos: number[]; advance: number }>;
+  numSims: number;
+}) {
+  const [sortKey, setSortKey] = useState<GroupSortKey>('advance');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
+  const handleSort = (key: GroupSortKey) => {
+    if (sortKey === key) {
+      setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortDir(key === 'team' ? 'asc' : 'desc');
+    }
+  };
+
+  const sorted = useMemo(() => {
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return [...groupData].sort((a, b) => {
+      if (sortKey === 'team') return a.team.localeCompare(b.team) * dir;
+      if (sortKey === 'advance') return (a.advance - b.advance) * dir;
+      const idx = parseInt(sortKey.slice(3));
+      return (a.pos[idx] - b.pos[idx]) * dir;
+    });
+  }, [groupData, sortKey, sortDir]);
+
+  return (
+    <TableContainer>
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            {GROUP_COLUMNS.map((col) => (
+              <TableCell
+                key={col.key}
+                align={col.align}
+                sx={{ py: 0.25, px: 0.5, fontWeight: col.bold ? 700 : undefined }}
+              >
+                <TableSortLabel
+                  active={sortKey === col.key}
+                  direction={sortKey === col.key ? sortDir : 'desc'}
+                  onClick={() => handleSort(col.key)}
+                  sx={{ '& .MuiTableSortLabel-icon': { fontSize: '0.8rem' } }}
+                >
+                  {col.label}
+                </TableSortLabel>
+              </TableCell>
+            ))}
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {sorted.map((t) => (
+            <TableRow key={t.team}>
+              <TableCell sx={{ py: 0.25, px: 0.5 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <TeamFlag countryCode={getCountryCode(t.team) ?? ''} size={16} />
+                  <Typography variant="body2" noWrap sx={{ fontSize: '0.75rem', maxWidth: 100 }}>{t.team}</Typography>
+                </Box>
+              </TableCell>
+              <TableCell align="center" sx={{ py: 0.25, px: 0.5, fontSize: '0.7rem' }}>{pct(t.pos[0], numSims)}</TableCell>
+              <TableCell align="center" sx={{ py: 0.25, px: 0.5, fontSize: '0.7rem' }}>{pct(t.pos[1], numSims)}</TableCell>
+              <TableCell align="center" sx={{ py: 0.25, px: 0.5, fontSize: '0.7rem' }}>{pct(t.pos[2], numSims)}</TableCell>
+              <TableCell align="center" sx={{ py: 0.25, px: 0.5, fontSize: '0.7rem' }}>{pct(t.pos[3], numSims)}</TableCell>
+              <TableCell align="center" sx={{ py: 0.25, px: 0.5, fontSize: '0.75rem', fontWeight: 700, color: pctNum(t.advance, numSims) >= 70 ? 'success.main' : pctNum(t.advance, numSims) >= 40 ? 'warning.main' : 'error.main' }}>
+                {pct(t.advance, numSims)}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  );
+}
+
+type StandingsSortKey = 'rank' | 'player' | 'avgScore' | 'avgRank' | 'winPct';
+
+const STANDINGS_COLUMNS: Array<{ key: StandingsSortKey; label: string; align: 'left' | 'right' }> = [
+  { key: 'rank', label: '#', align: 'left' },
+  { key: 'player', label: 'Player', align: 'left' },
+  { key: 'avgScore', label: 'Avg Score', align: 'right' },
+  { key: 'avgRank', label: 'Avg Rank', align: 'right' },
+  { key: 'winPct', label: 'Win %', align: 'right' },
+];
+
+function ExpectedStandingsTable({ playerScores, currentUsername }: {
+  playerScores: Array<{ key: string; avgScore: number; avgRank: number; winPct: number }>;
+  currentUsername: string;
+}) {
+  const [sortKey, setSortKey] = useState<StandingsSortKey>('avgScore');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
+  const handleSort = (key: StandingsSortKey) => {
+    if (sortKey === key) {
+      setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      const ascDefault = key === 'rank' || key === 'player' || key === 'avgRank';
+      setSortDir(ascDefault ? 'asc' : 'desc');
+    }
+  };
+
+  // Default ranking by avgScore desc — used for the # column
+  const ranked = useMemo(
+    () => [...playerScores].sort((a, b) => b.avgScore - a.avgScore),
+    [playerScores],
+  );
+  const rankByKey = useMemo(() => {
+    const m = new Map<string, number>();
+    ranked.forEach((p, i) => m.set(p.key, i + 1));
+    return m;
+  }, [ranked]);
+
+  const sorted = useMemo(() => {
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return [...playerScores].sort((a, b) => {
+      if (sortKey === 'rank') return ((rankByKey.get(a.key) ?? 0) - (rankByKey.get(b.key) ?? 0)) * dir;
+      if (sortKey === 'player') return a.key.localeCompare(b.key) * dir;
+      return (a[sortKey] - b[sortKey]) * dir;
+    });
+  }, [playerScores, sortKey, sortDir, rankByKey]);
+
+  return (
+    <TableContainer>
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            {STANDINGS_COLUMNS.map((col) => (
+              <TableCell key={col.key} align={col.align} sx={{ py: 0.5, px: 1 }}>
+                <TableSortLabel
+                  active={sortKey === col.key}
+                  direction={sortKey === col.key ? sortDir : 'desc'}
+                  onClick={() => handleSort(col.key)}
+                >
+                  {col.label}
+                </TableSortLabel>
+              </TableCell>
+            ))}
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {sorted.map((p) => {
+            const [username, bracketName] = p.key.split('|');
+            const isCurrentUser = username === currentUsername;
+            const rank = rankByKey.get(p.key);
+            return (
+              <TableRow key={p.key} sx={isCurrentUser ? { bgcolor: 'action.selected' } : undefined}>
+                <TableCell sx={{ py: 0.5, px: 1 }}>{rank}</TableCell>
+                <TableCell sx={{ py: 0.5, px: 1 }}>
+                  <Typography variant="body2" sx={{ fontWeight: isCurrentUser ? 700 : 400 }}>
+                    {username}{bracketName ? ` — ${bracketName}` : ''}
+                    {isCurrentUser && <Chip label="You" size="small" sx={{ ml: 0.5, height: 18, fontSize: '0.65rem' }} />}
+                  </Typography>
+                </TableCell>
+                <TableCell align="right" sx={{ py: 0.5, px: 1, fontWeight: 700 }}>{p.avgScore.toFixed(1)}</TableCell>
+                <TableCell align="right" sx={{ py: 0.5, px: 1 }}>{p.avgRank.toFixed(1)}</TableCell>
+                <TableCell align="right" sx={{ py: 0.5, px: 1, color: p.winPct > 0 ? 'success.main' : 'text.secondary', fontWeight: p.winPct > 0 ? 700 : 400 }}>
+                  {p.winPct > 0 ? `${p.winPct}%` : '—'}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </TableContainer>
   );
 }
 
@@ -289,44 +503,11 @@ export default function SimulatePage() {
               {GROUP_NAMES.map((g) => {
                 const groupData = results.groupResults[g];
                 if (!groupData) return null;
-                const sorted = [...groupData].sort((a, b) => b.advance - a.advance);
                 return (
                   <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={g}>
                     <Paper sx={{ p: 1.5 }}>
                       <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 0.5 }}>Group {g}</Typography>
-                      <TableContainer>
-                        <Table size="small">
-                          <TableHead>
-                            <TableRow>
-                              <TableCell sx={{ py: 0.25, px: 0.5 }}>Team</TableCell>
-                              <TableCell align="center" sx={{ py: 0.25, px: 0.5 }}>1st</TableCell>
-                              <TableCell align="center" sx={{ py: 0.25, px: 0.5 }}>2nd</TableCell>
-                              <TableCell align="center" sx={{ py: 0.25, px: 0.5 }}>3rd</TableCell>
-                              <TableCell align="center" sx={{ py: 0.25, px: 0.5 }}>4th</TableCell>
-                              <TableCell align="center" sx={{ py: 0.25, px: 0.5, fontWeight: 700 }}>Adv</TableCell>
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {sorted.map((t) => (
-                              <TableRow key={t.team}>
-                                <TableCell sx={{ py: 0.25, px: 0.5 }}>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                    <TeamFlag countryCode={getCountryCode(t.team) ?? ''} size={16} />
-                                    <Typography variant="body2" noWrap sx={{ fontSize: '0.75rem', maxWidth: 100 }}>{t.team}</Typography>
-                                  </Box>
-                                </TableCell>
-                                <TableCell align="center" sx={{ py: 0.25, px: 0.5, fontSize: '0.7rem' }}>{pct(t.pos[0], numSims)}</TableCell>
-                                <TableCell align="center" sx={{ py: 0.25, px: 0.5, fontSize: '0.7rem' }}>{pct(t.pos[1], numSims)}</TableCell>
-                                <TableCell align="center" sx={{ py: 0.25, px: 0.5, fontSize: '0.7rem' }}>{pct(t.pos[2], numSims)}</TableCell>
-                                <TableCell align="center" sx={{ py: 0.25, px: 0.5, fontSize: '0.7rem' }}>{pct(t.pos[3], numSims)}</TableCell>
-                                <TableCell align="center" sx={{ py: 0.25, px: 0.5, fontSize: '0.75rem', fontWeight: 700, color: pctNum(t.advance, numSims) >= 70 ? 'success.main' : pctNum(t.advance, numSims) >= 40 ? 'warning.main' : 'error.main' }}>
-                                  {pct(t.advance, numSims)}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </TableContainer>
+                      <GroupForecastTable groupData={groupData} numSims={numSims} />
                     </Paper>
                   </Grid>
                 );
@@ -379,41 +560,10 @@ export default function SimulatePage() {
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
                 Based on {numSims.toLocaleString()} simulated tournaments, here is how each player&apos;s picks are expected to perform.
               </Typography>
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ py: 0.5, px: 1 }}>#</TableCell>
-                      <TableCell sx={{ py: 0.5, px: 1 }}>Player</TableCell>
-                      <TableCell align="right" sx={{ py: 0.5, px: 1 }}>Avg Score</TableCell>
-                      <TableCell align="right" sx={{ py: 0.5, px: 1 }}>Avg Rank</TableCell>
-                      <TableCell align="right" sx={{ py: 0.5, px: 1 }}>Win %</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {results.playerScores.map((p, i) => {
-                      const [username, bracketName] = p.key.split('|');
-                      const isCurrentUser = username === user?.username;
-                      return (
-                        <TableRow key={p.key} sx={isCurrentUser ? { bgcolor: 'action.selected' } : undefined}>
-                          <TableCell sx={{ py: 0.5, px: 1 }}>{i + 1}</TableCell>
-                          <TableCell sx={{ py: 0.5, px: 1 }}>
-                            <Typography variant="body2" sx={{ fontWeight: isCurrentUser ? 700 : 400 }}>
-                              {username}{bracketName ? ` — ${bracketName}` : ''}
-                              {isCurrentUser && <Chip label="You" size="small" sx={{ ml: 0.5, height: 18, fontSize: '0.65rem' }} />}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align="right" sx={{ py: 0.5, px: 1, fontWeight: 700 }}>{p.avgScore.toFixed(1)}</TableCell>
-                          <TableCell align="right" sx={{ py: 0.5, px: 1 }}>{p.avgRank.toFixed(1)}</TableCell>
-                          <TableCell align="right" sx={{ py: 0.5, px: 1, color: p.winPct > 0 ? 'success.main' : 'text.secondary', fontWeight: p.winPct > 0 ? 700 : 400 }}>
-                            {p.winPct > 0 ? `${p.winPct}%` : '—'}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+              <ExpectedStandingsTable
+                playerScores={results.playerScores}
+                currentUsername={user.username}
+              />
             </Paper>
           )}
         </>

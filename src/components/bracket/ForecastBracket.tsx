@@ -1,6 +1,6 @@
 'use client';
-import { useMemo } from 'react';
-import { Box, Typography, Tooltip } from '@mui/material';
+import { useMemo, useState } from 'react';
+import { Box, Typography, Tooltip, Tabs, Tab, useMediaQuery, useTheme } from '@mui/material';
 import type { BracketSlotResult } from '@/hooks/useTournamentSim';
 import TeamFlag from '@/components/common/TeamFlag';
 
@@ -117,12 +117,49 @@ function ConnectorColumn({ pairCount, direction }: { pairCount: number; directio
   );
 }
 
+const ALL_ROUNDS = [
+  { key: 'R32', label: 'Round of 32', count: 16 },
+  { key: 'R16', label: 'Round of 16', count: 8 },
+  { key: 'QF', label: 'Quarterfinals', count: 4 },
+  { key: 'SF', label: 'Semifinals', count: 2 },
+  { key: 'FINAL', label: '🏆 Final', count: 1 },
+  { key: '3RD', label: '🥉 3rd Place', count: 1 },
+];
+
+function MobileForecastBracket({ slotMap, numSims, countryCodeMap }: { slotMap: Map<string, BracketSlotResult>; numSims: number; countryCodeMap: Record<string, string> }) {
+  const [tab, setTab] = useState(0);
+  const round = ALL_ROUNDS[tab];
+  const matchIds = round.count === 1 ? [round.key] : Array.from({ length: round.count }, (_, i) => `${round.key}-${i + 1}`);
+
+  return (
+    <Box>
+      <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" sx={{ mb: 2 }}>
+        {ALL_ROUNDS.map((r) => <Tab key={r.key} label={r.label} sx={{ fontSize: '0.7rem', minWidth: 60, px: 1 }} />)}
+      </Tabs>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        {matchIds.map((id) => (
+          <Box key={id} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+            <MatchupCell matchId={id} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
+          </Box>
+        ))}
+      </Box>
+    </Box>
+  );
+}
+
 export default function ForecastBracket({ bracketSlots, numSims, countryCodeMap }: ForecastBracketProps) {
+  const theme = useTheme();
+  const isSmall = useMediaQuery(theme.breakpoints.down('lg'));
+
   const slotMap = useMemo(() => {
     const map = new Map<string, BracketSlotResult>();
     for (const s of bracketSlots) map.set(s.slotId, s);
     return map;
   }, [bracketSlots]);
+
+  if (isSmall) {
+    return <MobileForecastBracket slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />;
+  }
 
   // Left half: R32 matches 1-8, R16 1-4, QF 1-2, SF 1
   // Right half: R32 matches 9-16, R16 5-8, QF 3-4, SF 2

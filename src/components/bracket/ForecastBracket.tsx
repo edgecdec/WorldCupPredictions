@@ -151,6 +151,9 @@ function ChampionBanner({ slotMap, numSims, countryCodeMap }: {
   numSims: number;
   countryCodeMap: Record<string, string>;
 }) {
+  const [topAnchor, setTopAnchor] = useState<HTMLElement | null>(null);
+  const [contenderAnchor, setContenderAnchor] = useState<{ el: HTMLElement; team: string } | null>(null);
+
   const championSlot = slotMap.get('FINAL-W');
   if (!championSlot || championSlot.teams.length === 0) return null;
   const top = championSlot.teams[0];
@@ -168,7 +171,14 @@ function ChampionBanner({ slotMap, numSims, countryCodeMap }: {
         <Typography variant="caption" sx={{ fontWeight: 700, color: 'warning.main', fontSize: '0.7rem', display: 'block', textTransform: 'uppercase', letterSpacing: 0.5 }}>
           🏆 Most Likely Champion
         </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5, justifyContent: 'center' }}>
+        <Box
+          onClick={(e) => setTopAnchor(e.currentTarget)}
+          sx={{
+            display: 'flex', alignItems: 'center', gap: 1, mt: 0.5, justifyContent: 'center',
+            cursor: 'pointer', borderRadius: 1, px: 1, py: 0.25,
+            '&:hover': { bgcolor: 'action.hover' },
+          }}
+        >
           <TeamFlag countryCode={countryCodeMap[top.team] ?? ''} size={28} />
           <Typography variant="h6" sx={{ fontWeight: 700 }}>{top.team}</Typography>
           <Typography variant="h6" sx={{ fontWeight: 700, color: 'warning.main' }}>{pct}%</Typography>
@@ -179,7 +189,15 @@ function ChampionBanner({ slotMap, numSims, countryCodeMap }: {
           Other contenders
         </Typography>
         {top3.slice(1).map((t) => (
-          <Box key={t.team} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 0.1 }}>
+          <Box
+            key={t.team}
+            onClick={(e) => setContenderAnchor({ el: e.currentTarget, team: t.team })}
+            sx={{
+              display: 'flex', alignItems: 'center', gap: 0.5, py: 0.1, px: 0.5,
+              cursor: 'pointer', borderRadius: 0.5,
+              '&:hover': { bgcolor: 'action.hover' },
+            }}
+          >
             <TeamFlag countryCode={countryCodeMap[t.team] ?? ''} size={14} />
             <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>{t.team}</Typography>
             <Typography variant="caption" sx={{ fontSize: '0.7rem', fontWeight: 700, ml: 0.5 }}>
@@ -188,6 +206,24 @@ function ChampionBanner({ slotMap, numSims, countryCodeMap }: {
           </Box>
         ))}
       </Box>
+
+      <Popover
+        open={Boolean(topAnchor)}
+        anchorEl={topAnchor}
+        onClose={() => setTopAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <SlotPopoverContent slot={championSlot} numSims={numSims} countryCodeMap={countryCodeMap} />
+      </Popover>
+      <Popover
+        open={Boolean(contenderAnchor)}
+        anchorEl={contenderAnchor?.el ?? null}
+        onClose={() => setContenderAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+      >
+        <SlotPopoverContent slot={championSlot} numSims={numSims} countryCodeMap={countryCodeMap} />
+      </Popover>
     </Box>
   );
 }

@@ -6,6 +6,8 @@ import {
   Tabs, Tab, IconButton,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { useAuth } from '@/hooks/useAuth';
 import { useTournamentSim, GROUPS } from '@/hooks/useTournamentSim';
 import type { PlayerEntry } from '@/hooks/useTournamentSim';
@@ -402,6 +404,7 @@ export default function SimulatePage() {
   const { user, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState(TAB_GROUPS);
   const [tournamentStarted, setTournamentStarted] = useState(false);
+  const [standingsRevealed, setStandingsRevealed] = useState(false);
   const [players, setPlayers] = useState<PlayerEntry[] | undefined>(undefined);
   const [scoring, setScoring] = useState<ScoringSettings>(DEFAULT_SCORING);
   const [groupId, setGroupId] = useSelectedGroup('everyone');
@@ -540,14 +543,23 @@ export default function SimulatePage() {
             />
           )}
 
-          {/* Expected Standings — admin only before tournament, all users after */}
+          {/* Expected Standings — admin only before tournament (hidden by default), all users after */}
           {results.playerScores && results.playerScores.length > 0 && (tournamentStarted || user.is_admin) && (
             <Paper sx={{ p: 2, mt: 3 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1.5, flexWrap: 'wrap' }}>
                 <Typography variant="subtitle1" fontWeight="bold">
                   Expected Standings
                 </Typography>
-                {userGroups.length > 1 && (
+                {!tournamentStarted && user.is_admin && (
+                  <IconButton
+                    size="small"
+                    onClick={() => setStandingsRevealed((v) => !v)}
+                    title={standingsRevealed ? 'Hide standings' : 'Reveal standings (admin)'}
+                  >
+                    {standingsRevealed ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                  </IconButton>
+                )}
+                {(tournamentStarted || standingsRevealed) && userGroups.length > 1 && (
                   <FormControl size="small" sx={{ minWidth: 180 }}>
                     <InputLabel>Group</InputLabel>
                     <Select value={groupId} label="Group" onChange={(e) => setGroupId(e.target.value)}>
@@ -558,22 +570,28 @@ export default function SimulatePage() {
                   </FormControl>
                 )}
               </Box>
-              {(() => {
-                const anyKnockoutPicks = (players ?? []).some((p) => Object.keys(p.knockout_picks).length > 0);
-                return (
-                  <>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                      Based on {numSims.toLocaleString()} simulated tournaments, here is how each player&apos;s picks are expected to perform.
-                      {!anyKnockoutPicks && ' Lead % = chance of having the top score after the group stage (knockout picks not yet locked in).'}
-                    </Typography>
-                    <ExpectedStandingsTable
-                      playerScores={results.playerScores}
-                      currentUsername={user.username}
-                      leadOnly={!anyKnockoutPicks}
-                    />
-                  </>
-                );
-              })()}
+              {!tournamentStarted && !standingsRevealed ? (
+                <Typography variant="body2" color="text.secondary">
+                  🔒 Hidden until the tournament starts (June 11). Click the eye icon above to reveal — admin only.
+                </Typography>
+              ) : (
+                (() => {
+                  const anyKnockoutPicks = (players ?? []).some((p) => Object.keys(p.knockout_picks).length > 0);
+                  return (
+                    <>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                        Based on {numSims.toLocaleString()} simulated tournaments, here is how each player&apos;s picks are expected to perform.
+                        {!anyKnockoutPicks && ' Lead % = chance of having the top score after the group stage (knockout picks not yet locked in).'}
+                      </Typography>
+                      <ExpectedStandingsTable
+                        playerScores={results.playerScores}
+                        currentUsername={user.username}
+                        leadOnly={!anyKnockoutPicks}
+                      />
+                    </>
+                  );
+                })()
+              )}
             </Paper>
           )}
         </>

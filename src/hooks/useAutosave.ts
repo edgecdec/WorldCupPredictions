@@ -59,13 +59,14 @@ export function useAutosave({ dataJson, disabled, saveFn }: UseAutosaveOptions) 
     return () => clearTimeout(timer);
   }, [dataJson, disabled]);
 
-  // Warn on unsaved changes
+  // Warn on unsaved changes — only when status indicates pending changes
   useEffect(() => {
-    if (disabled || dataJson === savedRef.current) return;
+    if (disabled) return;
+    if (status !== 'unsaved' && status !== 'saving' && status !== 'error') return;
     const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
-  }, [dataJson, disabled]);
+  }, [status, disabled]);
 
   return { status, markSaved };
 }

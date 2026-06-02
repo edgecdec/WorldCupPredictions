@@ -131,14 +131,22 @@ function simulateKnockoutMatch(
   return Math.random() < probA ? teamA : teamB;
 }
 
+interface TeamStats { pts: number; gf: number; ga: number; gd: number }
+
+interface GroupStageResult {
+  order: Record<string, string[]>;
+  tables: Record<string, Record<string, TeamStats>>;
+}
+
 function simulateGroupStage(
   groups: Record<string, string[]>,
   ratings: Record<string, TeamRating>,
   avgGA: number,
-): Record<string, string[]> {
-  const results: Record<string, string[]> = {};
+): GroupStageResult {
+  const order: Record<string, string[]> = {};
+  const tables: Record<string, Record<string, TeamStats>> = {};
   for (const [name, teams] of Object.entries(groups)) {
-    const table: Record<string, { pts: number; gf: number; ga: number; gd: number }> = {};
+    const table: Record<string, TeamStats> = {};
     for (const t of teams) table[t] = { pts: 0, gf: 0, ga: 0, gd: 0 };
     for (let i = 0; i < teams.length; i++) {
       for (let j = i + 1; j < teams.length; j++) {
@@ -151,21 +159,30 @@ function simulateGroupStage(
       }
     }
     for (const t of teams) table[t].gd = table[t].gf - table[t].ga;
-    results[name] = [...teams].sort((a, b) =>
+    tables[name] = table;
+    order[name] = [...teams].sort((a, b) =>
       table[b].pts - table[a].pts || table[b].gd - table[a].gd || table[b].gf - table[a].gf
     );
   }
-  return results;
+  return { order, tables };
 }
 
 function getBest3rdPlace(
-  groupResults: Record<string, string[]>,
-  ratings: Record<string, TeamRating>,
+  groupOrder: Record<string, string[]>,
+  tables: Record<string, Record<string, TeamStats>>,
 ): string[] {
-  const thirds = Object.values(groupResults).map(order => order[2]);
-  // Sort by PELE rating (proxy for FIFA tiebreakers without recomputing points)
-  thirds.sort((a, b) => (ratings[b]?.pele ?? 0) - (ratings[a]?.pele ?? 0));
-  return thirds.slice(0, 8);
+  // Get all 12 third-place teams with their group stage stats
+  const thirds: Array<{ team: string; pts: number; gd: number; gf: number }> = [];
+  for (const [g, order] of Object.entries(groupOrder)) {
+    const team = order[2];
+    const stats = tables[g]?.[team];
+    if (stats) {
+      thirds.push({ team, pts: stats.pts, gd: stats.gd, gf: stats.gf });
+    }
+  }
+  // FIFA tiebreakers: points > goal difference > goals scored
+  thirds.sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
+  return thirds.slice(0, 8).map(t => t.team);
 }
 
 function simulateKnockout(
@@ -367,11 +384,11 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
       ctx.postMessage({ type: 'progress', progress: sim } as SimResponse);
     }
 
-    const groupResults = simulateGroupStage(groups, ratings, avgGA);
-    const advancing3rd = getBest3rdPlace(groupResults, ratings);
+    const { order: groupOrder, tables } = simulateGroupStage(groups, ratings, avgGA);
+    const advancing3rd = getBest3rdPlace(groupOrder, tables);
 
     // Track group positions
-    for (const [g, order] of Object.entries(groupResults)) {
+    for (const [g, order] of Object.entries(groupOrder)) {
       const teams = groups[g];
       for (let pos = 0; pos < 4; pos++) {
         const teamIdx = teams.indexOf(order[pos]);
@@ -380,7 +397,7 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
     }
 
     // Track advancement (top 2 + best 3rd)
-    for (const order of Object.values(groupResults)) {
+    for (const order of Object.values(groupOrder)) {
       advanceCounts[order[0]]++;
       advanceCounts[order[1]]++;
     }
@@ -389,7 +406,7 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
     }
 
     // Simulate knockout
-    const { slotTeams, champion } = simulateKnockout(groupResults, advancing3rd, ratings, avgGA);
+    const { slotTeams, champion } = simulateKnockout(groupOrder, advancing3rd, ratings, avgGA);
     championCounts[champion]++;
 
     // Track bracket slot occupancy
@@ -430,7 +447,7 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
       for (const ent of entries!) {
         const gsScore = scoreGroupStageEntry(
           ent.group_predictions, ent.third_place_picks,
-          groupResults, advancing3rd, teamSeeds!, scoring!.groupStage,
+          groupOrder, advancing3rd, teamSeeds!, scoring!.groupStage,
         );
         const koScore = scoreKnockoutEntry(ent.knockout_picks, koMatchResults, teamRankings ?? {}, scoring!.knockout);
         scores.push({ key: ent.key, score: gsScore + koScore });

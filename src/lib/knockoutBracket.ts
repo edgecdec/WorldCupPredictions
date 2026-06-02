@@ -1,6 +1,7 @@
 import { BracketData, GroupStageResults, KnockoutMatchup } from '@/types';
 import { generateGenericBracket } from '@/lib/bracketEngine';
 import { toFifaId, toFifaRound } from '@/lib/bracketUtils';
+import { lookupThirdPlaceAssignment } from '@/lib/thirdPlaceLookup';
 
 // Round constants (FIFA scheme)
 const ROUND_R32 = 0;
@@ -106,6 +107,7 @@ function solveThirdPlaceAssignment(advancingGroups: string[]): string[] | null {
 /**
  * Given the set of advancing 3rd-place teams, return a map from
  * slot key (e.g. '3_1E') to the actual team name.
+ * Uses FIFA's official 495-combination lookup table.
  */
 function assignThirdPlaceTeams(
   groupResults: GroupStageResults,
@@ -125,7 +127,10 @@ function assignThirdPlaceTeams(
   const advancingGroupLetters = [...teamToGroup.values()];
   if (advancingGroupLetters.length !== 8) return assignments;
 
-  const slotAssignment = solveThirdPlaceAssignment(advancingGroupLetters);
+  // Use official FIFA lookup table
+  const officialAssignment = lookupThirdPlaceAssignment(advancingGroupLetters);
+  // Fall back to backtracking solver if lookup fails (shouldn't happen with valid data)
+  const slotAssignment = officialAssignment ?? solveThirdPlaceAssignment(advancingGroupLetters);
   if (!slotAssignment) return assignments;
 
   const groupToTeam = new Map<string, string>();
@@ -133,11 +138,15 @@ function assignThirdPlaceTeams(
     groupToTeam.set(group, team);
   }
 
-  for (let i = 0; i < THIRD_PLACE_SLOT_KEYS.length; i++) {
-    const groupLetter = slotAssignment[i];
+  // Map from lookup table order [vs1A,vs1B,vs1D,vs1E,vs1G,vs1I,vs1K,vs1L]
+  // to THIRD_PLACE_SLOT_KEYS order ['3_1E','3_1I','3_1A','3_1L','3_1D','3_1G','3_1B','3_1K']
+  const LOOKUP_TO_SLOT_INDEX = [2, 6, 4, 0, 5, 1, 7, 3];
+  for (let lookupIdx = 0; lookupIdx < 8; lookupIdx++) {
+    const groupLetter = slotAssignment[lookupIdx];
+    const slotIdx = officialAssignment ? LOOKUP_TO_SLOT_INDEX[lookupIdx] : lookupIdx;
     const teamName = groupToTeam.get(groupLetter);
     if (teamName) {
-      assignments.set(THIRD_PLACE_SLOT_KEYS[i], teamName);
+      assignments.set(THIRD_PLACE_SLOT_KEYS[slotIdx], teamName);
     }
   }
 

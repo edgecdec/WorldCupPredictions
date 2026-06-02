@@ -41,6 +41,7 @@ interface TournamentSimRequest {
   scoring?: ScoringSettings;
   teamSeeds?: Record<string, number>;
   teamRankings?: Record<string, number>;
+  thirdPlaceLookup?: Record<string, string[]>;
 }
 
 interface GroupPositionResult {
@@ -190,6 +191,7 @@ function simulateKnockout(
   advancing3rd: string[],
   ratings: Record<string, TeamRating>,
   avgGA: number,
+  thirdPlaceLookup?: Record<string, string[]>,
 ): { slotTeams: Record<string, string>; champion: string } {
   const winners: Record<string, string> = {};
   const runnersUp: Record<string, string> = {};
@@ -198,10 +200,42 @@ function simulateKnockout(
     runnersUp[g] = order[1];
   }
 
-  function resolveSource(src: string): string {
+  // Build 3rd-place assignment using FIFA official lookup
+  // Lookup order: [vs1A, vs1B, vs1D, vs1E, vs1G, vs1I, vs1K, vs1L]
+  // R32_STRUCTURE slots using 3rd: indices 1(vs1E),4(vs1I),6(vs1A),7(vs1L),8(vs1D),9(vs1G),12(vs1B),14(vs1K)
+  // Map: slot index in R32_STRUCTURE -> lookup table index
+  const thirdPlaceSlotMap: Record<number, number> = { 1: 3, 4: 5, 6: 0, 7: 7, 8: 2, 9: 4, 12: 1, 14: 6 };
+
+  // Determine which groups have advancing 3rd-place teams
+  const advancingGroups: string[] = [];
+  const groupToThird: Record<string, string> = {};
+  for (const [g, order] of Object.entries(groupResults)) {
+    const third = order[2];
+    if (advancing3rd.includes(third)) {
+      advancingGroups.push(g);
+      groupToThird[g] = third;
+    }
+  }
+
+  let thirdAssignment: string[] | null = null;
+  if (thirdPlaceLookup) {
+    const key = [...advancingGroups].sort().join('');
+    thirdAssignment = thirdPlaceLookup[key] ?? null;
+  }
+
+  function resolveSource(src: string, r32Idx: number): string {
     if (src.startsWith('1')) return winners[src[1]];
     if (src.startsWith('2')) return runnersUp[src[1]];
-    if (src.startsWith('3:')) return advancing3rd[parseInt(src.slice(2))];
+    if (src.startsWith('3:')) {
+      if (thirdAssignment) {
+        const lookupIdx = thirdPlaceSlotMap[r32Idx];
+        if (lookupIdx !== undefined) {
+          const assignedGroup = thirdAssignment[lookupIdx];
+          return groupToThird[assignedGroup] ?? advancing3rd[parseInt(src.slice(2))];
+        }
+      }
+      return advancing3rd[parseInt(src.slice(2))];
+    }
     return '';
   }
 
@@ -211,8 +245,8 @@ function simulateKnockout(
   const r32Winners: string[] = [];
   for (let i = 0; i < 16; i++) {
     const [srcA, srcB] = R32_STRUCTURE[i];
-    const teamA = resolveSource(srcA);
-    const teamB = resolveSource(srcB);
+    const teamA = resolveSource(srcA, i);
+    const teamB = resolveSource(srcB, i);
     slotTeams[`R32-${i + 1}-A`] = teamA;
     slotTeams[`R32-${i + 1}-B`] = teamB;
     const winner = simulateKnockoutMatch(teamA, teamB, ratings, avgGA);
@@ -353,7 +387,7 @@ function scoreKnockoutEntry(
 const ctx = self as unknown as Worker;
 
 ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
-  const { ratings, avgGA, groups, numSims, entries, scoring, teamSeeds, teamRankings } = e.data;
+  const { ratings, avgGA, groups, numSims, entries, scoring, teamSeeds, teamRankings, thirdPlaceLookup } = e.data;
 
   // Accumulators
   const groupPos: Record<string, number[][]> = {};
@@ -406,7 +440,7 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
     }
 
     // Simulate knockout
-    const { slotTeams, champion } = simulateKnockout(groupOrder, advancing3rd, ratings, avgGA);
+    const { slotTeams, champion } = simulateKnockout(groupOrder, advancing3rd, ratings, avgGA, thirdPlaceLookup);
     championCounts[champion]++;
 
     // Track bracket slot occupancy

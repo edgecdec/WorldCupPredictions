@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { PELE_RATINGS, AVG_GA } from '@/lib/peleRatings';
+import { THIRD_PLACE_LOOKUP } from '@/lib/thirdPlaceLookup';
 import type { ScoringSettings, GroupPrediction } from '@/types';
 import { DEFAULT_SCORING } from '@/types';
 
@@ -123,6 +124,7 @@ export function useTournamentSim(players?: PlayerEntry[], scoringSettings?: Scor
       scoring: scoringSettings ?? DEFAULT_SCORING,
       teamSeeds: TEAM_SEEDS,
       teamRankings: FIFA_RANKINGS,
+      thirdPlaceLookup: THIRD_PLACE_LOOKUP,
     });
   }, [players, scoringSettings]);
 

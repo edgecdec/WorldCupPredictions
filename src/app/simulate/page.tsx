@@ -3,19 +3,20 @@ import { useState, useMemo, useEffect } from 'react';
 import {
   Container, Typography, Box, LinearProgress, Paper, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, Grid, Chip,
-  Tabs, Tab, IconButton, Alert,
+  Tabs, Tab, IconButton,
 } from '@mui/material';
-import LockIcon from '@mui/icons-material/Lock';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { useAuth } from '@/hooks/useAuth';
 import { useTournamentSim, GROUPS } from '@/hooks/useTournamentSim';
 import type { PlayerEntry } from '@/hooks/useTournamentSim';
+import { useSelectedGroup } from '@/hooks/useSelectedGroup';
 import AuthForm from '@/components/auth/AuthForm';
 import TeamFlag from '@/components/common/TeamFlag';
 import ForecastBracket from '@/components/bracket/ForecastBracket';
 import { PELE_RATINGS } from '@/lib/peleRatings';
 import type { ScoringSettings, GroupPrediction } from '@/types';
 import { DEFAULT_SCORING } from '@/types';
+import { FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 
 const GROUP_NAMES = Object.keys(GROUPS);
 const TAB_GROUPS = 0;
@@ -63,6 +64,8 @@ export default function SimulatePage() {
   const [tournamentStarted, setTournamentStarted] = useState(false);
   const [players, setPlayers] = useState<PlayerEntry[] | undefined>(undefined);
   const [scoring, setScoring] = useState<ScoringSettings>(DEFAULT_SCORING);
+  const [groupId, setGroupId] = useSelectedGroup('everyone');
+  const [userGroups, setUserGroups] = useState<Array<{ id: string; name: string }>>([]);
 
   useEffect(() => {
     fetch('/api/tournaments')
@@ -77,7 +80,17 @@ export default function SimulatePage() {
 
   useEffect(() => {
     if (!user) return;
-    fetch('/api/simulate?group_id=everyone')
+    fetch('/api/groups')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.groups) setUserGroups(d.groups.map((g: { id: string; name: string }) => ({ id: g.id, name: g.name })));
+      })
+      .catch(() => {});
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || !groupId) return;
+    fetch(`/api/simulate?group_id=${groupId}`)
       .then((r) => r.json())
       .then((d) => {
         if (d.entries) {
@@ -94,7 +107,7 @@ export default function SimulatePage() {
         if (d.scoring) setScoring(d.scoring);
       })
       .catch(() => {});
-  }, [user]);
+  }, [user, groupId]);
 
   const { results, progress, running, numSims, rerun } = useTournamentSim(players, scoring);
 
@@ -109,16 +122,6 @@ export default function SimulatePage() {
     );
   }
 
-  if (!tournamentStarted && !user.is_admin) {
-    return (
-      <Container maxWidth="sm" sx={{ mt: 4 }}>
-        <Alert icon={<LockIcon />} severity="info" sx={{ mt: 2 }}>
-          The tournament forecast will be available once the group stage begins on June 11.
-          Check back then to see simulation-powered probabilities for every team and match!
-        </Alert>
-      </Container>
-    );
-  }
 
   return (
     <Container maxWidth="xl" sx={{ mt: 2, mb: 4 }}>
@@ -261,12 +264,24 @@ export default function SimulatePage() {
             </Box>
           )}
 
-          {/* Expected Standings */}
-          {results.playerScores && results.playerScores.length > 0 && (
+          {/* Expected Standings — admin only before tournament, all users after */}
+          {results.playerScores && results.playerScores.length > 0 && (tournamentStarted || user.is_admin) && (
             <Paper sx={{ p: 2, mt: 3 }}>
-              <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>
-                Expected Standings
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1.5, flexWrap: 'wrap' }}>
+                <Typography variant="subtitle1" fontWeight="bold">
+                  Expected Standings
+                </Typography>
+                {userGroups.length > 1 && (
+                  <FormControl size="small" sx={{ minWidth: 180 }}>
+                    <InputLabel>Group</InputLabel>
+                    <Select value={groupId} label="Group" onChange={(e) => setGroupId(e.target.value)}>
+                      {userGroups.map((g) => (
+                        <MenuItem key={g.id} value={g.id}>{g.name}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                )}
+              </Box>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
                 Based on {numSims.toLocaleString()} simulated tournaments, here is how each player&apos;s picks are expected to perform.
               </Typography>

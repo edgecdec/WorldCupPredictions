@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect } from 'react';
 import {
   Container, Typography, Box, LinearProgress, Paper, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, TableSortLabel, Grid, Chip,
-  Tabs, Tab, IconButton,
+  Tabs, Tab, IconButton, Tooltip,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -49,6 +49,22 @@ function pct(count: number, total: number): string {
 
 function pctNum(count: number, total: number): number {
   return Math.round((count / total) * 100);
+}
+
+const TEAM_ABBREV: Record<string, string> = {
+  'Bosnia and Herzegovina': 'Bosnia & H.',
+  'South Africa': 'S. Africa',
+  'South Korea': 'S. Korea',
+  'Saudi Arabia': 'Saudi A.',
+  'New Zealand': 'New Zealand',
+  'Ivory Coast': 'Ivory Coast',
+  'DR Congo': 'DR Congo',
+  'Cape Verde': 'Cape Verde',
+  Netherlands: 'Netherlands',
+};
+
+function abbreviateTeam(name: string): string {
+  return TEAM_ABBREV[name] ?? name;
 }
 
 interface TeamRoundRow {
@@ -277,17 +293,21 @@ function GroupForecastTable({ groupData, numSims }: {
         <TableBody>
           {sorted.map((t) => (
             <TableRow key={t.team}>
-              <TableCell sx={{ py: 0.25, px: 0.5 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <TableCell sx={{ py: 0.25, px: 0.5, maxWidth: 0, width: '100%' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
                   <TeamFlag countryCode={getCountryCode(t.team) ?? ''} size={16} />
-                  <Typography variant="body2" noWrap sx={{ fontSize: '0.75rem', maxWidth: 100 }}>{t.team}</Typography>
+                  <Tooltip title={t.team} disableHoverListener={t.team.length <= 14}>
+                    <Typography variant="body2" noWrap sx={{ fontSize: '0.7rem', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {abbreviateTeam(t.team)}
+                    </Typography>
+                  </Tooltip>
                 </Box>
               </TableCell>
-              <TableCell align="center" sx={{ py: 0.25, px: 0.5, fontSize: '0.7rem' }}>{pct(t.pos[0], numSims)}</TableCell>
-              <TableCell align="center" sx={{ py: 0.25, px: 0.5, fontSize: '0.7rem' }}>{pct(t.pos[1], numSims)}</TableCell>
-              <TableCell align="center" sx={{ py: 0.25, px: 0.5, fontSize: '0.7rem' }}>{pct(t.pos[2], numSims)}</TableCell>
-              <TableCell align="center" sx={{ py: 0.25, px: 0.5, fontSize: '0.7rem' }}>{pct(t.pos[3], numSims)}</TableCell>
-              <TableCell align="center" sx={{ py: 0.25, px: 0.5, fontSize: '0.75rem', fontWeight: 700, color: pctNum(t.advance, numSims) >= 70 ? 'success.main' : pctNum(t.advance, numSims) >= 40 ? 'warning.main' : 'error.main' }}>
+              <TableCell align="center" sx={{ py: 0.25, px: 0.25, fontSize: '0.7rem' }}>{pct(t.pos[0], numSims)}</TableCell>
+              <TableCell align="center" sx={{ py: 0.25, px: 0.25, fontSize: '0.7rem' }}>{pct(t.pos[1], numSims)}</TableCell>
+              <TableCell align="center" sx={{ py: 0.25, px: 0.25, fontSize: '0.7rem' }}>{pct(t.pos[2], numSims)}</TableCell>
+              <TableCell align="center" sx={{ py: 0.25, px: 0.25, fontSize: '0.7rem' }}>{pct(t.pos[3], numSims)}</TableCell>
+              <TableCell align="center" sx={{ py: 0.25, px: 0.25, fontSize: '0.75rem', fontWeight: 700, color: pctNum(t.advance, numSims) >= 70 ? 'success.main' : pctNum(t.advance, numSims) >= 40 ? 'warning.main' : 'error.main' }}>
                 {pct(t.advance, numSims)}
               </TableCell>
             </TableRow>

@@ -2,16 +2,17 @@
 import { useState, useMemo, useEffect } from 'react';
 import {
   Container, Typography, Box, LinearProgress, Paper, Table, TableBody,
-  TableCell, TableContainer, TableHead, TableRow, Tooltip, Grid, Chip,
+  TableCell, TableContainer, TableHead, TableRow, Grid, Chip,
   Tabs, Tab, IconButton, Alert,
 } from '@mui/material';
 import LockIcon from '@mui/icons-material/Lock';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { useAuth } from '@/hooks/useAuth';
 import { useTournamentSim, GROUPS } from '@/hooks/useTournamentSim';
-import type { BracketSlotResult, PlayerEntry } from '@/hooks/useTournamentSim';
+import type { PlayerEntry } from '@/hooks/useTournamentSim';
 import AuthForm from '@/components/auth/AuthForm';
 import TeamFlag from '@/components/common/TeamFlag';
+import ForecastBracket from '@/components/bracket/ForecastBracket';
 import { PELE_RATINGS } from '@/lib/peleRatings';
 import type { ScoringSettings, GroupPrediction } from '@/types';
 import { DEFAULT_SCORING } from '@/types';
@@ -47,46 +48,6 @@ function pctNum(count: number, total: number): number {
   return Math.round((count / total) * 100);
 }
 
-function SlotTooltip({ slot, numSims }: { slot: BracketSlotResult; numSims: number }) {
-  const top = slot.teams.slice(0, 10);
-  return (
-    <Box sx={{ p: 0.5 }}>
-      {top.map((t) => (
-        <Box key={t.team} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 0.25 }}>
-          <TeamFlag countryCode={getCountryCode(t.team) ?? ''} size={14} />
-          <Typography variant="caption" sx={{ flex: 1 }}>{t.team}</Typography>
-          <Typography variant="caption" fontWeight="bold">{pct(t.count, numSims)}</Typography>
-        </Box>
-      ))}
-      {slot.teams.length > 10 && (
-        <Typography variant="caption" color="text.secondary">+{slot.teams.length - 10} more</Typography>
-      )}
-    </Box>
-  );
-}
-
-function BracketSlot({ slot, numSims }: { slot: BracketSlotResult | undefined; numSims: number }) {
-  if (!slot || slot.teams.length === 0) {
-    return <Box sx={{ p: 1, border: 1, borderColor: 'divider', borderRadius: 1, minWidth: 140, opacity: 0.5 }}>
-      <Typography variant="caption" color="text.secondary">TBD</Typography>
-    </Box>;
-  }
-  const top = slot.teams[0];
-  const percentage = pctNum(top.count, numSims);
-  return (
-    <Tooltip title={<SlotTooltip slot={slot} numSims={numSims} />} arrow placement="top">
-      <Box sx={{
-        p: 0.75, border: 1, borderColor: 'divider', borderRadius: 1, minWidth: 140,
-        cursor: 'pointer', '&:hover': { bgcolor: 'action.hover', borderColor: 'primary.main' },
-        display: 'flex', alignItems: 'center', gap: 0.75,
-      }}>
-        <TeamFlag countryCode={getCountryCode(top.team) ?? ''} size={18} />
-        <Typography variant="body2" sx={{ flex: 1, fontWeight: 500 }} noWrap>{top.team}</Typography>
-        <Chip label={`${percentage}%`} size="small" variant="outlined" sx={{ height: 20, fontSize: '0.7rem' }} />
-      </Box>
-    </Tooltip>
-  );
-}
 
 interface SimApiEntry {
   username: string;
@@ -137,14 +98,6 @@ export default function SimulatePage() {
 
   const { results, progress, running, numSims, rerun } = useTournamentSim(players, scoring);
 
-  const slotMap = useMemo(() => {
-    if (!results) return new Map<string, BracketSlotResult>();
-    const map = new Map<string, BracketSlotResult>();
-    for (const slot of results.bracketSlots) {
-      map.set(slot.slotId, slot);
-    }
-    return map;
-  }, [results]);
 
   if (authLoading) return null;
   if (!user) {
@@ -256,64 +209,15 @@ export default function SimulatePage() {
           {activeTab === TAB_BRACKET && (
             <Box>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Each matchup shows the most likely team in each slot. Hover to see all possibilities.
+                Hover over any team to see all teams that could end up in that slot and their probabilities.
               </Typography>
-              {['R32', 'R16', 'QF', 'SF'].map((round) => {
-                const count = round === 'R32' ? 16 : round === 'R16' ? 8 : round === 'QF' ? 4 : 2;
-                const label = round === 'R32' ? 'Round of 32' : round === 'R16' ? 'Round of 16' : round === 'QF' ? 'Quarterfinals' : 'Semifinals';
-                return (
-                  <Box key={round} sx={{ mb: 3 }}>
-                    <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>{label}</Typography>
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
-                      {Array.from({ length: count }, (_, i) => {
-                        const matchId = `${round}-${i + 1}`;
-                        const slotA = slotMap.get(`${matchId}-A`);
-                        const slotB = slotMap.get(`${matchId}-B`);
-                        const slotW = slotMap.get(`${matchId}-W`);
-                        return (
-                          <Paper key={matchId} sx={{ p: 1, minWidth: 170, flex: '1 1 auto', maxWidth: 220 }}>
-                            <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
-                              Match {i + 1}
-                            </Typography>
-                            <BracketSlot slot={slotA} numSims={numSims} />
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', my: 0.25 }}>vs</Typography>
-                            <BracketSlot slot={slotB} numSims={numSims} />
-                            <Box sx={{ mt: 0.75, pt: 0.75, borderTop: 1, borderColor: 'divider' }}>
-                              <Typography variant="caption" color="text.secondary">Winner →</Typography>
-                              <BracketSlot slot={slotW} numSims={numSims} />
-                            </Box>
-                          </Paper>
-                        );
-                      })}
-                    </Box>
-                  </Box>
-                );
-              })}
-              {/* Final + 3rd */}
-              <Box sx={{ mb: 3 }}>
-                <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>Final</Typography>
-                <Paper sx={{ p: 1.5, maxWidth: 240 }}>
-                  <BracketSlot slot={slotMap.get('FINAL-A')} numSims={numSims} />
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', my: 0.25 }}>vs</Typography>
-                  <BracketSlot slot={slotMap.get('FINAL-B')} numSims={numSims} />
-                  <Box sx={{ mt: 0.75, pt: 0.75, borderTop: 1, borderColor: 'divider' }}>
-                    <Typography variant="caption" color="text.secondary">🏆 Champion →</Typography>
-                    <BracketSlot slot={slotMap.get('FINAL-W')} numSims={numSims} />
-                  </Box>
-                </Paper>
-              </Box>
-              <Box sx={{ mb: 3 }}>
-                <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>3rd Place Match</Typography>
-                <Paper sx={{ p: 1.5, maxWidth: 240 }}>
-                  <BracketSlot slot={slotMap.get('3RD-A')} numSims={numSims} />
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', my: 0.25 }}>vs</Typography>
-                  <BracketSlot slot={slotMap.get('3RD-B')} numSims={numSims} />
-                  <Box sx={{ mt: 0.75, pt: 0.75, borderTop: 1, borderColor: 'divider' }}>
-                    <Typography variant="caption" color="text.secondary">🥉 Winner →</Typography>
-                    <BracketSlot slot={slotMap.get('3RD-W')} numSims={numSims} />
-                  </Box>
-                </Paper>
-              </Box>
+              <ForecastBracket
+                bracketSlots={results.bracketSlots}
+                numSims={numSims}
+                countryCodeMap={Object.fromEntries(
+                  Object.keys(PELE_RATINGS).map(t => [t, getCountryCode(t) ?? ''])
+                )}
+              />
             </Box>
           )}
 

@@ -12,6 +12,7 @@ interface KnockoutBracketProps {
   readOnly?: boolean;
   results?: Record<string, string>;
   countryCodeMap?: Record<string, string>;
+  probabilityMap?: Record<string, Record<string, number>>;
 }
 
 const CONNECTOR_COLOR = 'divider';

@@ -15,6 +15,7 @@ interface MatchupProps {
   result?: string;
   countryCodeMap?: Record<string, string>;
   isChampionPick?: boolean;
+  probabilities?: Record<string, number>;
 }
 
 function TeamSlot({
@@ -27,6 +28,7 @@ function TeamSlot({
   position,
   countryCode,
   animating,
+  probability,
 }: {
   team: string | null;
   isPicked: boolean;
@@ -37,6 +39,7 @@ function TeamSlot({
   position: 'top' | 'bottom';
   countryCode?: string;
   animating: boolean;
+  probability?: number;
 }) {
   const bg = isCorrect
     ? 'rgba(76, 175, 80, 0.3)'
@@ -83,6 +86,11 @@ function TeamSlot({
           >
             {team}
           </Typography>
+          {probability !== undefined && (
+            <Typography component="span" sx={{ fontSize: '0.6rem', color: 'text.secondary', fontWeight: 600 }}>
+              {probability}%
+            </Typography>
+          )}
           {isCorrect && (
             <Typography component="span" sx={{ fontSize: '0.65rem', color: 'success.main' }}>
               ✓
@@ -103,7 +111,7 @@ function TeamSlot({
   );
 }
 
-export default function Matchup({ matchup, userPick, onPick, readOnly, disabled, result, countryCodeMap = {}, isChampionPick }: MatchupProps) {
+export default function Matchup({ matchup, userPick, onPick, readOnly, disabled, result, countryCodeMap = {}, isChampionPick, probabilities }: MatchupProps) {
   const clickable = !readOnly && !disabled && !!onPick;
   const pickA = userPick === matchup.teamA;
   const pickB = userPick === matchup.teamB;
@@ -146,6 +154,7 @@ export default function Matchup({ matchup, userPick, onPick, readOnly, disabled,
         position="top"
         countryCode={matchup.teamA ? countryCodeMap[matchup.teamA] : undefined}
         animating={animatingSlot === 'A'}
+        probability={matchup.teamA && probabilities ? probabilities[matchup.teamA] : undefined}
       />
       <TeamSlot
         team={matchup.teamB}
@@ -157,6 +166,7 @@ export default function Matchup({ matchup, userPick, onPick, readOnly, disabled,
         position="bottom"
         countryCode={matchup.teamB ? countryCodeMap[matchup.teamB] : undefined}
         animating={animatingSlot === 'B'}
+        probability={matchup.teamB && probabilities ? probabilities[matchup.teamB] : undefined}
       />
     </Paper>
   );

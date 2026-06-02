@@ -24,6 +24,7 @@ export default function JoinGroupPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
+  const [hasPicks, setHasPicks] = useState<boolean | null>(null);
 
   const loadGroup = useCallback(async () => {
     try {
@@ -45,6 +46,21 @@ export default function JoinGroupPage() {
     if (user && code) loadGroup();
   }, [user, code, loadGroup]);
 
+  useEffect(() => {
+    if (!user) return;
+    fetch("/api/picks")
+      .then((r) => r.json())
+      .then((d) => {
+        setHasPicks(
+          d.ok
+          && d.prediction
+          && Array.isArray(d.prediction.group_predictions)
+          && d.prediction.group_predictions.length > 0,
+        );
+      })
+      .catch(() => setHasPicks(false));
+  }, [user]);
+
   const handleJoin = async () => {
     setJoining(true);
     try {
@@ -58,6 +74,12 @@ export default function JoinGroupPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+
+      // If the user hasn't made their picks yet, send them to predictions first
+      if (!hasPicks) {
+        router.push("/bracket");
+        return;
+      }
       router.push(`/leaderboard?group=${data.group_id}`);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to join group");
@@ -119,9 +141,20 @@ export default function JoinGroupPage() {
             <Typography color="success.main" gutterBottom>
               ✅ You&apos;re already in this group!
             </Typography>
-            <Button variant="contained" href={`/leaderboard?group=${group.id}`} sx={{ mt: 1 }}>
-              View Leaderboard
-            </Button>
+            {hasPicks === false ? (
+              <>
+                <Typography color="text.secondary" sx={{ mb: 1 }}>
+                  Make your predictions to start competing.
+                </Typography>
+                <Button variant="contained" href="/bracket" sx={{ mt: 1 }}>
+                  Make Predictions
+                </Button>
+              </>
+            ) : (
+              <Button variant="contained" href={`/leaderboard?group=${group.id}`} sx={{ mt: 1 }}>
+                View Leaderboard
+              </Button>
+            )}
           </Box>
         ) : (
           <Button

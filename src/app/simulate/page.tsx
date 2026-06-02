@@ -256,40 +256,64 @@ export default function SimulatePage() {
           {activeTab === TAB_BRACKET && (
             <Box>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Hover over any slot to see the full list of teams and their probabilities.
+                Each matchup shows the most likely team in each slot. Hover to see all possibilities.
               </Typography>
-              {['R32', 'R16', 'QF', 'SF', 'FINAL'].map((round) => {
-                const roundSlots = results.bracketSlots
-                  .filter((s) => s.slotId.startsWith(round) && s.slotId.endsWith('-W'))
-                  .sort((a, b) => {
-                    const numA = parseInt(a.slotId.split('-')[1]) || 0;
-                    const numB = parseInt(b.slotId.split('-')[1]) || 0;
-                    return numA - numB;
-                  });
-                if (roundSlots.length === 0) return null;
-                const label = round === 'R32' ? 'Round of 32' : round === 'R16' ? 'Round of 16' : round === 'QF' ? 'Quarterfinals' : round === 'SF' ? 'Semifinals' : 'Final';
+              {['R32', 'R16', 'QF', 'SF'].map((round) => {
+                const count = round === 'R32' ? 16 : round === 'R16' ? 8 : round === 'QF' ? 4 : 2;
+                const label = round === 'R32' ? 'Round of 32' : round === 'R16' ? 'Round of 16' : round === 'QF' ? 'Quarterfinals' : 'Semifinals';
                 return (
                   <Box key={round} sx={{ mb: 3 }}>
                     <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>{label}</Typography>
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                      {roundSlots.map((slot) => (
-                        <BracketSlot key={slot.slotId} slot={slot} numSims={numSims} />
-                      ))}
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+                      {Array.from({ length: count }, (_, i) => {
+                        const matchId = `${round}-${i + 1}`;
+                        const slotA = slotMap.get(`${matchId}-A`);
+                        const slotB = slotMap.get(`${matchId}-B`);
+                        const slotW = slotMap.get(`${matchId}-W`);
+                        return (
+                          <Paper key={matchId} sx={{ p: 1, minWidth: 170, flex: '1 1 auto', maxWidth: 220 }}>
+                            <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                              Match {i + 1}
+                            </Typography>
+                            <BracketSlot slot={slotA} numSims={numSims} />
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', my: 0.25 }}>vs</Typography>
+                            <BracketSlot slot={slotB} numSims={numSims} />
+                            <Box sx={{ mt: 0.75, pt: 0.75, borderTop: 1, borderColor: 'divider' }}>
+                              <Typography variant="caption" color="text.secondary">Winner →</Typography>
+                              <BracketSlot slot={slotW} numSims={numSims} />
+                            </Box>
+                          </Paper>
+                        );
+                      })}
                     </Box>
                   </Box>
                 );
               })}
-              {/* 3rd place */}
-              {(() => {
-                const thirdSlot = results.bracketSlots.find(s => s.slotId === '3RD-W');
-                if (!thirdSlot) return null;
-                return (
-                  <Box sx={{ mb: 3 }}>
-                    <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>3rd Place Match</Typography>
-                    <BracketSlot slot={thirdSlot} numSims={numSims} />
+              {/* Final + 3rd */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>Final</Typography>
+                <Paper sx={{ p: 1.5, maxWidth: 240 }}>
+                  <BracketSlot slot={slotMap.get('FINAL-A')} numSims={numSims} />
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', my: 0.25 }}>vs</Typography>
+                  <BracketSlot slot={slotMap.get('FINAL-B')} numSims={numSims} />
+                  <Box sx={{ mt: 0.75, pt: 0.75, borderTop: 1, borderColor: 'divider' }}>
+                    <Typography variant="caption" color="text.secondary">🏆 Champion →</Typography>
+                    <BracketSlot slot={slotMap.get('FINAL-W')} numSims={numSims} />
                   </Box>
-                );
-              })()}
+                </Paper>
+              </Box>
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>3rd Place Match</Typography>
+                <Paper sx={{ p: 1.5, maxWidth: 240 }}>
+                  <BracketSlot slot={slotMap.get('3RD-A')} numSims={numSims} />
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', my: 0.25 }}>vs</Typography>
+                  <BracketSlot slot={slotMap.get('3RD-B')} numSims={numSims} />
+                  <Box sx={{ mt: 0.75, pt: 0.75, borderTop: 1, borderColor: 'divider' }}>
+                    <Typography variant="caption" color="text.secondary">🥉 Winner →</Typography>
+                    <BracketSlot slot={slotMap.get('3RD-W')} numSims={numSims} />
+                  </Box>
+                </Paper>
+              </Box>
             </Box>
           )}
 

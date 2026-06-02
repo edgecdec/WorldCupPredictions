@@ -40,6 +40,7 @@ interface TournamentSimRequest {
   entries?: PlayerEntry[];
   scoring?: ScoringSettings;
   teamSeeds?: Record<string, number>;
+  teamRankings?: Record<string, number>;
 }
 
 interface GroupPositionResult {
@@ -302,28 +303,31 @@ function scoreGroupStageEntry(
   return total;
 }
 
+interface KoMatchResult {
+  winner: string;
+  loser: string;
+  round: number;
+}
+
 function scoreKnockoutEntry(
   picks: Record<string, string>,
-  knockoutResults: Record<string, string>,
+  matchResults: Record<string, KoMatchResult>,
   teamRankings: Record<string, number>,
   settings: ScoringSettings['knockout'],
 ): number {
   let total = 0;
-  for (const [matchId, winner] of Object.entries(knockoutResults)) {
-    if (!picks[matchId] || picks[matchId] !== winner) continue;
-    const roundStr = matchId.replace(/-\d+-[WAB]$/, '').replace(/-[WAB]$/, '');
-    let roundIdx = 0;
-    if (roundStr === 'R32') roundIdx = 0;
-    else if (roundStr === 'R16') roundIdx = 1;
-    else if (roundStr === 'QF') roundIdx = 2;
-    else if (roundStr === 'SF') roundIdx = 3;
-    else if (roundStr === '3RD') roundIdx = 4;
-    else if (roundStr === 'FINAL') roundIdx = 5;
+  for (const [matchId, result] of Object.entries(matchResults)) {
+    if (!picks[matchId] || picks[matchId] !== result.winner) continue;
 
-    total += settings.pointsPerRound[roundIdx] ?? 0;
+    total += settings.pointsPerRound[result.round] ?? 0;
 
-    // Upset bonus - we need the loser, which we don't easily have here
-    // Skip upset bonus for now — the base points dominate expected value
+    const winnerRank = teamRankings[result.winner] ?? 50;
+    const loserRank = teamRankings[result.loser] ?? 50;
+    const rankDiff = winnerRank - loserRank;
+    if (rankDiff > 0) {
+      const mult = settings.upsetMultiplierPerRound[result.round] ?? 0;
+      total += Math.floor(rankDiff / settings.upsetModulus) * mult;
+    }
   }
   return total;
 }
@@ -332,7 +336,7 @@ function scoreKnockoutEntry(
 const ctx = self as unknown as Worker;
 
 ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
-  const { ratings, avgGA, groups, numSims, entries, scoring, teamSeeds } = e.data;
+  const { ratings, avgGA, groups, numSims, entries, scoring, teamSeeds, teamRankings } = e.data;
 
   // Accumulators
   const groupPos: Record<string, number[][]> = {};
@@ -396,22 +400,39 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
 
     // Score players
     if (hasPlayers) {
+      // Build knockout match results with losers and rounds from slotTeams
+      const koMatchResults: Record<string, KoMatchResult> = {};
+      const roundLabels = ['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'];
+      for (let rIdx = 0; rIdx < roundLabels.length; rIdx++) {
+        const prefix = roundLabels[rIdx];
+        if (prefix === '3RD' || prefix === 'FINAL') {
+          const w = slotTeams[`${prefix}-W`];
+          const a = slotTeams[`${prefix}-A`];
+          const b = slotTeams[`${prefix}-B`];
+          if (w && a && b) {
+            koMatchResults[prefix] = { winner: w, loser: w === a ? b : a, round: rIdx };
+          }
+        } else {
+          const count = prefix === 'R32' ? 16 : prefix === 'R16' ? 8 : prefix === 'QF' ? 4 : 2;
+          for (let i = 1; i <= count; i++) {
+            const matchId = `${prefix}-${i}`;
+            const w = slotTeams[`${matchId}-W`];
+            const a = slotTeams[`${matchId}-A`];
+            const b = slotTeams[`${matchId}-B`];
+            if (w && a && b) {
+              koMatchResults[matchId] = { winner: w, loser: w === a ? b : a, round: rIdx };
+            }
+          }
+        }
+      }
+
       const scores: { key: string; score: number }[] = [];
       for (const ent of entries!) {
         const gsScore = scoreGroupStageEntry(
           ent.group_predictions, ent.third_place_picks,
           groupResults, advancing3rd, teamSeeds!, scoring!.groupStage,
         );
-        // Knockout scoring would need matchId→winner mapping from slotTeams
-        // Use W slots as knockout results
-        const koResults: Record<string, string> = {};
-        for (const [slot, team] of Object.entries(slotTeams)) {
-          if (slot.endsWith('-W')) {
-            const matchId = slot.replace('-W', '');
-            koResults[matchId] = team;
-          }
-        }
-        const koScore = scoreKnockoutEntry(ent.knockout_picks, koResults, {}, scoring!.knockout);
+        const koScore = scoreKnockoutEntry(ent.knockout_picks, koMatchResults, teamRankings ?? {}, scoring!.knockout);
         scores.push({ key: ent.key, score: gsScore + koScore });
       }
       scores.sort((a, b) => b.score - a.score);

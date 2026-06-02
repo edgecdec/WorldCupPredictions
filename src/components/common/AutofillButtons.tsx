@@ -15,9 +15,9 @@ interface AutofillButtonsProps {
 }
 
 const STRATEGIES: { key: AutofillStrategy; label: string; icon: React.ReactNode; desc: string }[] = [
-  { key: 'chalk', label: 'Chalk', icon: <AutoFixHighIcon fontSize="small" />, desc: 'Higher-ranked teams always win/finish higher.' },
+  { key: 'chalk', label: 'Chalk', icon: <AutoFixHighIcon fontSize="small" />, desc: 'Higher FIFA-ranked teams always win/finish higher. The naive favorite-always-wins approach.' },
   { key: 'random', label: 'Random', icon: <CasinoIcon fontSize="small" />, desc: 'Completely random picks.' },
-  { key: 'smart', label: 'Smart', icon: <PsychologyIcon fontSize="small" />, desc: 'Weighted by FIFA ranking — better teams are favored but upsets can happen.' },
+  { key: 'smart', label: 'Smart', icon: <PsychologyIcon fontSize="small" />, desc: "Simulates each match using Nate Silver's PELE goal model — better teams are favored but realistic upsets happen." },
 ];
 
 export default function AutofillButtons({ onAutofill, disabled, overwrites = true }: AutofillButtonsProps) {

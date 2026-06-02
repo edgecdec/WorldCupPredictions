@@ -1,5 +1,6 @@
 import { BracketData, KnockoutMatchup } from '@/types';
 import { getTeamByName } from '@/lib/bracketData';
+import { PELE_RATINGS, AVG_GA } from '@/lib/peleRatings';
 
 type GroupOrders = Record<string, string[]>;
 
@@ -7,6 +8,14 @@ type GroupOrders = Record<string, string[]>;
 
 function rankOf(data: BracketData, name: string): number {
   return getTeamByName(data, name)?.fifaRanking ?? 999;
+}
+
+function peleOf(name: string): number {
+  return PELE_RATINGS[name]?.pele ?? 1500;
+}
+
+function sortByPele(teams: string[]): string[] {
+  return [...teams].sort((a, b) => peleOf(b) - peleOf(a));
 }
 
 function sortByRanking(teams: string[], data: BracketData): string[] {
@@ -22,22 +31,68 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-/** Weighted coin flip: returns true with probability favoring the better-ranked team */
-function weightedPick(rankA: number, rankB: number): boolean {
-  const diff = Math.abs(rankA - rankB);
-  const BASE_PROB = 0.55;
-  const MAX_PROB = 0.85;
-  const SCALE = 50;
-  const prob = BASE_PROB + (MAX_PROB - BASE_PROB) * Math.min(diff / SCALE, 1);
-  // prob = chance the better-ranked team wins
-  return rankA < rankB ? Math.random() < prob : Math.random() >= prob;
+// --- PELE-based match simulation (Poisson goal model) ---
+
+function poissonSample(lambda: number): number {
+  const L = Math.exp(-lambda);
+  let k = 0, p = 1;
+  do { k++; p *= Math.random(); } while (p > L);
+  return k - 1;
 }
+
+/** Simulate a group-stage match (allows draws). Returns goal count for each team. */
+function simulateGroupMatch(teamA: string, teamB: string): [number, number] {
+  const a = PELE_RATINGS[teamA];
+  const b = PELE_RATINGS[teamB];
+  if (!a || !b) return [0, 0];
+  const lambdaA = a.gf * (b.ga / AVG_GA);
+  const lambdaB = b.gf * (a.ga / AVG_GA);
+  return [poissonSample(lambdaA), poissonSample(lambdaB)];
+}
+
+/** Simulate a knockout match (no draws — uses PELE-weighted coin flip on tie to model ET/penalties). */
+function simulateKnockoutMatch(teamA: string, teamB: string): string {
+  const [ga, gb] = simulateGroupMatch(teamA, teamB);
+  if (ga !== gb) return ga > gb ? teamA : teamB;
+  const a = PELE_RATINGS[teamA];
+  const b = PELE_RATINGS[teamB];
+  if (!a || !b) return Math.random() < 0.5 ? teamA : teamB;
+  const probA = a.pele / (a.pele + b.pele);
+  return Math.random() < probA ? teamA : teamB;
+}
+
+interface TeamStats { pts: number; gf: number; ga: number; gd: number }
+
+/** Run a full round-robin for a 4-team group, return finishing order + stats. */
+function simulateGroupStandings(teams: string[]): { order: string[]; stats: Record<string, TeamStats> } {
+  const stats: Record<string, TeamStats> = {};
+  for (const t of teams) stats[t] = { pts: 0, gf: 0, ga: 0, gd: 0 };
+  for (let i = 0; i < teams.length; i++) {
+    for (let j = i + 1; j < teams.length; j++) {
+      const [ga, gb] = simulateGroupMatch(teams[i], teams[j]);
+      stats[teams[i]].gf += ga; stats[teams[i]].ga += gb;
+      stats[teams[j]].gf += gb; stats[teams[j]].ga += ga;
+      if (ga > gb) stats[teams[i]].pts += 3;
+      else if (ga === gb) { stats[teams[i]].pts += 1; stats[teams[j]].pts += 1; }
+      else stats[teams[j]].pts += 3;
+    }
+  }
+  for (const t of teams) stats[t].gd = stats[t].gf - stats[t].ga;
+  const order = [...teams].sort((a, b) =>
+    stats[b].pts - stats[a].pts || stats[b].gd - stats[a].gd || stats[b].gf - stats[a].gf
+  );
+  return { order, stats };
+}
+
+/** Cache of last simulation: stats per group keyed by group name. */
+let lastSmartGroupStats: Record<string, Record<string, TeamStats>> = {};
 
 // --- Group Stage Autofill ---
 
 export function chalkGroups(data: BracketData): GroupOrders {
   const orders: GroupOrders = {};
   for (const g of data.groups) {
+    // Naive: sort by FIFA ranking (lower = better)
     orders[g.name] = sortByRanking(g.teams.map((t) => t.name), data);
   }
   return orders;
@@ -53,18 +108,16 @@ export function randomGroups(data: BracketData): GroupOrders {
 
 export function smartGroups(data: BracketData): GroupOrders {
   const orders: GroupOrders = {};
+  const allStats: Record<string, Record<string, TeamStats>> = {};
   for (const g of data.groups) {
-    // Weighted shuffle: assign random scores biased by ranking
+    // Run a single PELE-based group simulation (round-robin with Poisson goals)
     const teams = g.teams.map((t) => t.name);
-    const scored = teams.map((name) => {
-      const rank = rankOf(data, name);
-      // Lower rank = better. Score = rank + noise so better teams usually end up higher.
-      const noise = Math.random() * 40;
-      return { name, score: rank + noise };
-    });
-    scored.sort((a, b) => a.score - b.score);
-    orders[g.name] = scored.map((s) => s.name);
+    const { order, stats } = simulateGroupStandings(teams);
+    orders[g.name] = order;
+    allStats[g.name] = stats;
   }
+  // Cache stats so smartThirdPlace can use the same simulation outcome
+  lastSmartGroupStats = allStats;
   return orders;
 }
 
@@ -74,6 +127,7 @@ const REQUIRED_THIRD_PLACE = 8;
 
 export function chalkThirdPlace(data: BracketData, groupOrders: GroupOrders): string[] {
   const thirds = data.groups.map((g) => groupOrders[g.name]?.[2] ?? g.teams[2].name);
+  // Naive: top 8 by FIFA ranking
   return sortByRanking(thirds, data).slice(0, REQUIRED_THIRD_PLACE);
 }
 
@@ -83,13 +137,20 @@ export function randomThirdPlace(data: BracketData, groupOrders: GroupOrders): s
 }
 
 export function smartThirdPlace(data: BracketData, groupOrders: GroupOrders): string[] {
-  const thirds = data.groups.map((g) => groupOrders[g.name]?.[2] ?? g.teams[2].name);
-  // Weighted: better-ranked thirds more likely to be picked
-  const scored = thirds.map((name) => ({
-    name,
-    score: rankOf(data, name) + Math.random() * 30,
-  }));
-  scored.sort((a, b) => a.score - b.score);
+  // Smart: rank the 12 third-place teams using FIFA tiebreakers (points > GD > GF)
+  // from the simulated group stage stats — exactly how the real tournament works.
+  const scored: Array<{ name: string; pts: number; gd: number; gf: number }> = [];
+  for (const g of data.groups) {
+    const thirdPlaceTeam = groupOrders[g.name]?.[2] ?? g.teams[2].name;
+    const stats = lastSmartGroupStats[g.name]?.[thirdPlaceTeam];
+    if (stats) {
+      scored.push({ name: thirdPlaceTeam, pts: stats.pts, gd: stats.gd, gf: stats.gf });
+    } else {
+      // Fallback (smartGroups wasn't called first): use PELE as a proxy
+      scored.push({ name: thirdPlaceTeam, pts: 0, gd: 0, gf: peleOf(thirdPlaceTeam) / 1000 });
+    }
+  }
+  scored.sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
   return scored.slice(0, REQUIRED_THIRD_PLACE).map((s) => s.name);
 }
 
@@ -100,34 +161,41 @@ export function chalkKnockout(
   data: BracketData,
   existingPicks: Record<string, string>,
 ): Record<string, string> {
-  return fillKnockout(matchups, data, existingPicks, (rA, rB) => rA < rB);
+  // Naive: better FIFA-ranked team always wins
+  return fillKnockout(matchups, existingPicks, (teamA, teamB) =>
+    rankOf(data, teamA) <= rankOf(data, teamB) ? teamA : teamB,
+  );
 }
 
 export function randomKnockout(
   matchups: KnockoutMatchup[],
-  data: BracketData,
+  _data: BracketData,
   existingPicks: Record<string, string>,
 ): Record<string, string> {
-  return fillKnockout(matchups, data, existingPicks, () => Math.random() < 0.5);
+  return fillKnockout(matchups, existingPicks, (teamA, teamB) =>
+    Math.random() < 0.5 ? teamA : teamB,
+  );
 }
 
 export function smartKnockout(
   matchups: KnockoutMatchup[],
-  data: BracketData,
+  _data: BracketData,
   existingPicks: Record<string, string>,
 ): Record<string, string> {
-  return fillKnockout(matchups, data, existingPicks, (rA, rB) => weightedPick(rA, rB));
+  // Smart: simulate each match using the PELE Poisson goal model
+  return fillKnockout(matchups, existingPicks, (teamA, teamB) =>
+    simulateKnockoutMatch(teamA, teamB),
+  );
 }
 
 /**
  * Fill knockout picks round by round. Only fills empty slots.
- * pickA: given rankA and rankB, return true to pick teamA.
+ * pickWinner: given two team names, return the chosen winner.
  */
 function fillKnockout(
   matchups: KnockoutMatchup[],
-  data: BracketData,
   existingPicks: Record<string, string>,
-  pickA: (rankA: number, rankB: number) => boolean,
+  pickWinner: (teamA: string, teamB: string) => string,
 ): Record<string, string> {
   const picks = { ...existingPicks };
   const byId = new Map(matchups.map((m) => [m.id, m]));
@@ -142,9 +210,7 @@ function fillKnockout(
     const teamB = resolveTeamB(m, picks, byId);
     if (!teamA || !teamB) continue; // can't determine teams yet
 
-    const rA = rankOf(data, teamA);
-    const rB = rankOf(data, teamB);
-    picks[m.id] = pickA(rA, rB) ? teamA : teamB;
+    picks[m.id] = pickWinner(teamA, teamB);
   }
 
   return picks;

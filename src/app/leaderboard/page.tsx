@@ -45,7 +45,7 @@ const SCORE_COLUMNS: { key: SortKey; label: string; align: 'left' | 'right' }[] 
 
 const TOTAL_GROUPS = 12;
 const TOTAL_THIRD_PLACE = 8;
-const TOTAL_KNOCKOUT = 31;
+const TOTAL_KNOCKOUT = 32;
 
 export default function LeaderboardPage() {
   return (

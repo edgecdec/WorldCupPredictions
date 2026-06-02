@@ -65,7 +65,7 @@ const STEPS = [
     content: (
       <>
         <Typography gutterBottom>
-          Once the group stage ends, the knockout bracket opens. You&apos;ll pick winners for all <strong>31 matches</strong> from the Round of 32 through the Final.
+          Once the group stage ends, the knockout bracket opens. You&apos;ll pick winners for all <strong>31 matches</strong> from the Round of 32 through the Final, plus the 3rd-place match (<strong>32 total</strong>).
         </Typography>
         <Typography gutterBottom>
           Points increase each round — getting the Final right is worth the most!

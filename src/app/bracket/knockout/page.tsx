@@ -251,7 +251,7 @@ export default function KnockoutPage() {
       {hasKnockoutBracket && !disabled && (
         <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
           <Typography variant="body2" color="text.secondary">Autofill:</Typography>
-          <AutofillButtons onAutofill={handleAutofill} disabled={disabled} />
+          <AutofillButtons onAutofill={handleAutofill} disabled={disabled} overwrites={false} />
           <Button variant="outlined" startIcon={<TouchAppIcon />} onClick={() => setSimpleMode(true)}>
             Fill Step-by-Step
           </Button>

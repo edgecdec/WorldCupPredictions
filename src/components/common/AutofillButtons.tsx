@@ -10,6 +10,8 @@ export type AutofillStrategy = 'chalk' | 'random' | 'smart';
 interface AutofillButtonsProps {
   onAutofill: (strategy: AutofillStrategy) => void;
   disabled?: boolean;
+  /** Whether this autofill overwrites existing picks. Defaults to true (group stage). */
+  overwrites?: boolean;
 }
 
 const STRATEGIES: { key: AutofillStrategy; label: string; icon: React.ReactNode; desc: string }[] = [
@@ -18,7 +20,7 @@ const STRATEGIES: { key: AutofillStrategy; label: string; icon: React.ReactNode;
   { key: 'smart', label: 'Smart', icon: <PsychologyIcon fontSize="small" />, desc: 'Weighted by FIFA ranking — better teams are favored but upsets can happen.' },
 ];
 
-export default function AutofillButtons({ onAutofill, disabled }: AutofillButtonsProps) {
+export default function AutofillButtons({ onAutofill, disabled, overwrites = true }: AutofillButtonsProps) {
   const [pending, setPending] = useState<AutofillStrategy | null>(null);
 
   const selected = STRATEGIES.find((s) => s.key === pending);
@@ -37,7 +39,10 @@ export default function AutofillButtons({ onAutofill, disabled }: AutofillButton
         <DialogTitle>Autofill: {selected?.label}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            {selected?.desc} Only empty slots will be filled — existing picks are preserved.
+            {selected?.desc}{' '}
+            {overwrites
+              ? '⚠️ This will overwrite all your current picks.'
+              : 'Only empty slots will be filled — existing picks are preserved.'}
           </DialogContentText>
         </DialogContent>
         <DialogActions>

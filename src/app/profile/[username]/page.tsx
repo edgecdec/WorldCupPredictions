@@ -96,6 +96,26 @@ export default function ProfilePage() {
     load();
   }, [username]);
 
+  const bracketData = tournament?.bracket_data as BracketData | undefined;
+  const results = tournament?.results_data as TournamentResults | undefined;
+  const matchups = results?.knockoutBracket ?? [];
+  const pred = profile?.prediction ?? null;
+
+  const knockoutPicks = pred?.knockoutPicks ?? {};
+  const effectiveMatchups = useMemo(
+    () => matchups.length > 0 ? computeEffectiveMatchups(matchups, knockoutPicks) : [],
+    [matchups, knockoutPicks],
+  );
+
+  // Phase gating: hide picks until lock times pass (admin always sees)
+  const lockTimeGroups = tournament?.lock_time_groups ? new Date(tournament.lock_time_groups) : null;
+  const lockTimeKnockout = tournament?.lock_time_knockout ? new Date(tournament.lock_time_knockout) : null;
+  const now = new Date();
+  const groupsLocked = lockTimeGroups ? now >= lockTimeGroups : false;
+  const knockoutLocked = lockTimeKnockout ? now >= lockTimeKnockout : false;
+  const canSeeGroupPicks = isOwnProfile || user?.is_admin || groupsLocked;
+  const canSeeKnockoutPicks = isOwnProfile || user?.is_admin || knockoutLocked;
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -112,17 +132,6 @@ export default function ProfilePage() {
       </Box>
     );
   }
-
-  const bracketData = tournament?.bracket_data as BracketData | undefined;
-  const results = tournament?.results_data as TournamentResults | undefined;
-  const matchups = results?.knockoutBracket ?? [];
-  const pred = profile.prediction;
-
-  const knockoutPicks = pred?.knockoutPicks ?? {};
-  const effectiveMatchups = useMemo(
-    () => matchups.length > 0 ? computeEffectiveMatchups(matchups, knockoutPicks) : [],
-    [matchups, knockoutPicks],
-  );
 
   const groupOrders: Record<string, string[]> = {};
   if (bracketData?.groups && pred) {
@@ -173,7 +182,7 @@ export default function ProfilePage() {
             <Typography variant="body2" color="text.secondary">
               Member since {memberSince}
             </Typography>
-            {profile.championPick && (
+            {profile.championPick && canSeeKnockoutPicks && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1 }}>
                 <EmojiEventsIcon sx={{ color: 'warning.main', fontSize: 20 }} />
                 <Typography variant="body2">
@@ -185,9 +194,11 @@ export default function ProfilePage() {
           {pred?.bracketName && (
             <Chip label={pred.bracketName} variant="outlined" />
           )}
-          <Button component={Link} href={`/bracket/${encodeURIComponent(profile.username)}`} variant="outlined" size="small">
-            View Full Bracket
-          </Button>
+          {canSeeGroupPicks && (
+            <Button component={Link} href={`/bracket/${encodeURIComponent(profile.username)}`} variant="outlined" size="small">
+              View Full Bracket
+            </Button>
+          )}
         </Box>
       </Paper>
 
@@ -283,15 +294,28 @@ export default function ProfilePage() {
         </Paper>
       )}
 
-      {/* Mini Bracket Progression */}
-      {pred && matchups.length > 0 && Object.keys(pred.knockoutPicks).length > 0 && (
+      {/* Mini Bracket Progression — only visible after knockout phase starts (or own profile / admin) */}
+      {pred && matchups.length > 0 && Object.keys(pred.knockoutPicks).length > 0 && canSeeKnockoutPicks && (
         <Box sx={{ mb: 3, maxWidth: 500 }}>
           <MiniBracket matchups={effectiveMatchups} picks={pred.knockoutPicks} countryCodeMap={countryCodeMap} results={results?.knockout} />
         </Box>
       )}
 
+      {/* Hidden picks notice (someone else's profile, before tournament starts) */}
+      {pred && !canSeeGroupPicks && (
+        <Paper sx={{ p: 4, textAlign: 'center', mb: 3 }}>
+          <Typography color="text.secondary" sx={{ mb: 1 }}>
+            🔒 {profile.username}&apos;s predictions are hidden until the tournament begins
+            {lockTimeGroups && ` on ${lockTimeGroups.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}`}.
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            Once group stage matches start, all players&apos; picks become visible.
+          </Typography>
+        </Paper>
+      )}
+
       {/* Group Predictions */}
-      {pred && bracketData?.groups && (
+      {pred && bracketData?.groups && canSeeGroupPicks && (
         <>
           <Typography variant="h5" fontWeight="bold" sx={{ mb: 2 }}>Group Predictions</Typography>
           <Box
@@ -335,8 +359,8 @@ export default function ProfilePage() {
         </>
       )}
 
-      {/* Knockout Bracket */}
-      {pred && matchups.length > 0 && Object.keys(pred.knockoutPicks).length > 0 && (
+      {/* Knockout Bracket — only visible after knockout phase starts (or own profile / admin) */}
+      {pred && matchups.length > 0 && Object.keys(pred.knockoutPicks).length > 0 && canSeeKnockoutPicks && (
         <>
           <Typography variant="h5" fontWeight="bold" sx={{ mb: 2 }}>Knockout Bracket</Typography>
           {pred.tiebreaker != null && (
@@ -350,6 +374,15 @@ export default function ProfilePage() {
             <KnockoutBracket matchups={effectiveMatchups} picks={pred.knockoutPicks} readOnly results={results?.knockout} countryCodeMap={countryCodeMap} />
           )}
         </>
+      )}
+
+      {/* Knockout-not-yet-visible notice (group stage active but knockout hidden) */}
+      {pred && canSeeGroupPicks && !canSeeKnockoutPicks && Object.keys(pred.knockoutPicks).length > 0 && (
+        <Paper sx={{ p: 3, textAlign: 'center', mb: 3 }}>
+          <Typography color="text.secondary">
+            🔒 Knockout bracket picks become visible once the knockout stage begins.
+          </Typography>
+        </Paper>
       )}
 
       {!pred && (

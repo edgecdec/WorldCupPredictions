@@ -105,6 +105,25 @@ export default function PublicBracketPage() {
     }
   };
 
+  const bracketData = tournament?.bracket_data as BracketData | undefined;
+  const results = tournament?.results_data as TournamentResults | undefined;
+  const matchups = results?.knockoutBracket || [];
+  const effectiveMatchups = useMemo(
+    () => matchups.length > 0 ? computeEffectiveMatchups(matchups, knockoutPicks) : [],
+    [matchups, knockoutPicks],
+  );
+  const decodedUsername = decodeURIComponent(username);
+  const isOwnProfile = user?.username?.toLowerCase() === decodedUsername.toLowerCase();
+
+  // Phase gating: hide picks until lock times pass
+  const lockTimeGroups = tournament?.lock_time_groups ? new Date(tournament.lock_time_groups) : null;
+  const lockTimeKnockout = tournament?.lock_time_knockout ? new Date(tournament.lock_time_knockout) : null;
+  const now = new Date();
+  const groupsLocked = lockTimeGroups ? now >= lockTimeGroups : false;
+  const knockoutLocked = lockTimeKnockout ? now >= lockTimeKnockout : false;
+  const canSeeGroupPicks = isOwnProfile || user?.is_admin || groupsLocked;
+  const canSeeKnockoutPicks = isOwnProfile || user?.is_admin || knockoutLocked;
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -121,15 +140,6 @@ export default function PublicBracketPage() {
       </Box>
     );
   }
-
-  const bracketData = tournament?.bracket_data as BracketData | undefined;
-  const results = tournament?.results_data as TournamentResults | undefined;
-  const matchups = results?.knockoutBracket || [];
-  const effectiveMatchups = useMemo(
-    () => matchups.length > 0 ? computeEffectiveMatchups(matchups, knockoutPicks) : [],
-    [matchups, knockoutPicks],
-  );
-  const decodedUsername = decodeURIComponent(username);
   const groupResultsMap = new Map(
     (results?.groupStage?.groupResults ?? []).map((gr) => [gr.groupName, gr.order]),
   );
@@ -159,13 +169,21 @@ export default function PublicBracketPage() {
       </Box>
 
       <Box ref={printRef}>
-        {tiebreaker != null && (
+        {/* Picks hidden notice */}
+        {!canSeeGroupPicks && (
+          <Alert severity="info" sx={{ mb: 3 }}>
+            🔒 {decodedUsername}&apos;s predictions are hidden until the tournament begins
+            {lockTimeGroups && ` on ${lockTimeGroups.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}`}.
+          </Alert>
+        )}
+
+        {tiebreaker != null && canSeeKnockoutPicks && (
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Tiebreaker (total goals in Final): {tiebreaker}
           </Typography>
         )}
 
-        {bracketData?.groups && (
+        {bracketData?.groups && canSeeGroupPicks && (
           <>
             <Typography variant="h5" fontWeight="bold" sx={{ mb: 2 }}>Group Stage</Typography>
             <Box
@@ -209,7 +227,7 @@ export default function PublicBracketPage() {
           </>
         )}
 
-        {matchups.length > 0 && Object.keys(knockoutPicks).length > 0 && (
+        {matchups.length > 0 && Object.keys(knockoutPicks).length > 0 && canSeeKnockoutPicks && (
           <>
             <Typography variant="h5" fontWeight="bold" sx={{ mb: 2 }}>Knockout Bracket</Typography>
             {isMobile ? (
@@ -218,6 +236,12 @@ export default function PublicBracketPage() {
               <KnockoutBracket matchups={effectiveMatchups} picks={knockoutPicks} readOnly results={results?.knockout} countryCodeMap={countryCodeMap} />
             )}
           </>
+        )}
+
+        {canSeeGroupPicks && !canSeeKnockoutPicks && Object.keys(knockoutPicks).length > 0 && (
+          <Alert severity="info" sx={{ mt: 3 }}>
+            🔒 Knockout bracket picks become visible once the knockout stage begins.
+          </Alert>
         )}
       </Box>
 

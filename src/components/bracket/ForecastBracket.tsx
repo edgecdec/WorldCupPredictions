@@ -177,34 +177,57 @@ export default function ForecastBracket({ bracketSlots, numSims, countryCodeMap 
   const roundLabels = ['R32', 'R16', 'QF', 'SF'];
   const roundDisplayNames: Record<string, string> = { R32: 'Round of 32', R16: 'Round of 16', QF: 'Quarterfinals', SF: 'Semifinals' };
 
+  const leftRounds = [leftR32, leftR16, leftQF, leftSF];
+  const rightRounds = [rightSF, rightQF, rightR16, rightR32];
+
   return (
     <Box sx={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', pb: 2 }}>
-      <Box sx={{ display: 'flex', alignItems: 'stretch', minWidth: 'fit-content', height: 720 }}>
-        {/* Left half */}
-        {[leftR32, leftR16, leftQF, leftSF].map((ids, i) => (
-          <Box key={`left-${i}`} sx={{ display: 'contents' }}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-              <Typography variant="caption" sx={{ textAlign: 'center', fontWeight: 700, color: 'text.secondary', mb: 0.5, fontSize: '0.6rem' }}>
+      {/* Round labels row */}
+      <Box sx={{ display: 'flex', alignItems: 'flex-end', minWidth: 'fit-content', mb: 0.5 }}>
+        {leftRounds.map((ids, i) => (
+          <Box key={`lbl-left-${i}`} sx={{ display: 'contents' }}>
+            <Box sx={{ minWidth: 130, flexShrink: 0, textAlign: 'center' }}>
+              <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', fontSize: '0.6rem' }}>
                 {roundDisplayNames[roundLabels[i]]}
               </Typography>
-              <RoundColumn matchIds={ids} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} isFirstRound={i === 0} />
             </Box>
+            {i < 3 && <Box sx={{ width: 12, flexShrink: 0 }} />}
+          </Box>
+        ))}
+        <Box sx={{ minWidth: 160, mx: 1, textAlign: 'center' }}>
+          <Typography variant="caption" sx={{ fontWeight: 700, color: 'warning.main', fontSize: '0.7rem' }}>
+            🏆 Final
+          </Typography>
+        </Box>
+        {rightRounds.map((ids, i) => (
+          <Box key={`lbl-right-${i}`} sx={{ display: 'contents' }}>
+            {i > 0 && <Box sx={{ width: 12, flexShrink: 0 }} />}
+            <Box sx={{ minWidth: 130, flexShrink: 0, textAlign: 'center' }}>
+              <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', fontSize: '0.6rem' }}>
+                {roundDisplayNames[roundLabels[3 - i]]}
+              </Typography>
+            </Box>
+          </Box>
+        ))}
+      </Box>
+
+      {/* Bracket */}
+      <Box sx={{ display: 'flex', alignItems: 'stretch', minWidth: 'fit-content', height: 720 }}>
+        {/* Left half */}
+        {leftRounds.map((ids, i) => (
+          <Box key={`left-${i}`} sx={{ display: 'contents' }}>
+            <RoundColumn matchIds={ids} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} isFirstRound={i === 0} />
             {i < 3 && <ConnectorColumn pairCount={ids.length} direction="left" />}
           </Box>
         ))}
 
         {/* Center: Final + 3rd */}
         <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minWidth: 160, mx: 1, gap: 3 }}>
-          <Box sx={{ textAlign: 'center' }}>
-            <Typography variant="caption" sx={{ fontWeight: 700, color: 'warning.main', mb: 0.5, display: 'block', fontSize: '0.7rem' }}>
-              🏆 Final
-            </Typography>
-            <Box sx={{ border: 2, borderColor: 'warning.main', borderRadius: 1, p: 0.25 }}>
-              <MatchupCell matchId="FINAL" slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
-            </Box>
+          <Box sx={{ border: 2, borderColor: 'warning.main', borderRadius: 1, p: 0.25 }}>
+            <MatchupCell matchId="FINAL" slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
           </Box>
-          <Box sx={{ textAlign: 'center', opacity: 0.8 }}>
-            <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', display: 'block', fontSize: '0.6rem' }}>
+          <Box sx={{ opacity: 0.8 }}>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', display: 'block', fontSize: '0.6rem', textAlign: 'center', mb: 0.25 }}>
               🥉 3rd Place
             </Typography>
             <MatchupCell matchId="3RD" slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
@@ -212,15 +235,10 @@ export default function ForecastBracket({ bracketSlots, numSims, countryCodeMap 
         </Box>
 
         {/* Right half (reversed order) */}
-        {[rightSF, rightQF, rightR16, rightR32].map((ids, i) => (
+        {rightRounds.map((ids, i) => (
           <Box key={`right-${i}`} sx={{ display: 'contents' }}>
             {i > 0 && <ConnectorColumn pairCount={ids.length} direction="right" />}
-            <Box sx={{ display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-              <Typography variant="caption" sx={{ textAlign: 'center', fontWeight: 700, color: 'text.secondary', mb: 0.5, fontSize: '0.6rem' }}>
-                {roundDisplayNames[roundLabels[3 - i]]}
-              </Typography>
-              <RoundColumn matchIds={ids} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} isFirstRound={i === 3} />
-            </Box>
+            <RoundColumn matchIds={ids} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} isFirstRound={i === 3} />
           </Box>
         ))}
       </Box>

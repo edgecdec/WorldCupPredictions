@@ -86,16 +86,17 @@ function MatchupCell({ matchId, slotMap, numSims, countryCodeMap }: {
   );
 }
 
-function RoundColumn({ matchIds, slotMap, numSims, countryCodeMap }: {
+function RoundColumn({ matchIds, slotMap, numSims, countryCodeMap, isFirstRound }: {
   matchIds: string[];
   slotMap: Map<string, BracketSlotResult>;
   numSims: number;
   countryCodeMap: Record<string, string>;
+  isFirstRound?: boolean;
 }) {
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', minWidth: 130, flexShrink: 0 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', minWidth: 130, flexShrink: 0, flex: 1 }}>
       {matchIds.map((id) => (
-        <Box key={id} sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        <Box key={id} sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', py: isFirstRound ? 0.25 : 0, flex: 1 }}>
           <MatchupCell matchId={id} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
         </Box>
       ))}
@@ -178,7 +179,7 @@ export default function ForecastBracket({ bracketSlots, numSims, countryCodeMap 
 
   return (
     <Box sx={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', pb: 2 }}>
-      <Box sx={{ display: 'flex', alignItems: 'stretch', minWidth: 'fit-content', minHeight: 600 }}>
+      <Box sx={{ display: 'flex', alignItems: 'stretch', minWidth: 'fit-content', height: 720 }}>
         {/* Left half */}
         {[leftR32, leftR16, leftQF, leftSF].map((ids, i) => (
           <Box key={`left-${i}`} sx={{ display: 'contents' }}>
@@ -186,7 +187,7 @@ export default function ForecastBracket({ bracketSlots, numSims, countryCodeMap 
               <Typography variant="caption" sx={{ textAlign: 'center', fontWeight: 700, color: 'text.secondary', mb: 0.5, fontSize: '0.6rem' }}>
                 {roundDisplayNames[roundLabels[i]]}
               </Typography>
-              <RoundColumn matchIds={ids} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
+              <RoundColumn matchIds={ids} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} isFirstRound={i === 0} />
             </Box>
             {i < 3 && <ConnectorColumn pairCount={ids.length} direction="left" />}
           </Box>
@@ -218,7 +219,7 @@ export default function ForecastBracket({ bracketSlots, numSims, countryCodeMap 
               <Typography variant="caption" sx={{ textAlign: 'center', fontWeight: 700, color: 'text.secondary', mb: 0.5, fontSize: '0.6rem' }}>
                 {roundDisplayNames[roundLabels[3 - i]]}
               </Typography>
-              <RoundColumn matchIds={ids} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
+              <RoundColumn matchIds={ids} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} isFirstRound={i === 3} />
             </Box>
           </Box>
         ))}

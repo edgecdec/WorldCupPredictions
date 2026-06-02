@@ -298,18 +298,19 @@ function GroupForecastTable({ groupData, numSims }: {
 
 type StandingsSortKey = 'rank' | 'player' | 'avgScore' | 'avgRank' | 'winPct';
 
-const STANDINGS_COLUMNS: Array<{ key: StandingsSortKey; label: string; align: 'left' | 'right' }> = [
-  { key: 'rank', label: '#', align: 'left' },
-  { key: 'player', label: 'Player', align: 'left' },
-  { key: 'avgScore', label: 'Avg Score', align: 'right' },
-  { key: 'avgRank', label: 'Avg Rank', align: 'right' },
-  { key: 'winPct', label: 'Win %', align: 'right' },
-];
-
-function ExpectedStandingsTable({ playerScores, currentUsername }: {
+function ExpectedStandingsTable({ playerScores, currentUsername, leadOnly }: {
   playerScores: Array<{ key: string; avgScore: number; avgRank: number; winPct: number }>;
   currentUsername: string;
+  leadOnly: boolean;
 }) {
+  const winLabel = leadOnly ? 'Lead %' : 'Win %';
+  const STANDINGS_COLUMNS: Array<{ key: StandingsSortKey; label: string; align: 'left' | 'right' }> = [
+    { key: 'rank', label: '#', align: 'left' },
+    { key: 'player', label: 'Player', align: 'left' },
+    { key: 'avgScore', label: 'Avg Score', align: 'right' },
+    { key: 'avgRank', label: 'Avg Rank', align: 'right' },
+    { key: 'winPct', label: winLabel, align: 'right' },
+  ];
   const [sortKey, setSortKey] = useState<StandingsSortKey>('avgScore');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
@@ -557,13 +558,22 @@ export default function SimulatePage() {
                   </FormControl>
                 )}
               </Box>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                Based on {numSims.toLocaleString()} simulated tournaments, here is how each player&apos;s picks are expected to perform.
-              </Typography>
-              <ExpectedStandingsTable
-                playerScores={results.playerScores}
-                currentUsername={user.username}
-              />
+              {(() => {
+                const anyKnockoutPicks = (players ?? []).some((p) => Object.keys(p.knockout_picks).length > 0);
+                return (
+                  <>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                      Based on {numSims.toLocaleString()} simulated tournaments, here is how each player&apos;s picks are expected to perform.
+                      {!anyKnockoutPicks && ' Lead % = chance of having the top score after the group stage (knockout picks not yet locked in).'}
+                    </Typography>
+                    <ExpectedStandingsTable
+                      playerScores={results.playerScores}
+                      currentUsername={user.username}
+                      leadOnly={!anyKnockoutPicks}
+                    />
+                  </>
+                );
+              })()}
             </Paper>
           )}
         </>

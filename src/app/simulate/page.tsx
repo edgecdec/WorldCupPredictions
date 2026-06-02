@@ -21,7 +21,7 @@ import { FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 const GROUP_NAMES = Object.keys(GROUPS);
 const TAB_GROUPS = 0;
 const TAB_BRACKET = 1;
-const TAB_CHAMPION = 2;
+const TAB_TEAM_OUTLOOK = 2;
 
 function getCountryCode(team: string): string | undefined {
   const CODES: Record<string, string> = {
@@ -49,6 +49,131 @@ function pctNum(count: number, total: number): number {
   return Math.round((count / total) * 100);
 }
 
+interface TeamRoundRow {
+  team: string;
+  reachR32: number;
+  reachR16: number;
+  reachQF: number;
+  reachSF: number;
+  reachFinal: number;
+  champion: number;
+}
+
+function computeTeamOutlook(
+  bracketSlots: Array<{ slotId: string; teams: Array<{ team: string; count: number }> }>,
+  advanceProbs: Array<{ team: string; pct: number }>,
+  championProbs: Array<{ team: string; pct: number }>,
+  numSims: number,
+): TeamRoundRow[] {
+  // Reach R32 = advance from group stage (top 2 + best 3rd)
+  const r32Map = new Map(advanceProbs.map((t) => [t.team, t.pct]));
+  const champMap = new Map(championProbs.map((t) => [t.team, t.pct]));
+
+  // Reach R16 = won an R32 match → appears in any R32-N-W slot
+  // Reach QF = won an R16 match → R16-N-W
+  // Reach SF = won a QF match → QF-N-W
+  // Reach Final = won a SF match → appears in FINAL-A or FINAL-B
+  const reachR16: Record<string, number> = {};
+  const reachQF: Record<string, number> = {};
+  const reachSF: Record<string, number> = {};
+  const reachFinal: Record<string, number> = {};
+
+  for (const slot of bracketSlots) {
+    if (slot.slotId.match(/^R32-\d+-W$/)) {
+      for (const t of slot.teams) reachR16[t.team] = (reachR16[t.team] ?? 0) + t.count;
+    } else if (slot.slotId.match(/^R16-\d+-W$/)) {
+      for (const t of slot.teams) reachQF[t.team] = (reachQF[t.team] ?? 0) + t.count;
+    } else if (slot.slotId.match(/^QF-\d+-W$/)) {
+      for (const t of slot.teams) reachSF[t.team] = (reachSF[t.team] ?? 0) + t.count;
+    } else if (slot.slotId === 'FINAL-A' || slot.slotId === 'FINAL-B') {
+      for (const t of slot.teams) reachFinal[t.team] = (reachFinal[t.team] ?? 0) + t.count;
+    }
+  }
+
+  const allTeams = new Set<string>();
+  for (const t of advanceProbs) allTeams.add(t.team);
+  Object.keys(reachR16).forEach((t) => allTeams.add(t));
+
+  const rows: TeamRoundRow[] = [];
+  for (const team of allTeams) {
+    rows.push({
+      team,
+      reachR32: r32Map.get(team) ?? 0,
+      reachR16: ((reachR16[team] ?? 0) / numSims) * 100,
+      reachQF: ((reachQF[team] ?? 0) / numSims) * 100,
+      reachSF: ((reachSF[team] ?? 0) / numSims) * 100,
+      reachFinal: ((reachFinal[team] ?? 0) / numSims) * 100,
+      champion: champMap.get(team) ?? 0,
+    });
+  }
+  rows.sort((a, b) => b.champion - a.champion || b.reachFinal - a.reachFinal || b.reachSF - a.reachSF);
+  return rows;
+}
+
+function TeamOutlookTable({ bracketSlots, advanceProbs, championProbs, numSims }: {
+  bracketSlots: Array<{ slotId: string; teams: Array<{ team: string; count: number }> }>;
+  advanceProbs: Array<{ team: string; pct: number }>;
+  championProbs: Array<{ team: string; pct: number }>;
+  numSims: number;
+}) {
+  const rows = useMemo(
+    () => computeTeamOutlook(bracketSlots, advanceProbs, championProbs, numSims),
+    [bracketSlots, advanceProbs, championProbs, numSims],
+  );
+
+  const fmt = (n: number) => n >= 0.05 ? n.toFixed(1) : '<0.1';
+  const cellColor = (n: number) => {
+    if (n >= 70) return 'success.main';
+    if (n >= 40) return 'warning.main';
+    if (n >= 10) return 'text.primary';
+    return 'text.secondary';
+  };
+
+  return (
+    <Paper sx={{ overflow: 'auto' }}>
+      <Typography variant="body2" color="text.secondary" sx={{ p: 2, pb: 1 }}>
+        For each team, the probability of reaching each tournament round across {numSims.toLocaleString()} simulations.
+      </Typography>
+      <TableContainer>
+        <Table size="small" stickyHeader>
+          <TableHead>
+            <TableRow>
+              <TableCell sx={{ py: 0.5 }}>Team</TableCell>
+              <TableCell align="right" sx={{ py: 0.5 }}>R32</TableCell>
+              <TableCell align="right" sx={{ py: 0.5 }}>R16</TableCell>
+              <TableCell align="right" sx={{ py: 0.5 }}>QF</TableCell>
+              <TableCell align="right" sx={{ py: 0.5 }}>SF</TableCell>
+              <TableCell align="right" sx={{ py: 0.5 }}>Final</TableCell>
+              <TableCell align="right" sx={{ py: 0.5, fontWeight: 700 }}>Champion</TableCell>
+              <TableCell align="right" sx={{ py: 0.5, color: 'text.secondary' }}>PELE</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {rows.map((r) => (
+              <TableRow key={r.team} hover>
+                <TableCell sx={{ py: 0.5 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <TeamFlag countryCode={getCountryCode(r.team) ?? ''} size={18} />
+                    <Typography variant="body2">{r.team}</Typography>
+                  </Box>
+                </TableCell>
+                <TableCell align="right" sx={{ py: 0.5, color: cellColor(r.reachR32) }}>{fmt(r.reachR32)}%</TableCell>
+                <TableCell align="right" sx={{ py: 0.5, color: cellColor(r.reachR16) }}>{fmt(r.reachR16)}%</TableCell>
+                <TableCell align="right" sx={{ py: 0.5, color: cellColor(r.reachQF) }}>{fmt(r.reachQF)}%</TableCell>
+                <TableCell align="right" sx={{ py: 0.5, color: cellColor(r.reachSF) }}>{fmt(r.reachSF)}%</TableCell>
+                <TableCell align="right" sx={{ py: 0.5, color: cellColor(r.reachFinal) }}>{fmt(r.reachFinal)}%</TableCell>
+                <TableCell align="right" sx={{ py: 0.5, fontWeight: 700, color: cellColor(r.champion) }}>{fmt(r.champion)}%</TableCell>
+                <TableCell align="right" sx={{ py: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
+                  {PELE_RATINGS[r.team]?.pele.toFixed(0)}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Paper>
+  );
+}
 
 interface SimApiEntry {
   username: string;
@@ -156,7 +281,7 @@ export default function SimulatePage() {
           >
             <Tab label="Group Stage" />
             <Tab label="Knockout Bracket" />
-            <Tab label="Champion Odds" />
+            <Tab label="Team Outlook" />
           </Tabs>
 
           {activeTab === TAB_GROUPS && (
@@ -224,44 +349,13 @@ export default function SimulatePage() {
             </Box>
           )}
 
-          {activeTab === TAB_CHAMPION && (
-            <Box sx={{ maxWidth: 600 }}>
-              <TableContainer component={Paper}>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ py: 0.5 }}>#</TableCell>
-                      <TableCell sx={{ py: 0.5 }}>Team</TableCell>
-                      <TableCell align="right" sx={{ py: 0.5 }}>Win %</TableCell>
-                      <TableCell align="right" sx={{ py: 0.5 }}>PELE</TableCell>
-                      <TableCell sx={{ py: 0.5, width: '40%' }}></TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {results.championProbs.slice(0, 30).map((t, i) => (
-                      <TableRow key={t.team}>
-                        <TableCell sx={{ py: 0.5 }}>{i + 1}</TableCell>
-                        <TableCell sx={{ py: 0.5 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <TeamFlag countryCode={getCountryCode(t.team) ?? ''} size={20} />
-                            <Typography variant="body2">{t.team}</Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell align="right" sx={{ py: 0.5, fontWeight: 700 }}>{t.pct}%</TableCell>
-                        <TableCell align="right" sx={{ py: 0.5, color: 'text.secondary', fontSize: '0.8rem' }}>
-                          {PELE_RATINGS[t.team]?.pele.toFixed(0)}
-                        </TableCell>
-                        <TableCell sx={{ py: 0.5 }}>
-                          <Box sx={{ width: '100%', bgcolor: 'action.hover', borderRadius: 1, height: 8 }}>
-                            <Box sx={{ width: `${Math.min(t.pct * 5, 100)}%`, bgcolor: 'primary.main', borderRadius: 1, height: '100%' }} />
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Box>
+          {activeTab === TAB_TEAM_OUTLOOK && (
+            <TeamOutlookTable
+              bracketSlots={results.bracketSlots}
+              advanceProbs={results.advanceProbs}
+              championProbs={results.championProbs}
+              numSims={numSims}
+            />
           )}
 
           {/* Expected Standings — admin only before tournament, all users after */}

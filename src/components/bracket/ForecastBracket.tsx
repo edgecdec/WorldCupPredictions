@@ -1,6 +1,6 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { Box, Typography, Tooltip, Tabs, Tab, useMediaQuery, useTheme } from '@mui/material';
+import { Box, Typography, Popover, Button, Tabs, Tab, useMediaQuery, useTheme } from '@mui/material';
 import type { BracketSlotResult } from '@/hooks/useTournamentSim';
 import TeamFlag from '@/components/common/TeamFlag';
 
@@ -11,24 +11,30 @@ interface ForecastBracketProps {
 }
 
 const CONNECTOR_COLOR = 'divider';
+const COLLAPSED_LIMIT = 8;
 
-function SlotTooltipContent({ slot, numSims, countryCodeMap }: { slot: BracketSlotResult; numSims: number; countryCodeMap: Record<string, string> }) {
-  const top = slot.teams.slice(0, 10);
+function SlotPopoverContent({ slot, numSims, countryCodeMap }: { slot: BracketSlotResult; numSims: number; countryCodeMap: Record<string, string> }) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? slot.teams : slot.teams.slice(0, COLLAPSED_LIMIT);
+  const hasMore = slot.teams.length > COLLAPSED_LIMIT;
   return (
-    <Box sx={{ p: 0.5, minWidth: 150 }}>
-      {top.map((t) => (
-        <Box key={t.team} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 0.2 }}>
-          <TeamFlag countryCode={countryCodeMap[t.team] ?? ''} size={12} />
-          <Typography variant="caption" sx={{ flex: 1, fontSize: '0.65rem' }}>{t.team}</Typography>
-          <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.65rem' }}>
+    <Box sx={{ p: 1, minWidth: 200, maxHeight: 400, overflowY: 'auto' }}>
+      <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', display: 'block', mb: 0.5, textTransform: 'uppercase', fontSize: '0.6rem' }}>
+        {slot.teams.length} possible team{slot.teams.length !== 1 ? 's' : ''}
+      </Typography>
+      {visible.map((t) => (
+        <Box key={t.team} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 0.25 }}>
+          <TeamFlag countryCode={countryCodeMap[t.team] ?? ''} size={14} />
+          <Typography variant="caption" sx={{ flex: 1, fontSize: '0.7rem' }}>{t.team}</Typography>
+          <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.7rem' }}>
             {Math.round((t.count / numSims) * 100)}%
           </Typography>
         </Box>
       ))}
-      {slot.teams.length > 10 && (
-        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>
-          +{slot.teams.length - 10} more
-        </Typography>
+      {hasMore && (
+        <Button size="small" onClick={() => setExpanded(!expanded)} sx={{ mt: 0.5, fontSize: '0.65rem', minHeight: 0, py: 0.25 }}>
+          {expanded ? 'Show less' : `See all ${slot.teams.length} teams`}
+        </Button>
       )}
     </Box>
   );
@@ -40,6 +46,8 @@ function TeamCell({ slot, numSims, countryCodeMap, position }: {
   countryCodeMap: Record<string, string>;
   position: 'top' | 'bottom';
 }) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+
   if (!slot || slot.teams.length === 0) {
     return (
       <Box sx={{ px: 0.5, py: 0.2, minWidth: 120, minHeight: 20, borderTop: position === 'top' ? 1 : 0, borderBottom: 1, borderLeft: 1, borderRight: 1, borderColor: 'divider', display: 'flex', alignItems: 'center' }}>
@@ -52,14 +60,17 @@ function TeamCell({ slot, numSims, countryCodeMap, position }: {
   const pct = Math.round((top.count / numSims) * 100);
 
   return (
-    <Tooltip title={<SlotTooltipContent slot={slot} numSims={numSims} countryCodeMap={countryCodeMap} />} arrow>
-      <Box sx={{
-        px: 0.5, py: 0.2, minWidth: 120, minHeight: 20, cursor: 'pointer',
-        borderTop: position === 'top' ? 1 : 0, borderBottom: 1, borderLeft: 1, borderRight: 1,
-        borderColor: 'divider',
-        display: 'flex', alignItems: 'center', gap: 0.4,
-        '&:hover': { bgcolor: 'action.hover', borderColor: 'primary.main' },
-      }}>
+    <>
+      <Box
+        onClick={(e) => setAnchor(e.currentTarget)}
+        sx={{
+          px: 0.5, py: 0.2, minWidth: 120, minHeight: 20, cursor: 'pointer',
+          borderTop: position === 'top' ? 1 : 0, borderBottom: 1, borderLeft: 1, borderRight: 1,
+          borderColor: 'divider',
+          display: 'flex', alignItems: 'center', gap: 0.4,
+          '&:hover': { bgcolor: 'action.hover', borderColor: 'primary.main' },
+        }}
+      >
         <TeamFlag countryCode={countryCodeMap[top.team] ?? ''} size={12} />
         <Typography variant="caption" noWrap sx={{ flex: 1, fontSize: '0.65rem', fontWeight: 500, lineHeight: 1.2 }}>
           {top.team}
@@ -68,7 +79,15 @@ function TeamCell({ slot, numSims, countryCodeMap, position }: {
           {pct}%
         </Typography>
       </Box>
-    </Tooltip>
+      <Popover
+        open={Boolean(anchor)}
+        anchorEl={anchor}
+        onClose={() => setAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+      >
+        <SlotPopoverContent slot={slot} numSims={numSims} countryCodeMap={countryCodeMap} />
+      </Popover>
+    </>
   );
 }
 
@@ -127,6 +146,52 @@ const ALL_ROUNDS = [
   { key: '3RD', label: '🥉 3rd Place', count: 1 },
 ];
 
+function ChampionBanner({ slotMap, numSims, countryCodeMap }: {
+  slotMap: Map<string, BracketSlotResult>;
+  numSims: number;
+  countryCodeMap: Record<string, string>;
+}) {
+  const championSlot = slotMap.get('FINAL-W');
+  if (!championSlot || championSlot.teams.length === 0) return null;
+  const top = championSlot.teams[0];
+  const top3 = championSlot.teams.slice(0, 3);
+  const pct = Math.round((top.count / numSims) * 100);
+
+  return (
+    <Box sx={{
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      gap: 2, py: 1.5, px: 2, mb: 2, flexWrap: 'wrap',
+      border: 2, borderColor: 'warning.main', borderRadius: 1,
+      bgcolor: (t) => t.palette.mode === 'dark' ? 'rgba(255,193,7,0.08)' : 'rgba(255,193,7,0.12)',
+    }}>
+      <Box sx={{ textAlign: 'center' }}>
+        <Typography variant="caption" sx={{ fontWeight: 700, color: 'warning.main', fontSize: '0.7rem', display: 'block', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          🏆 Most Likely Champion
+        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5, justifyContent: 'center' }}>
+          <TeamFlag countryCode={countryCodeMap[top.team] ?? ''} size={28} />
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>{top.team}</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 700, color: 'warning.main' }}>{pct}%</Typography>
+        </Box>
+      </Box>
+      <Box sx={{ borderLeft: 1, borderColor: 'divider', pl: 2, display: { xs: 'none', sm: 'block' } }}>
+        <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.65rem', display: 'block', mb: 0.25 }}>
+          Other contenders
+        </Typography>
+        {top3.slice(1).map((t) => (
+          <Box key={t.team} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 0.1 }}>
+            <TeamFlag countryCode={countryCodeMap[t.team] ?? ''} size={14} />
+            <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>{t.team}</Typography>
+            <Typography variant="caption" sx={{ fontSize: '0.7rem', fontWeight: 700, ml: 0.5 }}>
+              {Math.round((t.count / numSims) * 100)}%
+            </Typography>
+          </Box>
+        ))}
+      </Box>
+    </Box>
+  );
+}
+
 function MobileForecastBracket({ slotMap, numSims, countryCodeMap }: { slotMap: Map<string, BracketSlotResult>; numSims: number; countryCodeMap: Record<string, string> }) {
   const [tab, setTab] = useState(0);
   const round = ALL_ROUNDS[tab];
@@ -134,6 +199,7 @@ function MobileForecastBracket({ slotMap, numSims, countryCodeMap }: { slotMap: 
 
   return (
     <Box>
+      <ChampionBanner slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
       <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" sx={{ mb: 2 }}>
         {ALL_ROUNDS.map((r) => <Tab key={r.key} label={r.label} sx={{ fontSize: '0.7rem', minWidth: 60, px: 1 }} />)}
       </Tabs>
@@ -181,7 +247,9 @@ export default function ForecastBracket({ bracketSlots, numSims, countryCodeMap 
   const rightRounds = [rightSF, rightQF, rightR16, rightR32];
 
   return (
-    <Box sx={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', pb: 2 }}>
+    <Box>
+      <ChampionBanner slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
+      <Box sx={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', pb: 2 }}>
       {/* Round labels row */}
       <Box sx={{ display: 'flex', alignItems: 'flex-end', minWidth: 'fit-content', mb: 0.5 }}>
         {leftRounds.map((ids, i) => (
@@ -241,6 +309,7 @@ export default function ForecastBracket({ bracketSlots, numSims, countryCodeMap 
             <RoundColumn matchIds={ids} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} isFirstRound={i === 3} />
           </Box>
         ))}
+      </Box>
       </Box>
     </Box>
   );

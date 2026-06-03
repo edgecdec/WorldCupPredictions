@@ -6,3 +6,4 @@ data/
 .ralph/.server-env
 tsconfig.tsbuildinfo
 .ralph/.test-creds
+.DS_Store

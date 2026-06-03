@@ -1,16 +1,19 @@
 // PELE ratings — World Cup-adjusted (Silver Bulletin, June 2026)
 // Source: Nate Silver's PELE model with WC-specific adjustments for
-// 26-man rosters and recent form. GF/GA scaled proportionally to the
-// PELE delta from base (factor = 10^(delta/400)).
+// 26-man rosters and recent form. Home field advantage stored as a
+// separate per-team value (homeField) and applied per-match in the
+// simulation worker — only when that team plays a match at home.
 //
 // GF = expected goals scored per match against an average opponent
 // GA = expected goals conceded per match against an average opponent
+// homeField = PELE point bonus when this team plays in their host country
 
 export interface PeleRating {
   name: string;
   pele: number;
   gf: number;
   ga: number;
+  homeField?: number;
 }
 
 // Average GA across all 211 FIFA teams (used as baseline for matchup adjustment)
@@ -37,10 +40,10 @@ export const PELE_RATINGS: Record<string, PeleRating> = {
   "Japan": { name: "Japan", pele: 1872, gf: 3.03, ga: 0.71 },
   "Morocco": { name: "Morocco", pele: 1866, gf: 2.71, ga: 0.58 },
   "Paraguay": { name: "Paraguay", pele: 1855, gf: 2.77, ga: 0.67 },
-  "Mexico": { name: "Mexico", pele: 1853, gf: 2.76, ga: 0.68 },
+  "Mexico": { name: "Mexico", pele: 1853, gf: 2.76, ga: 0.68, homeField: 145 },
   "Austria": { name: "Austria", pele: 1832, gf: 2.86, ga: 0.85 },
-  "USA": { name: "USA", pele: 1810, gf: 2.69, ga: 0.86 },
-  "Canada": { name: "Canada", pele: 1806, gf: 2.48, ga: 0.84 },
+  "USA": { name: "USA", pele: 1810, gf: 2.69, ga: 0.86, homeField: 88 },
+  "Canada": { name: "Canada", pele: 1806, gf: 2.48, ga: 0.84, homeField: 86 },
   "Scotland": { name: "Scotland", pele: 1802, gf: 2.46, ga: 0.86 },
   "Algeria": { name: "Algeria", pele: 1794, gf: 2.56, ga: 0.89 },
   "Sweden": { name: "Sweden", pele: 1781, gf: 2.44, ga: 0.99 },

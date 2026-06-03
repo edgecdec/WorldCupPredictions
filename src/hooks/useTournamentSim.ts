@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { PELE_RATINGS, AVG_GA } from '@/lib/peleRatings';
 import { THIRD_PLACE_LOOKUP } from '@/lib/thirdPlaceLookup';
+import { KNOCKOUT_HOST } from '@/lib/matchVenues';
 import type { ScoringSettings, GroupPrediction } from '@/types';
 import { DEFAULT_SCORING } from '@/types';
 
@@ -151,6 +152,7 @@ export function useTournamentSim(
       teamSeeds: TEAM_SEEDS,
       teamRankings: FIFA_RANKINGS,
       thirdPlaceLookup: THIRD_PLACE_LOOKUP,
+      knockoutHosts: KNOCKOUT_HOST,
       actualGroupMatches: actualResults?.groupMatches,
       finalGroupStandings: actualResults?.finalGroupStandings,
       finalAdvancing3rd: actualResults?.finalAdvancing3rd,

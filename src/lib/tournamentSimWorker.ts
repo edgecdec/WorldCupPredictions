@@ -6,6 +6,8 @@ interface TeamRating {
   pele: number;
   gf: number;
   ga: number;
+  /** Home field advantage in PELE points (only present for host nations). */
+  homeField?: number;
 }
 
 interface PlayerEntry {
@@ -68,6 +70,12 @@ interface TournamentSimRequest {
    * Maps matchId (e.g. 'R32-1', 'R16-3', 'FINAL', '3RD') to the winning team name.
    */
   actualKnockoutResults?: Record<string, string>;
+  /**
+   * Per-knockout-match host country. When a host nation plays a match in
+   * their own country, they get the homeField PELE bonus applied.
+   * Map of matchId -> 'USA' | 'Mexico' | 'Canada'.
+   */
+  knockoutHosts?: Record<string, string>;
 }
 
 interface GroupPositionResult {
@@ -134,27 +142,52 @@ function poissonSample(lambda: number): number {
   return k - 1;
 }
 
+/**
+ * Returns (effectiveGF, effectiveGA, effectivePele) for a team applying
+ * home field advantage if homeFor === teamName.
+ * HFA is in PELE points; we scale GF/GA by 10^(hfa/400) like the WC adjustment.
+ */
+function effectiveRating(
+  rating: TeamRating, hasHomeField: boolean,
+): { gf: number; ga: number; pele: number } {
+  if (!hasHomeField || !rating.homeField) {
+    return { gf: rating.gf, ga: rating.ga, pele: rating.pele };
+  }
+  const factor = Math.pow(10, rating.homeField / 400);
+  return {
+    gf: rating.gf * factor,
+    ga: rating.ga / factor,
+    pele: rating.pele + rating.homeField,
+  };
+}
+
 function simulateGroupMatch(
   teamA: string, teamB: string,
   ratings: Record<string, TeamRating>, avgGA: number,
+  homeFor?: string,
 ): [number, number] {
   const a = ratings[teamA], b = ratings[teamB];
   if (!a || !b) return [0, 0];
-  const lambdaA = a.gf * (b.ga / avgGA);
-  const lambdaB = b.gf * (a.ga / avgGA);
+  const effA = effectiveRating(a, homeFor === teamA);
+  const effB = effectiveRating(b, homeFor === teamB);
+  const lambdaA = effA.gf * (effB.ga / avgGA);
+  const lambdaB = effB.gf * (effA.ga / avgGA);
   return [poissonSample(lambdaA), poissonSample(lambdaB)];
 }
 
 function simulateKnockoutMatch(
   teamA: string, teamB: string,
   ratings: Record<string, TeamRating>, avgGA: number,
+  homeFor?: string,
 ): string {
-  const [ga, gb] = simulateGroupMatch(teamA, teamB, ratings, avgGA);
+  const [ga, gb] = simulateGroupMatch(teamA, teamB, ratings, avgGA, homeFor);
   if (ga !== gb) return ga > gb ? teamA : teamB;
   // Draw: decide by PELE-weighted coin flip (simulates extra time + penalties)
   const a = ratings[teamA], b = ratings[teamB];
   if (!a || !b) return Math.random() < 0.5 ? teamA : teamB;
-  const probA = a.pele / (a.pele + b.pele);
+  const effA = effectiveRating(a, homeFor === teamA);
+  const effB = effectiveRating(b, homeFor === teamB);
+  const probA = effA.pele / (effA.pele + effB.pele);
   return Math.random() < probA ? teamA : teamB;
 }
 
@@ -189,11 +222,15 @@ function simulateGroupStage(
     for (const t of teams) table[t] = { pts: 0, gf: 0, ga: 0, gd: 0 };
     const actualLookup = buildActualLookup(actualGroupMatches?.[name]);
 
+    // In group stage, hosts play all 3 of their matches at home — find the host (if any) in this group
+    const hostTeam = teams.find((t) => ratings[t]?.homeField);
+
     for (let i = 0; i < teams.length; i++) {
       for (let j = i + 1; j < teams.length; j++) {
-        // Use real result if it exists, otherwise simulate
+        // Use real result if it exists, otherwise simulate (with home field if applicable)
         const actual = actualLookup.get(`${teams[i]}|${teams[j]}`);
-        const [ga, gb] = actual ?? simulateGroupMatch(teams[i], teams[j], ratings, avgGA);
+        const homeFor = (teams[i] === hostTeam || teams[j] === hostTeam) ? hostTeam : undefined;
+        const [ga, gb] = actual ?? simulateGroupMatch(teams[i], teams[j], ratings, avgGA, homeFor);
         table[teams[i]].gf += ga; table[teams[i]].ga += gb;
         table[teams[j]].gf += gb; table[teams[j]].ga += ga;
         if (ga > gb) table[teams[i]].pts += 3;
@@ -235,12 +272,18 @@ function simulateKnockout(
   avgGA: number,
   thirdPlaceLookup?: Record<string, string[]>,
   actualKnockoutResults?: Record<string, string>,
+  knockoutHosts?: Record<string, string>,
 ): { slotTeams: Record<string, string>; champion: string } {
-  // Helper: pick a winner — use real result if exists, otherwise simulate
+  // Helper: pick a winner — use real result if exists, otherwise simulate.
+  // If a host nation is playing in their own country, apply home field advantage.
   const winnerOf = (matchId: string, teamA: string, teamB: string): string => {
     const actual = actualKnockoutResults?.[matchId];
     if (actual && (actual === teamA || actual === teamB)) return actual;
-    return simulateKnockoutMatch(teamA, teamB, ratings, avgGA);
+    const host = knockoutHosts?.[matchId];
+    let homeFor: string | undefined;
+    if (host === teamA && ratings[teamA]?.homeField) homeFor = teamA;
+    else if (host === teamB && ratings[teamB]?.homeField) homeFor = teamB;
+    return simulateKnockoutMatch(teamA, teamB, ratings, avgGA, homeFor);
   };
   const winners: Record<string, string> = {};
   const runnersUp: Record<string, string> = {};
@@ -440,7 +483,7 @@ function scoreKnockoutEntry(
 const ctx = self as unknown as Worker;
 
 ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
-  const { ratings, avgGA, groups, numSims, entries, scoring, teamSeeds, teamRankings, thirdPlaceLookup, actualGroupMatches, actualKnockoutResults, finalGroupStandings, finalAdvancing3rd } = e.data;
+  const { ratings, avgGA, groups, numSims, entries, scoring, teamSeeds, teamRankings, thirdPlaceLookup, actualGroupMatches, actualKnockoutResults, finalGroupStandings, finalAdvancing3rd, knockoutHosts } = e.data;
 
   // Accumulators
   const groupPos: Record<string, number[][]> = {};
@@ -504,7 +547,7 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
     }
 
     // Simulate knockout
-    const { slotTeams, champion } = simulateKnockout(groupOrder, advancing3rd, ratings, avgGA, thirdPlaceLookup, actualKnockoutResults);
+    const { slotTeams, champion } = simulateKnockout(groupOrder, advancing3rd, ratings, avgGA, thirdPlaceLookup, actualKnockoutResults, knockoutHosts);
     championCounts[champion]++;
 
     // Track bracket slot occupancy

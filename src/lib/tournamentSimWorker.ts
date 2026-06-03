@@ -1,5 +1,56 @@
-// Web Worker for full tournament simulation (group stage + knockout)
-// Self-contained — no imports (workers can't use path aliases)
+// =============================================================================
+// 2026 FIFA World Cup Tournament Simulation Worker
+// =============================================================================
+//
+// This Web Worker runs the full tournament simulation thousands of times to
+// produce championship probabilities, advance probabilities, bracket-slot
+// probabilities, and (optionally) per-player expected scores.
+//
+// SELF-CONTAINED: This file cannot import from anywhere else because Web
+// Workers don't support TypeScript path aliases. All data (ratings, lookup
+// tables, etc.) is passed in via the request message.
+//
+// METHODOLOGY (loosely based on Nate Silver's PELE model, Silver Bulletin):
+//
+//   1. PELE rating represents overall team strength on an Elo-like scale
+//      (~1500 = average team, ~2000 = elite).
+//   2. GF/GA represent the team's expected goals scored/conceded vs an
+//      AVERAGE opponent. Used to derive Poisson lambdas per match:
+//        lambdaA = teamA.gf * (teamB.ga / AVG_GA)
+//        lambdaB = teamB.gf * (teamA.ga / AVG_GA)
+//      Lower opponent GA → fewer expected goals from us. Higher opponent
+//      GF → more expected goals against us.
+//   3. Goals are sampled from a Dixon-Coles-corrected joint Poisson, which
+//      adjusts for the well-known under-prediction of low-scoring outcomes
+//      in pure Poisson (0-0, 1-1 happen more in real soccer than independent
+//      Poisson predicts).
+//   4. Three additional adjustments per Silver Bulletin's published method:
+//      a. HOME FIELD ADVANTAGE: a host nation playing in their own country
+//         gets a homeField PELE bonus, applied only to that team's GF/GA
+//         via factor 10^(homeField/800). The /800 (vs /400) is because
+//         scaling both GF and GA by the same factor shifts the lambda
+//         RATIO by the square — to get a clean 10^(D/400) Elo shift we
+//         apply 10^(D/800) to each.
+//      b. STAGE MULTIPLIER: Group matches are upset-prone (0.9x rating
+//         gap), knockout matches are chalkier (1.1x rating gap). This is
+//         applied by shifting each team's PELE toward/away from the avg
+//         of the two teams' PELEs by half the gap delta.
+//      c. FORM STREAKINESS: Within a single sim, when a team overperforms
+//         their PELE expectation, they get a temporary PELE bump for the
+//         rest of that simulated tournament. Capped at ±60 PELE so a
+//         single result can't dominate. Reset between sims.
+//   5. Knockout draws: 40% resolved in extra time (better team more likely
+//      to score), 60% go to penalties (60/40 edge to better team, compressed
+//      from raw PELE prob to model shootout luck).
+//   6. 3rd place advancement uses FIFA's official 495-combination lookup
+//      table (passed in as `thirdPlaceLookup`). FIFA tiebreakers (pts > GD
+//      > GF) determine which 8 of 12 third-place teams advance.
+//
+// The result of N simulations is a probability distribution for every
+// outcome of interest: who wins each group, who advances, who reaches each
+// round of the knockout, who wins the cup, and how each player's bracket
+// scores against the simulated outcomes.
+// =============================================================================
 
 interface TeamRating {
   name: string;
@@ -143,13 +194,70 @@ function poissonSample(lambda: number): number {
 }
 
 /**
- * Returns (effectiveGF, effectiveGA, effectivePele) for a team applying
- * home field advantage if homeFor === teamName.
- * HFA is in PELE points. We scale GF and GA by 10^(hfa/800) each so that
- * the lambda ratio shift in the Poisson model equals 10^(hfa/400) — i.e.,
- * one Elo-equivalent unit per PELE point. Without the /800 split the
- * effect would be doubled (since both GF up and GA down both shift the
- * ratio in the same direction).
+ * Dixon-Coles correlation parameter (rho).
+ *
+ * Pure independent Poisson sampling has a well-documented problem in soccer:
+ * it under-predicts both 0-0 draws AND blowouts. Real soccer has more
+ * correlated low-scoring outcomes than independent Poisson assumes (because
+ * teams' tactics depend on the current score).
+ *
+ * Dixon-Coles (1997) introduced a tau correction applied to the joint
+ * probability of the 4 lowest-scoring cells (0-0, 0-1, 1-0, 1-1):
+ *   tau(0,0) = 1 - lambda_a * lambda_b * rho
+ *   tau(0,1) = 1 + lambda_a * rho
+ *   tau(1,0) = 1 + lambda_b * rho
+ *   tau(1,1) = 1 - rho
+ *
+ * Standard rho for soccer is around -0.13. With rho < 0:
+ *   tau(0,0) > 1: 0-0 happens MORE often than independent Poisson predicts
+ *   tau(1,1) > 1: 1-1 happens MORE often
+ *   tau(0,1) < 1: 0-1 happens LESS often
+ *   tau(1,0) < 1: 1-0 happens LESS often
+ * This shifts probability mass from (0,1)/(1,0) to (0,0)/(1,1) — i.e., more draws.
+ */
+const DC_RHO = -0.13;
+
+function sampleGoals(lambdaA: number, lambdaB: number): [number, number] {
+  // Independent Poisson sample, then check if the cell needs adjustment
+  const a = poissonSample(lambdaA);
+  const b = poissonSample(lambdaB);
+
+  // Apply tau adjustment via acceptance-rejection on low-score cells
+  let tau = 1;
+  if (a === 0 && b === 0) tau = 1 - lambdaA * lambdaB * DC_RHO;
+  else if (a === 0 && b === 1) tau = 1 + lambdaA * DC_RHO;
+  else if (a === 1 && b === 0) tau = 1 + lambdaB * DC_RHO;
+  else if (a === 1 && b === 1) tau = 1 - DC_RHO;
+
+  // For DC_RHO < 0, tau >= 1 for (0,0) and (1,1) and tau <= 1 for (0,1) and (1,0)
+  // Reject with probability (1 - tau) when tau < 1 (resample from a different cell)
+  if (tau < 1 && Math.random() > tau) {
+    // Resample but bias toward (0,0) and (1,1) — flip to a draw nearby
+    if (a === 0 && b === 1) return [0, 0];
+    if (a === 1 && b === 0) return [1, 1];
+  }
+  // For tau > 1 (0-0, 1-1), the cell is already favored by the independent draw
+  return [a, b];
+}
+
+
+/**
+ * Apply home field advantage to a team's effective rating.
+ *
+ * THE MATH: HFA is given in PELE points (e.g. Mexico +145, USA +88).
+ * In an Elo system, +D points = +D/400 in log-10 win-probability shift.
+ * We want our Poisson lambda RATIO to shift by exactly 10^(D/400) when
+ * a team gets +D PELE.
+ *
+ * Lambda for team A vs B:
+ *   lambdaA = gf_A * (ga_B / avgGA)
+ *   lambdaB = gf_B * (ga_A / avgGA)
+ *
+ * If we multiply gf_A by F and divide ga_A by F, both shifts increase
+ * lambdaA/lambdaB by F. So to shift the RATIO by F_total = 10^(D/400),
+ * each side gets F = sqrt(F_total) = 10^(D/800).
+ *
+ * This is why /800 is correct (vs /400 which would double-count).
  */
 function effectiveRating(
   rating: TeamRating, hasHomeField: boolean,
@@ -165,34 +273,189 @@ function effectiveRating(
   };
 }
 
+/**
+ * Apply Silver Bulletin's empirical stage multiplier to the PELE gap.
+ *
+ * Per Silver Bulletin's methodology page:
+ *   "applying a 0.9x multiplier on the difference in PELE ratings to
+ *    group-stage matchups but a 1.1x multiplier to knockout-stage games"
+ *
+ * Why: group matches are empirically more upset-prone than PELE expects
+ * (teams cautious early, draws are good results). Knockout matches are
+ * chalkier (favorites win more often than baseline PELE expects).
+ *
+ * Implementation: pivot each team's PELE around the average of the two
+ * PELEs, scaling each team's distance from that midpoint by `stageMult`.
+ * Then re-derive GF/GA factors from the new PELE deltas via the same
+ * 10^(delta/800) Elo→goal scaling used elsewhere.
+ *
+ * Worked example: Spain (PELE 2077) vs Cape Verde (PELE 1624)
+ *   Avg = 1850.5, original gap = 453 PELE
+ *   With 0.9x (group):    newSpain=2054, newCV=1647, gap=408 (compressed)
+ *   With 1.1x (knockout): newSpain=2100, newCV=1601, gap=499 (stretched)
+ *
+ * The stage mult only affects this single match calculation — it does
+ * NOT mutate stored ratings, so it doesn't carry across matches.
+ */
+function applyStageMultiplier(
+  effA: { gf: number; ga: number; pele: number },
+  effB: { gf: number; ga: number; pele: number },
+  stageMult: number,
+): [{ gf: number; ga: number; pele: number }, { gf: number; ga: number; pele: number }] {
+  if (stageMult === 1) return [effA, effB];
+  const avg = (effA.pele + effB.pele) / 2;
+  const newPeleA = avg + (effA.pele - avg) * stageMult;
+  const newPeleB = avg + (effB.pele - avg) * stageMult;
+  // The change in PELE for each team — apply matching GF/GA scaling using 10^(delta/800)
+  const factorA = Math.pow(10, (newPeleA - effA.pele) / 800);
+  const factorB = Math.pow(10, (newPeleB - effB.pele) / 800);
+  return [
+    { gf: effA.gf * factorA, ga: effA.ga / factorA, pele: newPeleA },
+    { gf: effB.gf * factorB, ga: effB.ga / factorB, pele: newPeleB },
+  ];
+}
+
+const GROUP_STAGE_MULT = 0.9;
+const KNOCKOUT_STAGE_MULT = 1.1;
+
+// =============================================================================
+// FORM STREAKINESS
+// =============================================================================
+// Per Silver Bulletin's methodology:
+//   "rating adjustments within each simulated universe carry over from
+//    game-to-game... a bit of short-term streakiness in international team
+//    performance over intervals of roughly 30 days, i.e. coinciding with the
+//    length of the World Cup, and our model accounts for this."
+//
+// MECHANIC: We track a per-team `form` bump (in PELE points) within each sim.
+// After each match, the team's form is updated based on actual h-margin vs
+// expected h-margin. Subsequent matches in the same sim use the bumped rating.
+//
+// FORM_K_FACTOR = 12 means a 1-goal overperformance vs expectation adds ~12
+//   PELE points to that team's effective rating for remaining matches.
+// FORM_MAX_BUMP = 60 caps the swing so a single result can't dominate; a hot
+//   team can be at most 1.5 standard-deviations stronger than their base.
+
+const FORM_K_FACTOR = 12;
+const FORM_MAX_BUMP = 60;
+
+/**
+ * Update the within-sim form map after a match concludes.
+ *
+ * Uses h-margin (harmonic margin), per Silver Bulletin: 1st goal counts as 1,
+ * 2nd as 1/2, 3rd as 1/3, etc. This gives diminishing returns to blowout
+ * results — winning 7-1 isn't 6x as impressive as winning 2-1, since soccer
+ * teams often play differently when leading.
+ *
+ * Update is zero-sum: teamA gains exactly what teamB loses.
+ */
+function applyFormUpdate(
+  teamA: string, teamB: string,
+  scoreA: number, scoreB: number,
+  expectedLambdaA: number, expectedLambdaB: number,
+  form: Record<string, number>,
+): void {
+  const actualMargin = harmonicMargin(scoreA - scoreB);
+  const expectedMargin = harmonicMargin(expectedLambdaA - expectedLambdaB);
+  const delta = (actualMargin - expectedMargin) * FORM_K_FACTOR;
+  form[teamA] = clamp((form[teamA] ?? 0) + delta, -FORM_MAX_BUMP, FORM_MAX_BUMP);
+  form[teamB] = clamp((form[teamB] ?? 0) - delta, -FORM_MAX_BUMP, FORM_MAX_BUMP);
+}
+
+/**
+ * h-margin: harmonic series scoring. 1st goal=1, 2nd=1/2, 3rd=1/3.
+ * A 3-1 win has h-margin = 1 + 1/2 = 1.5 (not 2 like raw margin).
+ * A 2-0 win has h-margin = 1 + 1/2 = 1.5 (same as 3-1 — only the diff matters,
+ *   so we apply harmonic on the absolute margin, not on each side's goals).
+ */
+function harmonicMargin(margin: number): number {
+  if (margin === 0) return 0;
+  const sign = margin < 0 ? -1 : 1;
+  const abs = Math.abs(margin);
+  let h = 0;
+  for (let i = 1; i <= abs; i++) h += 1 / i;
+  return sign * h;
+}
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+/**
+ * Build a TEMPORARY copy of a team's rating with form bump applied.
+ * The form bump is added to PELE; GF and GA are scaled by 10^(bump/800)
+ * to match the standard PELE→goal conversion.
+ *
+ * Does not mutate the original rating object.
+ */
+function applyFormBump(rating: TeamRating, formBump: number): TeamRating {
+  if (!formBump) return rating;
+  const factor = Math.pow(10, formBump / 800);
+  return {
+    ...rating,
+    pele: rating.pele + formBump,
+    gf: rating.gf * factor,
+    ga: rating.ga / factor,
+  };
+}
+
 function simulateGroupMatch(
   teamA: string, teamB: string,
   ratings: Record<string, TeamRating>, avgGA: number,
   homeFor?: string,
+  stageMult: number = GROUP_STAGE_MULT,
+  form?: Record<string, number>,
 ): [number, number] {
   const a = ratings[teamA], b = ratings[teamB];
   if (!a || !b) return [0, 0];
-  const effA = effectiveRating(a, homeFor === teamA);
-  const effB = effectiveRating(b, homeFor === teamB);
+  // Apply within-sim form bump
+  const aBumped = applyFormBump(a, form?.[teamA] ?? 0);
+  const bBumped = applyFormBump(b, form?.[teamB] ?? 0);
+  let effA = effectiveRating(aBumped, homeFor === teamA);
+  let effB = effectiveRating(bBumped, homeFor === teamB);
+  [effA, effB] = applyStageMultiplier(effA, effB, stageMult);
   const lambdaA = effA.gf * (effB.ga / avgGA);
   const lambdaB = effB.gf * (effA.ga / avgGA);
-  return [poissonSample(lambdaA), poissonSample(lambdaB)];
+  const [scoreA, scoreB] = sampleGoals(lambdaA, lambdaB);
+  // Update form for the rest of this sim
+  if (form) {
+    applyFormUpdate(teamA, teamB, scoreA, scoreB, lambdaA, lambdaB, form);
+  }
+  return [scoreA, scoreB];
 }
 
 function simulateKnockoutMatch(
   teamA: string, teamB: string,
   ratings: Record<string, TeamRating>, avgGA: number,
   homeFor?: string,
+  form?: Record<string, number>,
 ): string {
-  const [ga, gb] = simulateGroupMatch(teamA, teamB, ratings, avgGA, homeFor);
-  if (ga !== gb) return ga > gb ? teamA : teamB;
-  // Draw: decide by PELE-weighted coin flip (simulates extra time + penalties)
   const a = ratings[teamA], b = ratings[teamB];
   if (!a || !b) return Math.random() < 0.5 ? teamA : teamB;
-  const effA = effectiveRating(a, homeFor === teamA);
-  const effB = effectiveRating(b, homeFor === teamB);
+  const aBumped = applyFormBump(a, form?.[teamA] ?? 0);
+  const bBumped = applyFormBump(b, form?.[teamB] ?? 0);
+  let effA = effectiveRating(aBumped, homeFor === teamA);
+  let effB = effectiveRating(bBumped, homeFor === teamB);
+  [effA, effB] = applyStageMultiplier(effA, effB, KNOCKOUT_STAGE_MULT);
+  const lambdaA = effA.gf * (effB.ga / avgGA);
+  const lambdaB = effB.gf * (effA.ga / avgGA);
+  const [ga, gb] = sampleGoals(lambdaA, lambdaB);
+
+  // Update form based on regulation result (the part that's "real" goals)
+  if (form) {
+    applyFormUpdate(teamA, teamB, ga, gb, lambdaA, lambdaB, form);
+  }
+
+  if (ga !== gb) return ga > gb ? teamA : teamB;
+  // Draw after 90' regulation — simulate extra time then (if still tied) penalties.
+  if (Math.random() < 0.4) {
+    const [etA, etB] = sampleGoals(lambdaA / 2, lambdaB / 2);
+    if (etA !== etB) return etA > etB ? teamA : teamB;
+  }
+  // Penalties: ~60/40 edge to better team based on PELE
   const probA = effA.pele / (effA.pele + effB.pele);
-  return Math.random() < probA ? teamA : teamB;
+  const shotProb = 0.5 + (probA - 0.5) * 0.4;
+  return Math.random() < shotProb ? teamA : teamB;
 }
 
 interface TeamStats { pts: number; gf: number; ga: number; gd: number }
@@ -218,6 +481,7 @@ function simulateGroupStage(
   ratings: Record<string, TeamRating>,
   avgGA: number,
   actualGroupMatches?: Record<string, ActualMatch[]>,
+  form?: Record<string, number>,
 ): GroupStageResult {
   const order: Record<string, string[]> = {};
   const tables: Record<string, Record<string, TeamStats>> = {};
@@ -234,7 +498,7 @@ function simulateGroupStage(
         // Use real result if it exists, otherwise simulate (with home field if applicable)
         const actual = actualLookup.get(`${teams[i]}|${teams[j]}`);
         const homeFor = (teams[i] === hostTeam || teams[j] === hostTeam) ? hostTeam : undefined;
-        const [ga, gb] = actual ?? simulateGroupMatch(teams[i], teams[j], ratings, avgGA, homeFor);
+        const [ga, gb] = actual ?? simulateGroupMatch(teams[i], teams[j], ratings, avgGA, homeFor, GROUP_STAGE_MULT, form);
         table[teams[i]].gf += ga; table[teams[i]].ga += gb;
         table[teams[j]].gf += gb; table[teams[j]].ga += ga;
         if (ga > gb) table[teams[i]].pts += 3;
@@ -277,6 +541,7 @@ function simulateKnockout(
   thirdPlaceLookup?: Record<string, string[]>,
   actualKnockoutResults?: Record<string, string>,
   knockoutHosts?: Record<string, string>,
+  form?: Record<string, number>,
 ): { slotTeams: Record<string, string>; champion: string } {
   // Helper: pick a winner — use real result if exists, otherwise simulate.
   // If a host nation is playing in their own country, apply home field advantage.
@@ -287,7 +552,7 @@ function simulateKnockout(
     let homeFor: string | undefined;
     if (host === teamA && ratings[teamA]?.homeField) homeFor = teamA;
     else if (host === teamB && ratings[teamB]?.homeField) homeFor = teamB;
-    return simulateKnockoutMatch(teamA, teamB, ratings, avgGA, homeFor);
+    return simulateKnockoutMatch(teamA, teamB, ratings, avgGA, homeFor, form);
   };
   const winners: Record<string, string> = {};
   const runnersUp: Record<string, string> = {};
@@ -521,13 +786,20 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
       ctx.postMessage({ type: 'progress', progress: sim } as SimResponse);
     }
 
+    // Form bumps: per-team PELE adjustments accumulated within this single simulation.
+    // Reset at the start of each sim so universes are independent. Per Silver Bulletin:
+    // "rating adjustments within each simulated universe carry over from game-to-game"
+    // and "there is a bit of short-term streakiness in international team performance
+    // over intervals of roughly 30 days, i.e. coinciding with the length of the World Cup".
+    const form: Record<string, number> = {};
+
     let groupOrder: Record<string, string[]>;
     let advancing3rd: string[];
     if (groupStageLocked) {
       groupOrder = finalGroupStandings!;
       advancing3rd = finalAdvancing3rd ?? [];
     } else {
-      const gsResult = simulateGroupStage(groups, ratings, avgGA, actualGroupMatches);
+      const gsResult = simulateGroupStage(groups, ratings, avgGA, actualGroupMatches, form);
       groupOrder = gsResult.order;
       advancing3rd = getBest3rdPlace(groupOrder, gsResult.tables);
     }
@@ -551,7 +823,7 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
     }
 
     // Simulate knockout
-    const { slotTeams, champion } = simulateKnockout(groupOrder, advancing3rd, ratings, avgGA, thirdPlaceLookup, actualKnockoutResults, knockoutHosts);
+    const { slotTeams, champion } = simulateKnockout(groupOrder, advancing3rd, ratings, avgGA, thirdPlaceLookup, actualKnockoutResults, knockoutHosts, form);
     championCounts[champion]++;
 
     // Track bracket slot occupancy

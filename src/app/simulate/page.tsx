@@ -10,7 +10,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { useAuth } from '@/hooks/useAuth';
 import { useTournamentSim, GROUPS } from '@/hooks/useTournamentSim';
-import type { PlayerEntry } from '@/hooks/useTournamentSim';
+import type { PlayerEntry, ActualResults } from '@/hooks/useTournamentSim';
 import { useSelectedGroup } from '@/hooks/useSelectedGroup';
 import AuthForm from '@/components/auth/AuthForm';
 import TeamFlag from '@/components/common/TeamFlag';
@@ -429,14 +429,32 @@ export default function SimulatePage() {
   const [scoring, setScoring] = useState<ScoringSettings>(DEFAULT_SCORING);
   const [groupId, setGroupId] = useSelectedGroup('everyone');
   const [userGroups, setUserGroups] = useState<Array<{ id: string; name: string }>>([]);
+  const [actualResults, setActualResults] = useState<ActualResults | undefined>(undefined);
 
   useEffect(() => {
     fetch('/api/tournaments')
       .then((r) => r.json())
       .then((d) => {
-        if (d.ok && d.tournament?.lock_time_groups) {
-          setTournamentStarted(new Date() >= new Date(d.tournament.lock_time_groups));
+        if (!d.ok || !d.tournament) return;
+        const t = d.tournament;
+        if (t.lock_time_groups) {
+          setTournamentStarted(new Date() >= new Date(t.lock_time_groups));
         }
+        // Pull actual results into the shape the worker expects
+        const rd = t.results_data;
+        const ar: ActualResults = {};
+        if (rd?.groupStage?.groupResults?.length) {
+          const standings: Record<string, string[]> = {};
+          for (const gr of rd.groupStage.groupResults) {
+            standings[gr.groupName] = gr.order;
+          }
+          ar.finalGroupStandings = standings;
+          ar.finalAdvancing3rd = rd.groupStage.advancingThirdPlace ?? [];
+        }
+        if (rd?.knockout && Object.keys(rd.knockout).length > 0) {
+          ar.knockoutWinners = rd.knockout;
+        }
+        if (Object.keys(ar).length > 0) setActualResults(ar);
       })
       .catch(() => {});
   }, []);
@@ -472,7 +490,7 @@ export default function SimulatePage() {
       .catch(() => {});
   }, [user, groupId]);
 
-  const { results, progress, running, numSims, rerun } = useTournamentSim(players, scoring);
+  const { results, progress, running, numSims, rerun } = useTournamentSim(players, scoring, actualResults);
 
 
   if (authLoading) return null;

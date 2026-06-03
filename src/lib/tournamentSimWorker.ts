@@ -56,6 +56,14 @@ interface TournamentSimRequest {
    */
   actualGroupMatches?: Record<string, ActualMatch[]>;
   /**
+   * Final group stage standings (when the group stage is complete).
+   * If provided, simulation skips group stage entirely and uses these orders.
+   * Format: { groupName: [1stTeam, 2ndTeam, 3rdTeam, 4thTeam] }
+   */
+  finalGroupStandings?: Record<string, string[]>;
+  /** Pre-determined list of 8 advancing 3rd-place teams (when group stage is complete). */
+  finalAdvancing3rd?: string[];
+  /**
    * Already-completed knockout match results.
    * Maps matchId (e.g. 'R32-1', 'R16-3', 'FINAL', '3RD') to the winning team name.
    */
@@ -432,7 +440,7 @@ function scoreKnockoutEntry(
 const ctx = self as unknown as Worker;
 
 ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
-  const { ratings, avgGA, groups, numSims, entries, scoring, teamSeeds, teamRankings, thirdPlaceLookup, actualGroupMatches, actualKnockoutResults } = e.data;
+  const { ratings, avgGA, groups, numSims, entries, scoring, teamSeeds, teamRankings, thirdPlaceLookup, actualGroupMatches, actualKnockoutResults, finalGroupStandings, finalAdvancing3rd } = e.data;
 
   // Accumulators
   const groupPos: Record<string, number[][]> = {};
@@ -458,13 +466,24 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
 
   const PROGRESS_INTERVAL = Math.max(1, Math.floor(numSims / 20));
 
+  // If final group standings are provided (group stage complete), use them as-is
+  const groupStageLocked = finalGroupStandings && Object.keys(finalGroupStandings).length === Object.keys(groups).length;
+
   for (let sim = 0; sim < numSims; sim++) {
     if (sim % PROGRESS_INTERVAL === 0) {
       ctx.postMessage({ type: 'progress', progress: sim } as SimResponse);
     }
 
-    const { order: groupOrder, tables } = simulateGroupStage(groups, ratings, avgGA, actualGroupMatches);
-    const advancing3rd = getBest3rdPlace(groupOrder, tables);
+    let groupOrder: Record<string, string[]>;
+    let advancing3rd: string[];
+    if (groupStageLocked) {
+      groupOrder = finalGroupStandings!;
+      advancing3rd = finalAdvancing3rd ?? [];
+    } else {
+      const gsResult = simulateGroupStage(groups, ratings, avgGA, actualGroupMatches);
+      groupOrder = gsResult.order;
+      advancing3rd = getBest3rdPlace(groupOrder, gsResult.tables);
+    }
 
     // Track group positions
     for (const [g, order] of Object.entries(groupOrder)) {

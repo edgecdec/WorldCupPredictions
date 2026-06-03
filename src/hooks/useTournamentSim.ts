@@ -81,9 +81,35 @@ export interface PlayerEntry {
   knockout_picks: Record<string, string>;
 }
 
+export interface ActualMatch {
+  teamA: string;
+  teamB: string;
+  scoreA: number;
+  scoreB: number;
+}
+
+export interface ActualResults {
+  /** Completed group stage matches keyed by group name. */
+  groupMatches?: Record<string, ActualMatch[]>;
+  /**
+   * Final group stage standings (when the group stage is complete and locked).
+   * If set, the simulation uses these orders directly instead of simulating
+   * the group stage. Format: { groupName: [1st, 2nd, 3rd, 4th] }
+   */
+  finalGroupStandings?: Record<string, string[]>;
+  /** The 8 advancing 3rd-place teams (when group stage is complete). */
+  finalAdvancing3rd?: string[];
+  /** Completed knockout match winners keyed by match ID (e.g. 'R32-1', 'FINAL', '3RD'). */
+  knockoutWinners?: Record<string, string>;
+}
+
 const NUM_SIMS = 10000;
 
-export function useTournamentSim(players?: PlayerEntry[], scoringSettings?: ScoringSettings) {
+export function useTournamentSim(
+  players?: PlayerEntry[],
+  scoringSettings?: ScoringSettings,
+  actualResults?: ActualResults,
+) {
   const workerRef = useRef<Worker | null>(null);
   const [results, setResults] = useState<TournamentSimResults | null>(null);
   const [progress, setProgress] = useState(0);
@@ -125,8 +151,12 @@ export function useTournamentSim(players?: PlayerEntry[], scoringSettings?: Scor
       teamSeeds: TEAM_SEEDS,
       teamRankings: FIFA_RANKINGS,
       thirdPlaceLookup: THIRD_PLACE_LOOKUP,
+      actualGroupMatches: actualResults?.groupMatches,
+      finalGroupStandings: actualResults?.finalGroupStandings,
+      finalAdvancing3rd: actualResults?.finalAdvancing3rd,
+      actualKnockoutResults: actualResults?.knockoutWinners,
     });
-  }, [players, scoringSettings]);
+  }, [players, scoringSettings, actualResults]);
 
   useEffect(() => {
     run();

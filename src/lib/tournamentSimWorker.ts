@@ -261,17 +261,34 @@ function sampleGoals(lambdaA: number, lambdaB: number): [number, number] {
  */
 function effectiveRating(
   rating: TeamRating, hasHomeField: boolean,
+  hfaScale: number = 1,
 ): { gf: number; ga: number; pele: number } {
   if (!hasHomeField || !rating.homeField) {
     return { gf: rating.gf, ga: rating.ga, pele: rating.pele };
   }
-  const factor = Math.pow(10, rating.homeField / 800);
+  // Apply optional scaling — used to dampen knockout HFA. See KO_HFA_SCALE
+  // below: empirically calibrated against Silver Bulletin's published forecast,
+  // host nations match SB's % when knockout HFA is applied at 50% of the
+  // group-stage HFA. Likely reflects that high-stakes knockout matches are
+  // tactically tighter and home-crowd effects matter less.
+  const bonus = rating.homeField * hfaScale;
+  const factor = Math.pow(10, bonus / 800);
   return {
     gf: rating.gf * factor,
     ga: rating.ga / factor,
-    pele: rating.pele + rating.homeField,
+    pele: rating.pele + bonus,
   };
 }
+
+/**
+ * Scaling for knockout-stage home field advantage. Empirical calibration
+ * against Silver Bulletin's published forecast shows knockout HFA is best
+ * modeled at 50% of group-stage HFA — host nations' championship % matches
+ * SB closely with this scale.
+ *
+ * Group stage uses 100% HFA (full home field bonus from peleRatings.ts).
+ */
+const KO_HFA_SCALE = 0.5;
 
 /**
  * Apply Silver Bulletin's empirical stage multiplier to the PELE gap.
@@ -434,8 +451,11 @@ function simulateKnockoutMatch(
   if (!a || !b) return Math.random() < 0.5 ? teamA : teamB;
   const aBumped = applyFormBump(a, form?.[teamA] ?? 0);
   const bBumped = applyFormBump(b, form?.[teamB] ?? 0);
-  let effA = effectiveRating(aBumped, homeFor === teamA);
-  let effB = effectiveRating(bBumped, homeFor === teamB);
+  // Knockout HFA is dampened to KO_HFA_SCALE (50%) of group-stage HFA —
+  // empirical calibration vs Silver Bulletin shows hosts' championship %
+  // matches SB's published numbers with this scaling.
+  let effA = effectiveRating(aBumped, homeFor === teamA, KO_HFA_SCALE);
+  let effB = effectiveRating(bBumped, homeFor === teamB, KO_HFA_SCALE);
   [effA, effB] = applyStageMultiplier(effA, effB, KNOCKOUT_STAGE_MULT);
   const lambdaA = effA.gf * (effB.ga / avgGA);
   const lambdaB = effB.gf * (effA.ga / avgGA);

@@ -145,7 +145,11 @@ function poissonSample(lambda: number): number {
 /**
  * Returns (effectiveGF, effectiveGA, effectivePele) for a team applying
  * home field advantage if homeFor === teamName.
- * HFA is in PELE points; we scale GF/GA by 10^(hfa/400) like the WC adjustment.
+ * HFA is in PELE points. We scale GF and GA by 10^(hfa/800) each so that
+ * the lambda ratio shift in the Poisson model equals 10^(hfa/400) — i.e.,
+ * one Elo-equivalent unit per PELE point. Without the /800 split the
+ * effect would be doubled (since both GF up and GA down both shift the
+ * ratio in the same direction).
  */
 function effectiveRating(
   rating: TeamRating, hasHomeField: boolean,
@@ -153,7 +157,7 @@ function effectiveRating(
   if (!hasHomeField || !rating.homeField) {
     return { gf: rating.gf, ga: rating.ga, pele: rating.pele };
   }
-  const factor = Math.pow(10, rating.homeField / 400);
+  const factor = Math.pow(10, rating.homeField / 800);
   return {
     gf: rating.gf * factor,
     ga: rating.ga / factor,

@@ -31,6 +31,14 @@ interface ScoringSettings {
   };
 }
 
+/** A completed match result. */
+interface ActualMatch {
+  teamA: string;
+  teamB: string;
+  scoreA: number;
+  scoreB: number;
+}
+
 interface TournamentSimRequest {
   type: 'run';
   ratings: Record<string, TeamRating>;
@@ -42,6 +50,16 @@ interface TournamentSimRequest {
   teamSeeds?: Record<string, number>;
   teamRankings?: Record<string, number>;
   thirdPlaceLookup?: Record<string, string[]>;
+  /**
+   * Already-completed group stage matches keyed by group name.
+   * Each match locks the goals so the table is partially deterministic.
+   */
+  actualGroupMatches?: Record<string, ActualMatch[]>;
+  /**
+   * Already-completed knockout match results.
+   * Maps matchId (e.g. 'R32-1', 'R16-3', 'FINAL', '3RD') to the winning team name.
+   */
+  actualKnockoutResults?: Record<string, string>;
 }
 
 interface GroupPositionResult {
@@ -139,19 +157,35 @@ interface GroupStageResult {
   tables: Record<string, Record<string, TeamStats>>;
 }
 
+/** Build a lookup of (teamA, teamB) -> actual score for fast match lookup. */
+function buildActualLookup(actuals: ActualMatch[] | undefined): Map<string, [number, number]> {
+  const m = new Map<string, [number, number]>();
+  if (!actuals) return m;
+  for (const a of actuals) {
+    m.set(`${a.teamA}|${a.teamB}`, [a.scoreA, a.scoreB]);
+    m.set(`${a.teamB}|${a.teamA}`, [a.scoreB, a.scoreA]);
+  }
+  return m;
+}
+
 function simulateGroupStage(
   groups: Record<string, string[]>,
   ratings: Record<string, TeamRating>,
   avgGA: number,
+  actualGroupMatches?: Record<string, ActualMatch[]>,
 ): GroupStageResult {
   const order: Record<string, string[]> = {};
   const tables: Record<string, Record<string, TeamStats>> = {};
   for (const [name, teams] of Object.entries(groups)) {
     const table: Record<string, TeamStats> = {};
     for (const t of teams) table[t] = { pts: 0, gf: 0, ga: 0, gd: 0 };
+    const actualLookup = buildActualLookup(actualGroupMatches?.[name]);
+
     for (let i = 0; i < teams.length; i++) {
       for (let j = i + 1; j < teams.length; j++) {
-        const [ga, gb] = simulateGroupMatch(teams[i], teams[j], ratings, avgGA);
+        // Use real result if it exists, otherwise simulate
+        const actual = actualLookup.get(`${teams[i]}|${teams[j]}`);
+        const [ga, gb] = actual ?? simulateGroupMatch(teams[i], teams[j], ratings, avgGA);
         table[teams[i]].gf += ga; table[teams[i]].ga += gb;
         table[teams[j]].gf += gb; table[teams[j]].ga += ga;
         if (ga > gb) table[teams[i]].pts += 3;
@@ -192,7 +226,14 @@ function simulateKnockout(
   ratings: Record<string, TeamRating>,
   avgGA: number,
   thirdPlaceLookup?: Record<string, string[]>,
+  actualKnockoutResults?: Record<string, string>,
 ): { slotTeams: Record<string, string>; champion: string } {
+  // Helper: pick a winner — use real result if exists, otherwise simulate
+  const winnerOf = (matchId: string, teamA: string, teamB: string): string => {
+    const actual = actualKnockoutResults?.[matchId];
+    if (actual && (actual === teamA || actual === teamB)) return actual;
+    return simulateKnockoutMatch(teamA, teamB, ratings, avgGA);
+  };
   const winners: Record<string, string> = {};
   const runnersUp: Record<string, string> = {};
   for (const [g, order] of Object.entries(groupResults)) {
@@ -244,37 +285,40 @@ function simulateKnockout(
   // R32
   const r32Winners: string[] = [];
   for (let i = 0; i < 16; i++) {
+    const matchId = `R32-${i + 1}`;
     const [srcA, srcB] = R32_STRUCTURE[i];
     const teamA = resolveSource(srcA, i);
     const teamB = resolveSource(srcB, i);
-    slotTeams[`R32-${i + 1}-A`] = teamA;
-    slotTeams[`R32-${i + 1}-B`] = teamB;
-    const winner = simulateKnockoutMatch(teamA, teamB, ratings, avgGA);
-    slotTeams[`R32-${i + 1}-W`] = winner;
+    slotTeams[`${matchId}-A`] = teamA;
+    slotTeams[`${matchId}-B`] = teamB;
+    const winner = winnerOf(matchId, teamA, teamB);
+    slotTeams[`${matchId}-W`] = winner;
     r32Winners.push(winner);
   }
 
   // R16
   const r16Winners: string[] = [];
   for (let i = 0; i < 8; i++) {
+    const matchId = `R16-${i + 1}`;
     const teamA = r32Winners[i * 2];
     const teamB = r32Winners[i * 2 + 1];
-    slotTeams[`R16-${i + 1}-A`] = teamA;
-    slotTeams[`R16-${i + 1}-B`] = teamB;
-    const winner = simulateKnockoutMatch(teamA, teamB, ratings, avgGA);
-    slotTeams[`R16-${i + 1}-W`] = winner;
+    slotTeams[`${matchId}-A`] = teamA;
+    slotTeams[`${matchId}-B`] = teamB;
+    const winner = winnerOf(matchId, teamA, teamB);
+    slotTeams[`${matchId}-W`] = winner;
     r16Winners.push(winner);
   }
 
   // QF
   const qfWinners: string[] = [];
   for (let i = 0; i < 4; i++) {
+    const matchId = `QF-${i + 1}`;
     const teamA = r16Winners[i * 2];
     const teamB = r16Winners[i * 2 + 1];
-    slotTeams[`QF-${i + 1}-A`] = teamA;
-    slotTeams[`QF-${i + 1}-B`] = teamB;
-    const winner = simulateKnockoutMatch(teamA, teamB, ratings, avgGA);
-    slotTeams[`QF-${i + 1}-W`] = winner;
+    slotTeams[`${matchId}-A`] = teamA;
+    slotTeams[`${matchId}-B`] = teamB;
+    const winner = winnerOf(matchId, teamA, teamB);
+    slotTeams[`${matchId}-W`] = winner;
     qfWinners.push(winner);
   }
 
@@ -282,13 +326,14 @@ function simulateKnockout(
   const sfWinners: string[] = [];
   const sfLosers: string[] = [];
   for (let i = 0; i < 2; i++) {
+    const matchId = `SF-${i + 1}`;
     const teamA = qfWinners[i * 2];
     const teamB = qfWinners[i * 2 + 1];
-    slotTeams[`SF-${i + 1}-A`] = teamA;
-    slotTeams[`SF-${i + 1}-B`] = teamB;
-    const winner = simulateKnockoutMatch(teamA, teamB, ratings, avgGA);
+    slotTeams[`${matchId}-A`] = teamA;
+    slotTeams[`${matchId}-B`] = teamB;
+    const winner = winnerOf(matchId, teamA, teamB);
     const loser = winner === teamA ? teamB : teamA;
-    slotTeams[`SF-${i + 1}-W`] = winner;
+    slotTeams[`${matchId}-W`] = winner;
     sfWinners.push(winner);
     sfLosers.push(loser);
   }
@@ -296,12 +341,12 @@ function simulateKnockout(
   // 3rd place match
   slotTeams['3RD-A'] = sfLosers[0];
   slotTeams['3RD-B'] = sfLosers[1];
-  slotTeams['3RD-W'] = simulateKnockoutMatch(sfLosers[0], sfLosers[1], ratings, avgGA);
+  slotTeams['3RD-W'] = winnerOf('3RD', sfLosers[0], sfLosers[1]);
 
   // Final
   slotTeams['FINAL-A'] = sfWinners[0];
   slotTeams['FINAL-B'] = sfWinners[1];
-  const champion = simulateKnockoutMatch(sfWinners[0], sfWinners[1], ratings, avgGA);
+  const champion = winnerOf('FINAL', sfWinners[0], sfWinners[1]);
   slotTeams['FINAL-W'] = champion;
 
   return { slotTeams, champion };
@@ -387,7 +432,7 @@ function scoreKnockoutEntry(
 const ctx = self as unknown as Worker;
 
 ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
-  const { ratings, avgGA, groups, numSims, entries, scoring, teamSeeds, teamRankings, thirdPlaceLookup } = e.data;
+  const { ratings, avgGA, groups, numSims, entries, scoring, teamSeeds, teamRankings, thirdPlaceLookup, actualGroupMatches, actualKnockoutResults } = e.data;
 
   // Accumulators
   const groupPos: Record<string, number[][]> = {};
@@ -418,7 +463,7 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
       ctx.postMessage({ type: 'progress', progress: sim } as SimResponse);
     }
 
-    const { order: groupOrder, tables } = simulateGroupStage(groups, ratings, avgGA);
+    const { order: groupOrder, tables } = simulateGroupStage(groups, ratings, avgGA, actualGroupMatches);
     const advancing3rd = getBest3rdPlace(groupOrder, tables);
 
     // Track group positions
@@ -440,7 +485,7 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
     }
 
     // Simulate knockout
-    const { slotTeams, champion } = simulateKnockout(groupOrder, advancing3rd, ratings, avgGA, thirdPlaceLookup);
+    const { slotTeams, champion } = simulateKnockout(groupOrder, advancing3rd, ratings, avgGA, thirdPlaceLookup, actualKnockoutResults);
     championCounts[champion]++;
 
     // Track bracket slot occupancy

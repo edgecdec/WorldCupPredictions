@@ -1,8 +1,18 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
+import { syncEspnResults } from "@/lib/syncResults";
 import type { Tournament } from "@/types";
 
 export async function GET() {
+  // Fire-and-forget auto-sync from ESPN. Debounced server-side, so calling
+  // this on every page load is safe — at most one ESPN fetch per minute.
+  // Errors are swallowed; we still return whatever data is in the DB.
+  try {
+    await syncEspnResults();
+  } catch {
+    // Ignore sync failures so they don't break tournament loads
+  }
+
   const db = getDb();
   const row = db
     .prepare("SELECT * FROM tournaments ORDER BY year DESC LIMIT 1")

@@ -6,6 +6,21 @@ const SCOREBOARD_URL =
 const STANDINGS_URL =
   'https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standings';
 
+/** A completed (post-state) match from ESPN, mapped to our team names. */
+export interface CompletedMatch {
+  espnId: string;
+  date: string;
+  teamA: string;
+  teamB: string;
+  scoreA: number;
+  scoreB: number;
+  winner: string | null; // null if drawn (group stage); name if not
+  isGroup: boolean;
+  groupName?: string;
+  /** Match round in knockouts: 'R32', 'R16', 'QF', 'SF', '3RD', 'FINAL' */
+  knockoutRound?: string;
+}
+
 export interface GroupStanding {
   team: string;
   espnId: number;
@@ -116,5 +131,111 @@ export async function fetchGroupStandings(
 
     return { groupName, standings };
   });
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+/**
+ * Fetch all completed matches from ESPN, parsing their group/round.
+ * Looks back across the full tournament window via date queries.
+ */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export async function fetchCompletedMatches(
+  bracketData: BracketData,
+  daysBack: number = 30,
+): Promise<CompletedMatch[]> {
+  const dates: string[] = [];
+  const now = new Date();
+  for (let d = 0; d < daysBack; d++) {
+    const dt = new Date(now);
+    dt.setDate(dt.getDate() - d);
+    dates.push(dt.toISOString().slice(0, 10).replace(/-/g, ''));
+  }
+
+  const seenIds = new Set<string>();
+  const allEvents: any[] = [];
+  for (const date of dates) {
+    try {
+      const res = await fetch(`${SCOREBOARD_URL}?dates=${date}`, { cache: 'no-store' });
+      if (!res.ok) continue;
+      const data = await res.json();
+      for (const e of data.events ?? []) {
+        if (!seenIds.has(e.id)) { seenIds.add(e.id); allEvents.push(e); }
+      }
+    } catch {
+      // Ignore individual day failures
+    }
+  }
+
+  const completed: CompletedMatch[] = [];
+  for (const event of allEvents) {
+    const competition = event.competitions?.[0];
+    const status = competition?.status ?? event.status ?? {};
+    const state = status.type?.state ?? '';
+    if (state !== 'post') continue; // only completed matches
+
+    const competitors = competition?.competitors ?? [];
+    if (competitors.length !== 2) continue;
+    const cA = competitors[0];
+    const cB = competitors[1];
+    const idA = parseInt(cA.id ?? cA.team?.id ?? '0', 10);
+    const idB = parseInt(cB.id ?? cB.team?.id ?? '0', 10);
+    const teamA = getTeamByEspnId(bracketData, idA);
+    const teamB = getTeamByEspnId(bracketData, idB);
+    if (!teamA || !teamB) continue; // not a WC team
+
+    const scoreA = parseInt(cA.score ?? '0', 10);
+    const scoreB = parseInt(cB.score ?? '0', 10);
+
+    let winner: string | null = null;
+    if (cA.winner) winner = teamA.name;
+    else if (cB.winner) winner = teamB.name;
+    else if (scoreA > scoreB) winner = teamA.name;
+    else if (scoreB > scoreA) winner = teamB.name;
+
+    // Identify group vs knockout from notes/round
+    // ESPN uses competition.notes[0].headline or competition.type.id
+    // Group stage: notes contain "Group X" or status.type description
+    // Knockout: notes contain "Round of 16", "Quarter-Finals", etc.
+    const notes = competition?.notes?.[0]?.headline ?? '';
+    const description = competition?.type?.text ?? '';
+    const headline = (notes + ' ' + description).toLowerCase();
+
+    let isGroup = false;
+    let groupName: string | undefined;
+    let knockoutRound: string | undefined;
+
+    const groupMatch = headline.match(/group\s+([a-l])/i);
+    if (groupMatch) {
+      isGroup = true;
+      groupName = groupMatch[1].toUpperCase();
+    } else if (headline.includes('round of 32') || headline.includes('r32')) {
+      knockoutRound = 'R32';
+    } else if (headline.includes('round of 16') || headline.includes('r16')) {
+      knockoutRound = 'R16';
+    } else if (headline.includes('quarter')) {
+      knockoutRound = 'QF';
+    } else if (headline.includes('semi')) {
+      knockoutRound = 'SF';
+    } else if (headline.includes('third') || headline.includes('3rd')) {
+      knockoutRound = '3RD';
+    } else if (headline.includes('final')) {
+      knockoutRound = 'FINAL';
+    }
+
+    completed.push({
+      espnId: String(event.id ?? ''),
+      date: event.date ?? competition?.date ?? '',
+      teamA: teamA.name,
+      teamB: teamB.name,
+      scoreA,
+      scoreB,
+      winner,
+      isGroup,
+      groupName,
+      knockoutRound,
+    });
+  }
+
+  return completed;
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */

@@ -91,6 +91,7 @@ function initDb(db: Database.Database) {
   migrateEspnIds(db);
   migrateCountryCodes(db);
   migrateCreatorsToOwnGroups(db);
+  migrateResultsUpdatedAt(db);
 
   // Auto-assign any existing unassigned predictions to Everyone
   try {
@@ -148,6 +149,15 @@ function migrateCreatorsToOwnGroups(db: Database.Database) {
         | { id: string }
         | undefined;
       if (pred) ins.run(g.id, pred.id);
+    }
+  } catch { /* ignore migration errors */ }
+}
+
+function migrateResultsUpdatedAt(db: Database.Database) {
+  try {
+    const cols = db.prepare("PRAGMA table_info(tournaments)").all() as { name: string }[];
+    if (!cols.some((c) => c.name === 'results_updated_at')) {
+      db.prepare("ALTER TABLE tournaments ADD COLUMN results_updated_at TEXT").run();
     }
   } catch { /* ignore migration errors */ }
 }

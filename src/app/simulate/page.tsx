@@ -15,6 +15,8 @@ import { useSelectedGroup } from '@/hooks/useSelectedGroup';
 import AuthForm from '@/components/auth/AuthForm';
 import TeamFlag from '@/components/common/TeamFlag';
 import ForecastBracket from '@/components/bracket/ForecastBracket';
+import LiveScores from '@/components/bracket/LiveScores';
+import { useLiveScores } from '@/hooks/useLiveScores';
 import { PELE_RATINGS } from '@/lib/peleRatings';
 import type { ScoringSettings, GroupPrediction } from '@/types';
 import { DEFAULT_SCORING } from '@/types';
@@ -450,6 +452,9 @@ export default function SimulatePage() {
           }
           ar.finalGroupStandings = standings;
           ar.finalAdvancing3rd = rd.groupStage.advancingThirdPlace ?? [];
+        } else if (rd?.groupMatches && Object.keys(rd.groupMatches).length > 0) {
+          // Group stage in progress — pass per-match scores so the worker locks them in
+          ar.groupMatches = rd.groupMatches;
         }
         if (rd?.knockout && Object.keys(rd.knockout).length > 0) {
           ar.knockoutWinners = rd.knockout;
@@ -491,6 +496,16 @@ export default function SimulatePage() {
   }, [user, groupId]);
 
   const { results, progress, running, numSims, rerun } = useTournamentSim(players, scoring, actualResults);
+  const { games: liveGames, loading: liveLoading } = useLiveScores(tournamentStarted && Boolean(user));
+
+  const countryCodeMap = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const team of Object.keys(PELE_RATINGS)) {
+      const code = getCountryCode(team);
+      if (code) m[team] = code;
+    }
+    return m;
+  }, []);
 
 
   if (authLoading) return null;
@@ -526,6 +541,12 @@ export default function SimulatePage() {
 
       {running && (
         <LinearProgress variant="determinate" value={(progress / numSims) * 100} sx={{ mb: 2, height: 6, borderRadius: 3 }} />
+      )}
+
+      {tournamentStarted && (liveGames.length > 0 || liveLoading) && (
+        <Box sx={{ mb: 3 }}>
+          <LiveScores games={liveGames} loading={liveLoading} countryCodeMap={countryCodeMap} />
+        </Box>
       )}
 
       {results && (

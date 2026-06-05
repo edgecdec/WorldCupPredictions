@@ -3,6 +3,27 @@ import { useMemo, useState } from 'react';
 import { Box, Typography, Popover, Button, Tabs, Tab, useMediaQuery, useTheme } from '@mui/material';
 import type { BracketSlotResult } from '@/hooks/useTournamentSim';
 import TeamFlag from '@/components/common/TeamFlag';
+import { getFeederMatchupIds } from '@/lib/knockoutBracket';
+
+/**
+ * Walk the FIFA feeder tree from a top-level matchup down to R32, returning
+ * the visual ordering for each round (top-to-bottom). Ensures every R32 pair
+ * sits adjacent to the R16 match it actually feeds.
+ */
+function walkFeederIds(rootId: string, depth: number): string[][] {
+  // Returns [[rootId], [feeders of root], [feeders of feeders], ...]
+  const layers: string[][] = [[rootId]];
+  for (let d = 0; d < depth; d++) {
+    const last = layers[layers.length - 1];
+    const next: string[] = [];
+    for (const id of last) {
+      const f = getFeederMatchupIds(id);
+      if (f) next.push(f[0], f[1]);
+    }
+    layers.push(next);
+  }
+  return layers;
+}
 
 interface ForecastBracketProps {
   bracketSlots: BracketSlotResult[];
@@ -264,17 +285,21 @@ export default function ForecastBracket({ bracketSlots, numSims, countryCodeMap 
     return <MobileForecastBracket slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />;
   }
 
-  // Left half: R32 matches 1-8, R16 1-4, QF 1-2, SF 1
-  // Right half: R32 matches 9-16, R16 5-8, QF 3-4, SF 2
-  const leftR32 = Array.from({ length: 8 }, (_, i) => `R32-${i + 1}`);
-  const leftR16 = Array.from({ length: 4 }, (_, i) => `R16-${i + 1}`);
-  const leftQF = Array.from({ length: 2 }, (_, i) => `QF-${i + 1}`);
-  const leftSF = ['SF-1'];
+  // Walk the FIFA feeder tree from each SF down through R32 so each R32 pair
+  // visually sits next to the R16 it feeds (FIFA's feeders are non-sequential).
+  // walkFeederIds returns [[SF],[QFs],[R16s],[R32s]] — top-to-bottom per round.
+  const leftLayers = walkFeederIds('SF-1', 3);
+  const rightLayers = walkFeederIds('SF-2', 3);
 
-  const rightR32 = Array.from({ length: 8 }, (_, i) => `R32-${i + 9}`);
-  const rightR16 = Array.from({ length: 4 }, (_, i) => `R16-${i + 5}`);
-  const rightQF = Array.from({ length: 2 }, (_, i) => `QF-${i + 3}`);
-  const rightSF = ['SF-2'];
+  const leftSF = leftLayers[0];
+  const leftQF = leftLayers[1];
+  const leftR16 = leftLayers[2];
+  const leftR32 = leftLayers[3];
+
+  const rightSF = rightLayers[0];
+  const rightQF = rightLayers[1];
+  const rightR16 = rightLayers[2];
+  const rightR32 = rightLayers[3];
 
   const roundLabels = ['R32', 'R16', 'QF', 'SF'];
   const roundDisplayNames: Record<string, string> = { R32: 'Round of 32', R16: 'Round of 16', QF: 'Quarterfinals', SF: 'Semifinals' };

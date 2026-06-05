@@ -1,7 +1,7 @@
 import { getDb } from '@/lib/db';
 import { parseBracketData } from '@/lib/bracketData';
 import { fetchCompletedMatches, fetchGroupStandings, type CompletedMatch } from '@/lib/espnSync';
-import { generateKnockoutBracket } from '@/lib/knockoutBracket';
+import { generateKnockoutBracket, getFeederMatchupIds } from '@/lib/knockoutBracket';
 import { determineBestThirdPlace, isGroupStageComplete } from '@/lib/bestThirdPlace';
 import type { TournamentResults, GroupStageResults } from '@/types';
 
@@ -179,22 +179,14 @@ function resolveMatchupTeams(
 ): [string | null, string | null] {
   const m = matchups.find((x) => x.id === matchId);
   if (!m) return [null, null];
-  // teamA/teamB on the matchup are populated for R32; later rounds rely on winners propagation.
-  // We approximate: if R16/QF/etc. matchup teamA/teamB are null, look at the earlier round's winner.
-  // The bracket engine uses standard pairing: R16 match i has feeders R32 (2i-1) and R32 (2i).
   if (m.round === 0) return [m.teamA ?? null, m.teamB ?? null];
 
-  const prefix = ['R32', 'R16', 'QF', 'SF'][m.round - 1];
-  const idx = parseInt(m.id.split('-')[1] ?? '0', 10);
-  const feederA = `${prefix}-${idx * 2 - 1}`;
-  const feederB = `${prefix}-${idx * 2}`;
-  if (m.id === 'FINAL') {
-    return [knockoutResults['SF-1'] ?? null, knockoutResults['SF-2'] ?? null];
-  }
   if (m.id === '3RD') {
-    // 3rd place gets the LOSERS of SF — we'd need to know who lost
-    // For now, return null and we'll match on bracket data later
+    // 3rd place gets the LOSERS of SF — handled separately by callers
     return [null, null];
   }
-  return [knockoutResults[feederA] ?? null, knockoutResults[feederB] ?? null];
+
+  const feeders = getFeederMatchupIds(m.id);
+  if (!feeders) return [null, null];
+  return [knockoutResults[feeders[0]] ?? null, knockoutResults[feeders[1]] ?? null];
 }

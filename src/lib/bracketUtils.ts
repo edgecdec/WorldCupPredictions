@@ -1,8 +1,8 @@
 import { KnockoutMatchup } from '@/types';
 import {
-  computeEffectiveMatchups as genericCompute,
-  cascadeClear as genericCascade,
-} from '@/lib/bracketEngine';
+  getFeederMatchupIds,
+  getDownstreamMatchupIds,
+} from '@/lib/knockoutBracket';
 
 // Round index constants (FIFA scheme: 3RD=4, FINAL=5)
 const ROUND_R32 = 0;
@@ -122,18 +122,39 @@ export function generateEmptyBracket(): KnockoutMatchup[] {
 
 /**
  * Clear all downstream picks that depend on the old winner of a changed matchup.
- * Delegates to the generic bracket engine with ID translation.
+ * Uses FIFA-specific feeder map (R16/QF feeders are non-sequential).
  */
 export function cascadeClear(
   picks: Record<string, string>,
   changedMatchupId: string,
   matchups: KnockoutMatchup[],
 ): Record<string, string> {
-  const genMatchups = toGenericMatchups(matchups);
-  const genPicks = toGenericPicks(picks);
-  const genId = toGenericId(changedMatchupId);
-  const result = genericCascade(genPicks, genId, genMatchups, TEAM_COUNT);
-  return toFifaPicks(result);
+  const oldWinner = picks[changedMatchupId];
+  if (!oldWinner) return { ...picks };
+
+  const updated = { ...picks };
+  const downstream = getDownstreamMatchupIds(changedMatchupId);
+
+  // Determine old loser for SF→3RD clearing
+  let oldLoser: string | null = null;
+  const isSF = changedMatchupId === 'SF-1' || changedMatchupId === 'SF-2';
+  if (isSF) {
+    const sfMatchup = matchups.find((m) => m.id === changedMatchupId);
+    if (sfMatchup?.teamA && sfMatchup?.teamB) {
+      oldLoser = oldWinner === sfMatchup.teamA ? sfMatchup.teamB : sfMatchup.teamA;
+    }
+  }
+
+  for (const mid of downstream) {
+    if (updated[mid] === oldWinner) {
+      delete updated[mid];
+    }
+    if (mid === '3RD' && oldLoser && updated[mid] === oldLoser) {
+      delete updated[mid];
+    }
+  }
+
+  return updated;
 }
 
 /**
@@ -153,16 +174,54 @@ export function getMatchupsByRound(
 
 /**
  * Compute effective matchups by propagating user picks into downstream slots.
- * Delegates to the generic bracket engine with ID translation.
+ * Uses FIFA-specific feeder map (R16/QF feeders are non-sequential).
+ * For the 3RD match, propagates the LOSERS of the two SFs.
  */
 export function computeEffectiveMatchups(
   matchups: KnockoutMatchup[],
   picks: Record<string, string>,
 ): KnockoutMatchup[] {
-  const genMatchups = toGenericMatchups(matchups);
-  const genPicks = toGenericPicks(picks);
-  const result = genericCompute(genMatchups, genPicks, TEAM_COUNT);
-  return toFifaMatchups(result);
+  const map = new Map(matchups.map((m) => [m.id, { ...m }]));
+  // Sort by FIFA round so feeders are processed before consumers.
+  // FIFA round numbers: 0=R32, 1=R16, 2=QF, 3=SF, 4=3RD, 5=Final
+  const sorted = [...map.values()].sort((a, b) => a.round - b.round);
+
+  const resolveWinner = (
+    feeder: KnockoutMatchup | undefined,
+    feederId: string,
+  ): string | null => feeder?.winner ?? picks[feederId] ?? null;
+
+  const resolveLoser = (
+    feeder: KnockoutMatchup | undefined,
+    feederId: string,
+  ): string | null => {
+    if (!feeder?.teamA || !feeder?.teamB) return null;
+    const winner = resolveWinner(feeder, feederId);
+    if (!winner) return null;
+    return winner === feeder.teamA ? feeder.teamB : feeder.teamA;
+  };
+
+  for (const m of sorted) {
+    if (m.round === ROUND_R32) continue;
+
+    const feeders = getFeederMatchupIds(m.id);
+    if (!feeders) continue;
+
+    const [feederAId, feederBId] = feeders;
+    const feederA = map.get(feederAId);
+    const feederB = map.get(feederBId);
+    const effective = map.get(m.id)!;
+
+    if (m.id === '3RD') {
+      effective.teamA = resolveLoser(feederA, feederAId) ?? m.teamA;
+      effective.teamB = resolveLoser(feederB, feederBId) ?? m.teamB;
+    } else {
+      effective.teamA = resolveWinner(feederA, feederAId) ?? m.teamA;
+      effective.teamB = resolveWinner(feederB, feederBId) ?? m.teamB;
+    }
+  }
+
+  return [...map.values()];
 }
 
 // Export mapping utilities for use by other modules

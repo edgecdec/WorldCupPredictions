@@ -59,14 +59,6 @@ interface TeamRating {
   ga: number;
   /** Home field advantage in PELE points (only present for host nations). */
   homeField?: number;
-  /**
-   * Tilt rating per Silver Bulletin: positive = team is attack-minded
-   * (matches involving them produce more goals), negative = defense-minded.
-   * Range typically ±0.5. Used in match goal calculation: combined match
-   * tilt = tiltA + tiltB, multiplied by AVG_TILT_GOAL_IMPACT to scale
-   * the total expected goals up or down.
-   */
-  tilt?: number;
 }
 
 interface PlayerEntry {
@@ -468,38 +460,6 @@ function applyFormBump(rating: TeamRating, formBump: number): TeamRating {
   };
 }
 
-/**
- * Apply Silver Bulletin's Tilt adjustment to expected match goals.
- *
- * Per Silver Bulletin: "you'd use PELE to set the point spread or the
- * odds of a team winning, and Tilt to project the over-under." Tilt is
- * meant to affect total goal volume, NOT win probability.
- *
- * In a Poisson goal model, even scaling both lambdas by the same factor
- * indirectly affects win probability via the variance/mean ratio: lower
- * total goals means more upset variance, which hurts favorites. Empirical
- * calibration vs Silver Bulletin shows their model preserves favorites'
- * win probability better than ours when tilt is applied — likely because
- * they use a separate PELE-driven win probability calculation and only
- * apply tilt to the total goal expectation.
- *
- * After testing dampening factors 0, 0.25, 0.5, 1.0, the best calibration
- * is achieved with TILT_DAMPENING = 0 (no tilt applied to match outcomes).
- * Tilt data is preserved on each team but isn't currently used in match
- * simulation. Could be reintroduced for over/under predictions later.
- */
-const TILT_DAMPENING = 0;
-function applyTilt(
-  lambdaA: number, lambdaB: number,
-  tiltA: number = 0, tiltB: number = 0,
-): [number, number] {
-  if (TILT_DAMPENING === 0) return [lambdaA, lambdaB];
-  const combined = (tiltA + tiltB) * TILT_DAMPENING;
-  if (combined === 0) return [lambdaA, lambdaB];
-  const factor = 1 + combined;
-  const safeFactor = Math.max(0.1, factor);
-  return [lambdaA * safeFactor, lambdaB * safeFactor];
-}
 
 function simulateGroupMatch(
   teamA: string, teamB: string,
@@ -516,10 +476,8 @@ function simulateGroupMatch(
   let effA = effectiveRating(aBumped, homeFor === teamA);
   let effB = effectiveRating(bBumped, homeFor === teamB);
   [effA, effB] = applyStageMultiplier(effA, effB, stageMult);
-  let lambdaA = effA.gf * (effB.ga / avgGA);
-  let lambdaB = effB.gf * (effA.ga / avgGA);
-  // Apply tilt: scales total goals up/down based on both teams' attack/defense mindset
-  [lambdaA, lambdaB] = applyTilt(lambdaA, lambdaB, a.tilt, b.tilt);
+  const lambdaA = effA.gf * (effB.ga / avgGA);
+  const lambdaB = effB.gf * (effA.ga / avgGA);
   const [scoreA, scoreB] = sampleGoals(lambdaA, lambdaB);
   // Update form for the rest of this sim
   if (form) {
@@ -544,10 +502,8 @@ function simulateKnockoutMatch(
   let effA = effectiveRating(aBumped, homeFor === teamA, KO_HFA_SCALE);
   let effB = effectiveRating(bBumped, homeFor === teamB, KO_HFA_SCALE);
   [effA, effB] = applyStageMultiplier(effA, effB, KNOCKOUT_STAGE_MULT);
-  let lambdaA = effA.gf * (effB.ga / avgGA);
-  let lambdaB = effB.gf * (effA.ga / avgGA);
-  // Apply tilt: shifts total goals up/down without changing win-prob ratio
-  [lambdaA, lambdaB] = applyTilt(lambdaA, lambdaB, a.tilt, b.tilt);
+  const lambdaA = effA.gf * (effB.ga / avgGA);
+  const lambdaB = effB.gf * (effA.ga / avgGA);
   const [ga, gb] = sampleGoals(lambdaA, lambdaB);
 
   // Update form based on regulation result (the part that's "real" goals)

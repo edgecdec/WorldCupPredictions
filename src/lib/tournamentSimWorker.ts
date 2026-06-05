@@ -190,9 +190,53 @@ const R32_STRUCTURE = [
   ['2D', '2G'],      // R32-16
 ];
 
-// R16 pairings: winners of R32 matches paired sequentially
-// R16-1 = W(R32-1) vs W(R32-2), R16-2 = W(R32-3) vs W(R32-4), etc.
-// QF-1 = W(R16-1) vs W(R16-2), etc.
+// FIFA 2026 R16 pairings — NOT sequential!
+// Per FIFA's published bracket structure (Wikipedia 2026 FIFA World Cup
+// knockout stage): each R16 match has specific R32 feeders that DON'T
+// match the sequential 1+2, 3+4, ... pattern.
+// FIFA match IDs M89-96 map to our R16-1..8.
+//
+//   R16-1 (M89) = W(R32-2) vs W(R32-5)  [feeders: 1E-3rd, 1I-3rd]
+//   R16-2 (M90) = W(R32-1) vs W(R32-3)  [feeders: 2A-2B, 1F-2C]
+//   R16-3 (M91) = W(R32-4) vs W(R32-6)  [feeders: 1C-2F, 2E-2I]
+//   R16-4 (M92) = W(R32-7) vs W(R32-8)  [feeders: 1A-3rd, 1L-3rd]
+//   R16-5 (M93) = W(R32-11) vs W(R32-12) [feeders: 2K-2L, 1H-2J]
+//   R16-6 (M94) = W(R32-9) vs W(R32-10) [feeders: 1D-3rd, 1G-3rd]
+//   R16-7 (M95) = W(R32-14) vs W(R32-16) [feeders: 1J-2H, 2D-2G]
+//   R16-8 (M96) = W(R32-13) vs W(R32-15) [feeders: 1B-3rd, 1K-3rd]
+//
+// R32 indices below are 0-indexed (R32-1 = index 0, R32-16 = index 15).
+const R16_FEEDERS: [number, number][] = [
+  [1, 4],  // R16-1
+  [0, 2],  // R16-2
+  [3, 5],  // R16-3
+  [6, 7],  // R16-4
+  [10, 11], // R16-5
+  [8, 9],  // R16-6
+  [13, 15], // R16-7
+  [12, 14], // R16-8
+];
+
+// QF pairings — also NOT sequential. Per FIFA's published structure:
+//   QF-1 (M97)  = W(R16-1) vs W(R16-2)  ← happens to be sequential
+//   QF-2 (M98)  = W(R16-5) vs W(R16-6)  ← skipped 3,4
+//   QF-3 (M99)  = W(R16-3) vs W(R16-4)
+//   QF-4 (M100) = W(R16-7) vs W(R16-8)
+// R16 indices are 0-indexed (R16-1 = 0).
+const QF_FEEDERS: [number, number][] = [
+  [0, 1],  // QF-1
+  [4, 5],  // QF-2
+  [2, 3],  // QF-3
+  [6, 7],  // QF-4
+];
+
+// SF pairings:
+//   SF-1 (M101) = W(QF-1) vs W(QF-2)
+//   SF-2 (M102) = W(QF-3) vs W(QF-4)
+const SF_FEEDERS: [number, number][] = [
+  [0, 1],  // SF-1
+  [2, 3],  // SF-2
+];
 
 function poissonSample(lambda: number): number {
   const L = Math.exp(-lambda);
@@ -681,12 +725,13 @@ function simulateKnockout(
     r32Winners.push(winner);
   }
 
-  // R16
+  // R16 — using FIFA's official R16_FEEDERS map (not sequential)
   const r16Winners: string[] = [];
   for (let i = 0; i < 8; i++) {
     const matchId = `R16-${i + 1}`;
-    const teamA = r32Winners[i * 2];
-    const teamB = r32Winners[i * 2 + 1];
+    const [aIdx, bIdx] = R16_FEEDERS[i];
+    const teamA = r32Winners[aIdx];
+    const teamB = r32Winners[bIdx];
     slotTeams[`${matchId}-A`] = teamA;
     slotTeams[`${matchId}-B`] = teamB;
     const winner = winnerOf(matchId, teamA, teamB);
@@ -694,12 +739,13 @@ function simulateKnockout(
     r16Winners.push(winner);
   }
 
-  // QF
+  // QF — using FIFA's official QF_FEEDERS map (not sequential)
   const qfWinners: string[] = [];
   for (let i = 0; i < 4; i++) {
     const matchId = `QF-${i + 1}`;
-    const teamA = r16Winners[i * 2];
-    const teamB = r16Winners[i * 2 + 1];
+    const [aIdx, bIdx] = QF_FEEDERS[i];
+    const teamA = r16Winners[aIdx];
+    const teamB = r16Winners[bIdx];
     slotTeams[`${matchId}-A`] = teamA;
     slotTeams[`${matchId}-B`] = teamB;
     const winner = winnerOf(matchId, teamA, teamB);
@@ -707,13 +753,14 @@ function simulateKnockout(
     qfWinners.push(winner);
   }
 
-  // SF
+  // SF — using SF_FEEDERS (happens to be sequential pairing)
   const sfWinners: string[] = [];
   const sfLosers: string[] = [];
   for (let i = 0; i < 2; i++) {
     const matchId = `SF-${i + 1}`;
-    const teamA = qfWinners[i * 2];
-    const teamB = qfWinners[i * 2 + 1];
+    const [aIdx, bIdx] = SF_FEEDERS[i];
+    const teamA = qfWinners[aIdx];
+    const teamB = qfWinners[bIdx];
     slotTeams[`${matchId}-A`] = teamA;
     slotTeams[`${matchId}-B`] = teamB;
     const winner = winnerOf(matchId, teamA, teamB);

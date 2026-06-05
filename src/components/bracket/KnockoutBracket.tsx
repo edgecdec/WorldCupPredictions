@@ -3,7 +3,8 @@ import { useCallback, useMemo } from 'react';
 import { Box, Typography } from '@mui/material';
 import Matchup from './Matchup';
 import { KnockoutMatchup } from '@/types';
-import { cascadeClear, getMatchupsByRound, ROUND_3RD, ROUND_LABELS } from '@/lib/bracketUtils';
+import { getMatchupsByRound, ROUND_R32, ROUND_R16, ROUND_QF, ROUND_SF, ROUND_3RD, ROUND_LABELS } from '@/lib/bracketUtils';
+import { getFeederMatchupIds } from '@/lib/knockoutBracket';
 
 interface KnockoutBracketProps {
   matchups: KnockoutMatchup[];
@@ -17,34 +18,65 @@ interface KnockoutBracketProps {
 
 const CONNECTOR_COLOR = 'divider';
 
+/**
+ * Walk the FIFA feeder tree from a top-level matchup down to the earliest round,
+ * returning the visual ordering for each round (top-to-bottom).
+ *
+ * For example, walkFeeders('SF-1') returns:
+ *   { 3: ['SF-1'], 2: ['QF-1','QF-2'], 1: ['R16-1','R16-2','R16-5','R16-6'],
+ *     0: ['R32-2','R32-5','R32-1','R32-3','R32-11','R32-12','R32-9','R32-10'] }
+ * where each pair-of-pairs feeds its parent. This ensures the connectors line up.
+ */
+function walkFeeders(rootId: string, rootRound: number): Map<number, string[]> {
+  const result = new Map<number, string[]>();
+  result.set(rootRound, [rootId]);
+
+  let currentIds = [rootId];
+  let currentRound = rootRound;
+  while (currentRound > ROUND_R32) {
+    const nextIds: string[] = [];
+    for (const id of currentIds) {
+      const feeders = getFeederMatchupIds(id);
+      if (feeders) {
+        nextIds.push(feeders[0], feeders[1]);
+      }
+    }
+    currentRound -= 1;
+    result.set(currentRound, nextIds);
+    currentIds = nextIds;
+  }
+  return result;
+}
+
 /** Derive the bracket structure from matchups: normal rounds, final, 3rd place. */
 function deriveBracketStructure(matchups: KnockoutMatchup[]) {
   const byRound = getMatchupsByRound(matchups);
   const thirdMatchup = byRound.get(ROUND_3RD)?.[0] ?? null;
 
-  // Normal rounds are all rounds except the special 3RD round (round 4)
-  const normalRounds = [...byRound.keys()]
-    .filter((r) => r !== ROUND_3RD)
-    .sort((a, b) => a - b);
+  // Final = the matchup whose ID is 'FINAL'
+  const finalMatchup = matchups.find((m) => m.id === 'FINAL') ?? null;
 
-  if (normalRounds.length === 0) return { leftRounds: [], rightRounds: [], finalMatchup: null, thirdMatchup };
+  // SF determines the two halves: SF-1 → left, SF-2 → right.
+  const sfMatchups = byRound.get(ROUND_SF) ?? [];
+  const sf1 = sfMatchups.find((m) => m.id === 'SF-1');
+  const sf2 = sfMatchups.find((m) => m.id === 'SF-2');
 
-  // The last normal round is the Final
-  const finalRound = normalRounds[normalRounds.length - 1];
-  const finalMatchup = byRound.get(finalRound)?.[0] ?? null;
+  if (!sf1 || !sf2) {
+    return { leftRounds: [], rightRounds: [], finalMatchup, thirdMatchup };
+  }
 
-  // Rounds before the final get split into left/right halves
-  const bracketRounds = normalRounds.slice(0, -1);
+  const leftTree = walkFeeders('SF-1', ROUND_SF);
+  const rightTree = walkFeeders('SF-2', ROUND_SF);
 
-  // For each round, split matchups into left half (first half) and right half (second half)
+  // Order rounds shallowest (R32) → deepest (SF) for left,
+  // shallowest → deepest (will be reversed in render) for right.
+  const orderedRounds = [ROUND_R32, ROUND_R16, ROUND_QF, ROUND_SF];
+
   const leftRounds: { round: number; ids: string[] }[] = [];
   const rightRounds: { round: number; ids: string[] }[] = [];
-
-  for (const round of bracketRounds) {
-    const roundMatchups = byRound.get(round) ?? [];
-    const half = Math.ceil(roundMatchups.length / 2);
-    leftRounds.push({ round, ids: roundMatchups.slice(0, half).map((m) => m.id) });
-    rightRounds.push({ round, ids: roundMatchups.slice(half).map((m) => m.id) });
+  for (const round of orderedRounds) {
+    leftRounds.push({ round, ids: leftTree.get(round) ?? [] });
+    rightRounds.push({ round, ids: rightTree.get(round) ?? [] });
   }
 
   return { leftRounds, rightRounds, finalMatchup, thirdMatchup };

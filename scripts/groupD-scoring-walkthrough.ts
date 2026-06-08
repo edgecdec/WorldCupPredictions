@@ -1,168 +1,415 @@
 // Group D scoring walkthrough — exercises scoreGroupStage with edgecdec's
-// real Group D pick across a handful of scenarios so we can confirm the
-// math matches the documented rules. Run with `npx tsx scripts/groupD-scoring-walkthrough.ts`.
+// real Group D pick across 9 scenarios. For each one, the script walks through
+// every team's contribution to the score with explicit math, then totals.
+//
+// Run: npx tsx scripts/groupD-scoring-walkthrough.ts
 
 import { scoreGroupStage } from '../src/lib/scoring';
 import { DEFAULT_SCORING, type BracketData, type GroupPrediction, type GroupStageResults } from '../src/types';
 
-// Synthetic Group D bracket data — only the fields scoreGroupStage actually uses.
-// The function reads `groupSeed` (= pot) for upset bonus and `fifaRanking` for nothing
-// in scoreGroupStage (knockout uses ranking).
-const GROUP_D_TEAMS = [
-  { name: 'USA',        fifaRanking: 14, pot: 1 as const, groupSeed: 1 as const },
-  { name: 'Paraguay',   fifaRanking: 39, pot: 3 as const, groupSeed: 3 as const },
-  { name: 'Australia',  fifaRanking: 26, pot: 2 as const, groupSeed: 2 as const },
-  { name: 'Turkiye',    fifaRanking: 25, pot: 4 as const, groupSeed: 4 as const },
+// Group D facts (seeds = pots in our schema).
+const GROUP_D = [
+  { name: 'USA',        rank: 14, pot: 1 as const },
+  { name: 'Paraguay',   rank: 39, pot: 3 as const },
+  { name: 'Australia',  rank: 26, pot: 2 as const },
+  { name: 'Turkiye',    rank: 25, pot: 4 as const },
 ];
 
 const bracketData: BracketData = {
-  groups: [
-    {
-      name: 'D',
-      teams: [
-        { ...GROUP_D_TEAMS[0], espnId: 0 },
-        { ...GROUP_D_TEAMS[1], espnId: 0 },
-        { ...GROUP_D_TEAMS[2], espnId: 0 },
-        { ...GROUP_D_TEAMS[3], espnId: 0 },
-      ],
-    },
-  ],
+  groups: [{
+    name: 'D',
+    teams: [
+      { ...GROUP_D[0], groupSeed: 1, espnId: 0 },
+      { ...GROUP_D[1], groupSeed: 3, espnId: 0 },
+      { ...GROUP_D[2], groupSeed: 2, espnId: 0 },
+      { ...GROUP_D[3], groupSeed: 4, espnId: 0 },
+    ] as BracketData['groups'][0]['teams'],
+  }],
 };
 
-// edgecdec's Group D prediction: USA > Turkiye > Paraguay > Australia
-// with Paraguay also picked as one of 8 advancing 3rd-place teams.
-const edgecdecPrediction: GroupPrediction = {
+// edgecdec's actual prediction
+const PREDICTION: GroupPrediction = {
   groupName: 'D',
   order: ['USA', 'Turkiye', 'Paraguay', 'Australia'],
 };
-const edgecdec3rd: string[] = ['Paraguay']; // (real picks include 7 other groups but Group D scoring only cares about Paraguay)
+const PARAGUAY_PICKED_AS_3RD = ['Paraguay']; // edgecdec's 3rd-place advancing list (Group D portion)
 
-// =============================================================================
-// SCENARIOS
-// =============================================================================
+const RULES = DEFAULT_SCORING.groupStage;
+const SEED: Record<string, number> = { USA: 1, Paraguay: 3, Australia: 2, Turkiye: 4 };
 
-interface Scenario {
-  name: string;
-  /** Final order [1st, 2nd, 3rd, 4th] for Group D. */
-  order: [string, string, string, string];
-  /** Whether the 3rd place team advances as one of the best 8. */
-  thirdAdvances: boolean;
-  notes: string;
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function predictedAdvances(team: string): boolean {
+  const idx = PREDICTION.order.indexOf(team);
+  if (idx === -1) return false;
+  const pos = idx + 1;
+  if (pos <= 2) return true;
+  if (pos === 3) return PARAGUAY_PICKED_AS_3RD.includes(team);
+  return false;
 }
 
-const scenarios: Scenario[] = [
-  {
-    name: '1) Perfect order',
-    order: ['USA', 'Turkiye', 'Paraguay', 'Australia'],
-    thirdAdvances: true,
-    notes: 'edgecdec picked exactly this order, and his 3rd-place pick (Paraguay) advances.',
-  },
-  {
-    name: '2) Top 2 right but order swapped',
-    order: ['Turkiye', 'USA', 'Paraguay', 'Australia'],
-    thirdAdvances: true,
-    notes: 'USA & Turkiye both advance (matches), Paraguay still 3rd & advances, Australia last.',
-  },
-  {
-    name: '3) USA dominates, Australia takes 2nd, Paraguay flames out (3rd, no advance)',
-    order: ['USA', 'Australia', 'Paraguay', 'Turkiye'],
-    thirdAdvances: false,
-    notes: 'edgecdec only nailed 1st place. Paraguay is 3rd as predicted but does NOT advance, so the 3rd-place pick whiffs.',
-  },
-  {
-    name: '4) Big upset: Turkiye wins group, Paraguay second',
-    order: ['Turkiye', 'Paraguay', 'USA', 'Australia'],
-    thirdAdvances: false,
-    notes: 'Turkiye (pot 4) winning group = significant upset bonus IF predicted high. edgecdec had Turkiye 2nd, Paraguay 3rd.',
-  },
-  {
-    name: '5) Australia surprise winner, Paraguay 4th',
-    order: ['Australia', 'USA', 'Turkiye', 'Paraguay'],
-    thirdAdvances: false,
-    notes: 'edgecdec had Australia last; that whiffs. Paraguay 4th instead of 3rd.',
-  },
-];
+function actuallyAdvances(team: string, order: string[], thirdAdvances: boolean): boolean {
+  const pos = order.indexOf(team) + 1;
+  if (pos <= 2) return true;
+  if (pos === 3) return thirdAdvances;
+  return false;
+}
 
-function score(scenario: Scenario): void {
+function predictedPos(team: string): number {
+  return PREDICTION.order.indexOf(team) + 1;
+}
+
+interface Scenario {
+  id: string;
+  title: string;
+  order: [string, string, string, string];
+  thirdAdvances: boolean;
+  story: string;
+}
+
+// ---------------------------------------------------------------------------
+// Per-team scoring breakdown
+// ---------------------------------------------------------------------------
+
+interface TeamLine {
+  team: string;
+  actualPos: number;
+  predPos: number;
+  seed: number;
+  advanceMatch: boolean;
+  advancePts: number;
+  exactMatch: boolean;
+  exactPts: number;
+  upsetExplanation: string;
+  upsetPts: number;
+  rowTotal: number;
+}
+
+function explainTeam(team: string, actualPos: number, order: string[], thirdAdvances: boolean): TeamLine {
+  const predPos = predictedPos(team);
+  const seed = SEED[team];
+  const predAdv = predictedAdvances(team);
+  const actAdv = actuallyAdvances(team, order, thirdAdvances);
+  const advanceMatch = predAdv === actAdv;
+  const advancePts = advanceMatch ? RULES.advanceCorrect : 0;
+
+  const exactMatch = predPos === actualPos;
+  const exactPts = exactMatch ? RULES.exactPosition : 0;
+
+  // Upset bonus: only when team finished AT or BETTER than predicted, and seed > predictedPos
+  let upsetPts = 0;
+  let upsetExplanation = '';
+  if (actualPos <= predPos) {
+    const bonus = Math.max(0, seed - predPos);
+    upsetPts = bonus * RULES.upsetBonusPerPlace;
+    if (bonus > 0) {
+      upsetExplanation = `seed ${seed} - predicted ${predPos} = +${bonus}`;
+    } else {
+      upsetExplanation = `seed ${seed} ≤ predicted ${predPos}, no upset`;
+    }
+  } else {
+    upsetExplanation = `actual ${actualPos} > predicted ${predPos}, no upset bonus possible`;
+  }
+
+  return {
+    team, actualPos, predPos, seed,
+    advanceMatch, advancePts,
+    exactMatch, exactPts,
+    upsetExplanation, upsetPts,
+    rowTotal: advancePts + exactPts + upsetPts,
+  };
+}
+
+function reasonAdvanceMismatch(team: string, predAdv: boolean, actAdv: boolean): string {
+  if (predAdv === actAdv) return '';
+  return predAdv
+    ? `predicted to advance, did not`
+    : `predicted out, but advanced`;
+}
+
+function score(scenario: Scenario): { total: number; lines: TeamLine[]; flagAdvance: boolean; flagPerfect: boolean } {
   const results: GroupStageResults = {
     groupResults: [{ groupName: 'D', order: scenario.order }],
     advancingThirdPlace: scenario.thirdAdvances ? [scenario.order[2]] : [],
   };
-  const out = scoreGroupStage(
-    [edgecdecPrediction],
-    edgecdec3rd,
-    results,
-    bracketData,
-    DEFAULT_SCORING.groupStage,
+  const out = scoreGroupStage([PREDICTION], PARAGUAY_PICKED_AS_3RD, results, bracketData, RULES);
+
+  const lines = scenario.order.map((team, i) =>
+    explainTeam(team, i + 1, scenario.order, scenario.thirdAdvances),
   );
 
-  console.log('=='.repeat(40));
-  console.log(scenario.name);
-  console.log('  Actual order:', scenario.order.join(' > '), scenario.thirdAdvances ? '(3rd advances)' : '(3rd eliminated)');
-  console.log('  Notes:', scenario.notes);
+  const flagAdvance = lines.every(l => l.advanceMatch);
+  const flagPerfect = lines.every(l => l.exactMatch);
 
-  // Walk through each team and explain the points.
-  console.log('  Team-by-team breakdown:');
-  for (let i = 0; i < 4; i++) {
-    const team = scenario.order[i];
-    const actualPos = i + 1;
-    const predPos = edgecdecPrediction.order.indexOf(team) + 1;
-    const seed = GROUP_D_TEAMS.find((t) => t.name === team)?.groupSeed ?? 0;
-    const predAdv = predPos <= 2 || (predPos === 3 && edgecdec3rd.includes(team));
-    const actAdv = actualPos <= 2 || (actualPos === 3 && scenario.thirdAdvances);
-    const advMatch = predAdv === actAdv;
-    const exact = predPos === actualPos;
-    const upsetBonus = (actualPos <= predPos) ? Math.max(0, seed - predPos) : 0;
-    console.log(`    ${team.padEnd(11)} actual=#${actualPos}, predicted=#${predPos}, seed=${seed}`
-      + ` | adv-match=${advMatch ? 'YES (+1)' : 'no '}`
-      + ` | exact=${exact ? 'YES (+1)' : 'no '}`
-      + ` | upset bonus = ${upsetBonus}`);
+  // Sanity: our hand-computed total should equal scoreGroupStage's output.
+  const handTotal = lines.reduce((s, l) => s + l.rowTotal, 0)
+    + (flagAdvance ? RULES.advancementCorrectBonus : 0)
+    + (flagPerfect ? RULES.perfectOrderBonus : 0);
+  if (handTotal !== out.total) {
+    console.error(`!!! Mismatch in ${scenario.id}: hand=${handTotal}, fn=${out.total}`);
   }
 
-  const detail = out.perGroup[0];
-  console.log('  Score breakdown:');
-  console.log(`    Advance correct  : ${detail.advanceCorrectPoints} pts`);
-  console.log(`    Exact position   : ${detail.exactPositionPoints} pts`);
-  console.log(`    Upset bonus      : ${detail.upsetBonusPoints} pts`);
-  console.log(`    Adv. group bonus : ${detail.advancementCorrectBonus} pts (all 4 advance picks correct: ${detail.advancementCorrectBonus === DEFAULT_SCORING.groupStage.advancementCorrectBonus})`);
-  console.log(`    Perfect-order    : ${detail.perfectOrderBonus} pts (all 4 positions correct: ${detail.perfectOrderBonus === DEFAULT_SCORING.groupStage.perfectOrderBonus})`);
-  console.log(`    GROUP TOTAL      : ${detail.total} pts`);
+  return { total: out.total, lines, flagAdvance, flagPerfect };
+}
+
+// ---------------------------------------------------------------------------
+// Pretty printing
+// ---------------------------------------------------------------------------
+
+function bar(char = '─', n = 78): string {
+  return char.repeat(n);
+}
+
+function fmtCol(s: string | number, w: number, align: 'left' | 'right' = 'left'): string {
+  const str = String(s);
+  if (str.length >= w) return str.slice(0, w);
+  return align === 'left' ? str.padEnd(w) : str.padStart(w);
+}
+
+function printScenario(s: Scenario): void {
+  const r = score(s);
+
   console.log('');
+  console.log(bar('═'));
+  console.log(`SCENARIO ${s.id}: ${s.title}`);
+  console.log(bar('═'));
+  console.log(`Final order : ${s.order[0]} > ${s.order[1]} > ${s.order[2]} > ${s.order[3]}`);
+  console.log(`3rd place   : ${s.thirdAdvances ? `${s.order[2]} ADVANCES (one of best 8)` : `${s.order[2]} ELIMINATED`}`);
+  console.log(`Story       : ${s.story}`);
+  console.log('');
+  console.log(`edgecdec's prediction: ${PREDICTION.order.join(' > ')} (with Paraguay among the 8 advancing 3rd-place teams)`);
+  console.log('');
+
+  // Header
+  console.log(
+    fmtCol('Team', 10) + ' │ ' +
+    fmtCol('Actual', 7) + ' │ ' +
+    fmtCol('Pred', 5) + ' │ ' +
+    fmtCol('Seed', 5) + ' │ ' +
+    fmtCol('Advance match?', 24) + ' │ ' +
+    fmtCol('Exact?', 8) + ' │ ' +
+    fmtCol('Upset bonus calc', 30) + ' │ ' +
+    fmtCol('Row', 4, 'right'),
+  );
+  console.log(bar());
+
+  for (const line of r.lines) {
+    const team = line.team;
+    const predAdv = predictedAdvances(team);
+    const actAdv = actuallyAdvances(team, s.order, s.thirdAdvances);
+    const advCell = line.advanceMatch
+      ? `match (+${line.advancePts})`
+      : `MISS — ${reasonAdvanceMismatch(team, predAdv, actAdv)}`;
+    const exactCell = line.exactMatch ? `yes (+${line.exactPts})` : 'no';
+    const upsetCell = line.upsetPts > 0
+      ? `${line.upsetExplanation} → +${line.upsetPts}`
+      : line.upsetExplanation;
+
+    console.log(
+      fmtCol(team, 10) + ' │ ' +
+      fmtCol(`#${line.actualPos}`, 7) + ' │ ' +
+      fmtCol(`#${line.predPos}`, 5) + ' │ ' +
+      fmtCol(line.seed, 5) + ' │ ' +
+      fmtCol(advCell, 24) + ' │ ' +
+      fmtCol(exactCell, 8) + ' │ ' +
+      fmtCol(upsetCell, 30) + ' │ ' +
+      fmtCol(line.rowTotal, 4, 'right'),
+    );
+  }
+  console.log(bar());
+
+  // Subtotals
+  const advTotal = r.lines.reduce((sum, l) => sum + l.advancePts, 0);
+  const exactTotal = r.lines.reduce((sum, l) => sum + l.exactPts, 0);
+  const upsetTotal = r.lines.reduce((sum, l) => sum + l.upsetPts, 0);
+  const rowTotal = advTotal + exactTotal + upsetTotal;
+
+  console.log('');
+  console.log(`Subtotals:`);
+  console.log(`  Advance correct  : ${advTotal} pts (4 teams × +1 if advance prediction matches reality)`);
+  console.log(`  Exact position   : ${exactTotal} pts (4 teams × +1 if finishing in predicted slot)`);
+  console.log(`  Upset bonus      : ${upsetTotal} pts (sum of (seed - predPos) when team performs at/above pred)`);
+  console.log(`  ────────────`);
+  console.log(`  Per-team subtotal: ${rowTotal} pts`);
+  console.log('');
+
+  // Bonuses
+  const advBonus = r.flagAdvance ? RULES.advancementCorrectBonus : 0;
+  const perfectBonus = r.flagPerfect ? RULES.perfectOrderBonus : 0;
+  console.log(`Group-wide bonuses (all-or-nothing):`);
+  console.log(`  Advance bonus    : +${advBonus}  (all 4 advance/eliminate predictions correct? ${r.flagAdvance ? 'YES' : 'no'})`);
+  console.log(`  Perfect order    : +${perfectBonus}  (all 4 positions exactly correct? ${r.flagPerfect ? 'YES' : 'no'})`);
+  console.log('');
+  console.log(`>>> SCENARIO ${s.id} GROUP D TOTAL: ${r.total} pts <<<`);
 }
 
-console.log('Group D scoring walkthrough — edgecdec prediction: USA > Turkiye > Paraguay > Australia (Paraguay among top-8 3rd place)');
-console.log('');
-console.log('SCORING RULES (from DEFAULT_SCORING.groupStage):');
-console.log(`  +${DEFAULT_SCORING.groupStage.advanceCorrect}  per team where prediction's "advances" matches reality`);
-console.log(`  +${DEFAULT_SCORING.groupStage.exactPosition}  per team finishing at exactly their predicted position`);
-console.log(`  +${DEFAULT_SCORING.groupStage.upsetBonusPerPlace}  per (seed - predictedPos) when actualPos <= predictedPos & seed > predictedPos`);
-console.log(`  +${DEFAULT_SCORING.groupStage.advancementCorrectBonus}  bonus if all 4 "advance/eliminate" predictions are right`);
-console.log(`  +${DEFAULT_SCORING.groupStage.perfectOrderBonus}  bonus if all 4 positions are exactly right`);
-console.log('');
+// ---------------------------------------------------------------------------
+// Scenarios — covering core cases + edge cases
+// ---------------------------------------------------------------------------
 
-for (const scenario of scenarios) {
-  score(scenario);
+const scenarios: Scenario[] = [
+  {
+    id: 'A',
+    title: 'Perfect call (best case)',
+    order: ['USA', 'Turkiye', 'Paraguay', 'Australia'],
+    thirdAdvances: true,
+    story: 'edgecdec nails every position AND Paraguay sneaks through as one of 8 advancing 3rd-place teams. Maximum possible Group D score.',
+  },
+  {
+    id: 'B',
+    title: 'Top 2 right but order swapped',
+    order: ['Turkiye', 'USA', 'Paraguay', 'Australia'],
+    thirdAdvances: true,
+    story: 'Turkiye edges USA for the group. Paraguay still 3rd & advances, Australia still last. Loses perfect-order bonus, keeps the advance bonus.',
+  },
+  {
+    id: 'C',
+    title: 'USA dominates, 3rd-place pick whiffs',
+    order: ['USA', 'Australia', 'Paraguay', 'Turkiye'],
+    thirdAdvances: false,
+    story: 'USA wins group, Australia overperforms, Paraguay finishes 3rd as predicted but DOES NOT advance. The 3rd-place pick is the killer.',
+  },
+  {
+    id: 'D',
+    title: 'Big upset: Turkiye wins, Paraguay 2nd',
+    order: ['Turkiye', 'Paraguay', 'USA', 'Australia'],
+    thirdAdvances: false,
+    story: 'Turkiye (pot 4!) tops the group; Paraguay (pot 3) sneaks 2nd. USA out in 3rd. Australia stays last. Upset bonus shows up.',
+  },
+  {
+    id: 'E',
+    title: 'Australia shocks, Paraguay 4th',
+    order: ['Australia', 'USA', 'Turkiye', 'Paraguay'],
+    thirdAdvances: false,
+    story: 'Australia (predicted last) wins the group. Paraguay finishes dead last. Single point earned (USA still advances).',
+  },
+  {
+    id: 'F',
+    title: 'EDGE: Paraguay wins group (max upset for predicted-3rd)',
+    order: ['Paraguay', 'USA', 'Turkiye', 'Australia'],
+    thirdAdvances: true,
+    story: 'Paraguay (pot 3, predicted 3rd) wins the group. Maxes the upset bonus for Paraguay (3 - 3 = 0... wait, see breakdown). USA & Turkiye both advance.',
+  },
+  {
+    id: 'G',
+    title: 'EDGE: All 4 advance predictions match but order off',
+    order: ['Turkiye', 'USA', 'Australia', 'Paraguay'],
+    thirdAdvances: false,
+    story: 'edgecdec\'s "USA & Turkiye advance, Paraguay/Australia don\'t" is correct (Paraguay 4th, Australia 3rd & out). Top 2 swapped, bottom 2 swapped. Tests the advance bonus fires while perfect-order does not.',
+  },
+  {
+    id: 'H',
+    title: 'EDGE: Three teams tied on points (real-world tiebreaker)',
+    order: ['USA', 'Turkiye', 'Australia', 'Paraguay'],
+    thirdAdvances: true,
+    story: 'Australia overtakes Paraguay on tiebreakers; Australia advances as 3rd-place team instead. edgecdec had Paraguay 3rd, so the 3rd-place pick is wrong even though Paraguay is 4th.',
+  },
+  {
+    id: 'I',
+    title: 'EDGE: Worst possible — order completely reversed',
+    order: ['Australia', 'Paraguay', 'Turkiye', 'USA'],
+    thirdAdvances: false,
+    story: 'Australia wins, USA finishes last. Catastrophe. Tests the floor.',
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Print everything
+// ---------------------------------------------------------------------------
+
+console.log('');
+console.log(bar('═'));
+console.log('GROUP D SCORING WALKTHROUGH — edgecdec prediction');
+console.log(bar('═'));
+console.log('');
+console.log(`Predicted order : ${PREDICTION.order.join(' > ')}`);
+console.log(`3rd-place picks : ${PARAGUAY_PICKED_AS_3RD.join(', ')} (one of edgecdec's 8 advancing 3rd-place picks)`);
+console.log('');
+console.log('Group D teams & seeds:');
+console.log('  USA       — pot 1, FIFA rank 14');
+console.log('  Australia — pot 2, FIFA rank 26');
+console.log('  Paraguay  — pot 3, FIFA rank 39');
+console.log('  Turkiye   — pot 4, FIFA rank 25');
+console.log('');
+console.log('SCORING RULES (DEFAULT_SCORING.groupStage):');
+console.log(`  +${RULES.advanceCorrect}  per team where prediction\'s "advances?" matches reality`);
+console.log(`  +${RULES.exactPosition}  per team finishing in exactly its predicted slot`);
+console.log(`  +${RULES.upsetBonusPerPlace}  per (seed - predictedPos) when actualPos ≤ predictedPos AND seed > predictedPos`);
+console.log(`  +${RULES.advancementCorrectBonus}  bonus if all 4 "advance/eliminate" calls are right`);
+console.log(`  +${RULES.perfectOrderBonus}  bonus if all 4 positions are exactly right`);
+console.log('');
+console.log('Note on UPSET BONUS: this rewards predicting a low-pot team to outperform their seed.');
+console.log('  Example: Turkiye is pot 4 (lowest). Predicting Turkiye 2nd → if Turkiye finishes 2nd or');
+console.log('  better, you earn (4 - 2) = 2 bonus points. Predicting USA (pot 1) anywhere → 0 bonus,');
+console.log('  since seed (1) - any predictedPos (≥1) ≤ 0.');
+
+for (const s of scenarios) printScenario(s);
+
+// ---------------------------------------------------------------------------
+// Summary table
+// ---------------------------------------------------------------------------
+
+console.log('');
+console.log(bar('═'));
+console.log('SUMMARY TABLE — all scenarios');
+console.log(bar('═'));
+console.log('');
+console.log(
+  fmtCol('ID', 4) + ' │ ' +
+  fmtCol('Final order', 38) + ' │ ' +
+  fmtCol('3rd?', 6) + ' │ ' +
+  fmtCol('Adv', 4, 'right') + ' │ ' +
+  fmtCol('Exact', 6, 'right') + ' │ ' +
+  fmtCol('Upset', 6, 'right') + ' │ ' +
+  fmtCol('AdvB', 5, 'right') + ' │ ' +
+  fmtCol('Perf', 5, 'right') + ' │ ' +
+  fmtCol('TOTAL', 6, 'right'),
+);
+console.log(bar());
+for (const s of scenarios) {
+  const r = score(s);
+  const adv = r.lines.reduce((x, l) => x + l.advancePts, 0);
+  const exact = r.lines.reduce((x, l) => x + l.exactPts, 0);
+  const upset = r.lines.reduce((x, l) => x + l.upsetPts, 0);
+  const advB = r.flagAdvance ? RULES.advancementCorrectBonus : 0;
+  const perfB = r.flagPerfect ? RULES.perfectOrderBonus : 0;
+  console.log(
+    fmtCol(s.id, 4) + ' │ ' +
+    fmtCol(s.order.join(' > '), 38) + ' │ ' +
+    fmtCol(s.thirdAdvances ? 'adv' : 'out', 6) + ' │ ' +
+    fmtCol(adv, 4, 'right') + ' │ ' +
+    fmtCol(exact, 6, 'right') + ' │ ' +
+    fmtCol(upset, 6, 'right') + ' │ ' +
+    fmtCol(advB, 5, 'right') + ' │ ' +
+    fmtCol(perfB, 5, 'right') + ' │ ' +
+    fmtCol(r.total, 6, 'right'),
+  );
 }
+console.log('');
+console.log('Theoretical max for this prediction: 13 pts (scenario A — every component fires).');
+console.log('Theoretical floor: 0 pts (impossible here since picking the pot-1 team to advance is hard to miss; min observed = 1).');
+console.log('');
 
-// =============================================================================
-// LIVE-SCORE INTEGRATION SANITY CHECK
-// =============================================================================
-//
-// Show how an in-progress USA vs Paraguay match flows through the live model
-// into Group D standings. Useful to confirm that the sampleLiveScores → group
-// stage simulator → scoring pipeline produces sensible distributions.
+// ---------------------------------------------------------------------------
+// Live-score pipeline sanity check
+// ---------------------------------------------------------------------------
+
 import { sampleLiveScores } from '../src/lib/matchOdds';
 
-console.log('=='.repeat(40));
+console.log(bar('═'));
 console.log('LIVE-SCORE PIPELINE SANITY CHECK');
-console.log('Scenario: USA 1-0 Paraguay at 60\' (other Group D matches not yet played)');
+console.log(bar('═'));
+console.log('');
+console.log('Scenario: USA 1-0 Paraguay at 60\' — other Group D matches not yet played.');
+console.log('What happens when this in-progress match feeds into the forecast?');
 console.log('');
 
 const samples = sampleLiveScores('USA', 'Paraguay', 1, 0, 60, 5000, { stage: 'group' });
 if (!samples) {
   console.log('ERROR: PELE ratings missing for USA or Paraguay');
 } else {
-  // Tally final scoreline distribution
   const tally = new Map<string, number>();
   let usaWin = 0, draw = 0, parWin = 0;
   let totalA = 0, totalB = 0;
@@ -175,21 +422,28 @@ if (!samples) {
     totalA += a;
     totalB += b;
   }
-  const top = [...tally.entries()].sort((x, y) => y[1] - x[1]).slice(0, 5);
-  console.log('  Final-score distribution:');
-  console.log(`    USA win: ${(usaWin / samples.length * 100).toFixed(1)}%`);
-  console.log(`    Draw:    ${(draw / samples.length * 100).toFixed(1)}%`);
-  console.log(`    PAR win: ${(parWin / samples.length * 100).toFixed(1)}%`);
-  console.log(`  Most likely scorelines:`);
-  for (const [k, c] of top) console.log(`    ${k}: ${(c / samples.length * 100).toFixed(1)}%`);
-  console.log(`  Expected final score: USA ${(totalA / samples.length).toFixed(2)} - ${(totalB / samples.length).toFixed(2)} PAR`);
-  console.log('');
-  console.log('  How this flows into the forecast:');
-  console.log('  - Each tournament-sim iteration randomly picks one of these 5000 sampled');
-  console.log('    scorelines for USA-Paraguay, then simulates the other 5 Group D matches.');
-  console.log('  - Standings, points, GD, GF tiebreakers, and 3rd-place advancement all derive');
-  console.log('    from the resulting full-group table.');
-  console.log('  - edgecdec\'s scoring then runs against that simulated final order, exactly as');
-  console.log('    in the 5 deterministic scenarios above.');
-}
+  const top = [...tally.entries()].sort((x, y) => y[1] - x[1]).slice(0, 6);
 
+  console.log('  Match outcome (5000 sampled trajectories):');
+  console.log(`    USA win   ${(usaWin / samples.length * 100).toFixed(1)}%`);
+  console.log(`    Draw      ${(draw / samples.length * 100).toFixed(1)}%`);
+  console.log(`    PAR win   ${(parWin / samples.length * 100).toFixed(1)}%`);
+  console.log('');
+  console.log('  Top final scorelines:');
+  for (const [k, c] of top) {
+    console.log(`    ${k.padEnd(6)}  ${(c / samples.length * 100).toFixed(1)}%`);
+  }
+  console.log('');
+  console.log(`  Expected final: USA ${(totalA / samples.length).toFixed(2)} - ${(totalB / samples.length).toFixed(2)} PAR`);
+  console.log('');
+  console.log('  How this flows into edgecdec\'s forecast score:');
+  console.log('  1. The simulate page samples 1000 of these scorelines and ships them to the worker.');
+  console.log('  2. Each tournament-sim iteration:');
+  console.log('     a) picks one random sample (e.g. "1-1") for USA-Paraguay;');
+  console.log('     b) simulates the other 5 Group D matches normally;');
+  console.log('     c) tallies points/GD/GF, sorts the table, computes 3rd-place advancement;');
+  console.log('     d) runs scoreGroupStage on the resulting order.');
+  console.log('  3. Across 10,000 sims, the per-player avg score = expected forecast score.');
+  console.log('  4. So the same scoring rules from scenarios A-I apply to whatever order the');
+  console.log('     simulator produces — the live match just shifts the distribution of orders.');
+}

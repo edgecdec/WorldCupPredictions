@@ -41,25 +41,25 @@ const MAX_GOALS = 15;
 // effects later.
 
 /**
- * Per-minute hazard multipliers vs the league average. Indexed by minute (0–94).
- * Integrates to 90 over [0, 90), with five extra minutes of stoppage at the
- * 75–90 rate. So pre-match lambda * sum(MULT)/90 ≈ pre-match lambda when no
- * stoppage is added beyond baseline.
+ * Per-minute hazard multipliers vs the league average. Indexed by minute.
+ * Regulation 0..89 is renormalized to integrate to 90 (so pre-match lambda math
+ * is unchanged when there's no stoppage). Stoppage minutes 90..MAX_MINUTE-1
+ * extend beyond regulation at the late-game hazard rate.
  */
 const HAZARD_BASE: number[] = (() => {
-  // Piecewise curve, calibrated against published per-15-min goal distributions
-  // for international tournaments. Smoothed to avoid discontinuities at edges.
   const curve = (minute: number): number => {
     if (minute < 15) return 0.70;
     if (minute < 30) return 0.90;
     if (minute < 45) return 1.00;
     if (minute < 60) return 1.05;
     if (minute < 75) return 1.20;
-    return 1.45; // 75–90 (and stoppage)
+    if (minute < 90) return 1.45;
+    return 1.45; // stoppage runs at the late-game rate
   };
   const arr: number[] = [];
-  for (let m = 0; m < 95; m++) arr.push(curve(m));
-  // Renormalize so that minutes 0–89 sum to 90 (preserves total expected
+  // Cover 90 regulation + up to 12 stoppage (covers >99% of stoppage durations).
+  for (let m = 0; m < 102; m++) arr.push(curve(m));
+  // Renormalize so that minutes 0-89 sum to 90 (preserves total expected
   // goals = pre-match lambda for full-90 matches, no stoppage).
   let s = 0;
   for (let m = 0; m < 90; m++) s += arr[m];
@@ -67,15 +67,56 @@ const HAZARD_BASE: number[] = (() => {
   return arr.map((x) => x * k);
 })();
 
-/** Match length in minutes including expected stoppage. */
-const MATCH_LENGTH = 95;
+/** Maximum minute simulated, including stoppage tail. */
+const MAX_MINUTE = 102;
 
-// Score-state hazard adjustments per goal of margin, capped at 2 goals.
-// Trailing team scores faster; leading team slows down. Numbers come from
-// fitting per-minute hazards on score-state in published WC datasets.
-const TRAIL_BOOST_PER_GOAL = 0.18;
-const LEAD_DAMP_PER_GOAL = 0.08;
+/**
+ * Stoppage time distribution after minute 90. World Cup 2022 averaged ~6 min
+ * of 2H stoppage with substantial variance. Discrete probabilities below sum to 1.
+ *   3 min: 0.10, 4 min: 0.18, 5 min: 0.22, 6 min: 0.20,
+ *   7 min: 0.14, 8 min: 0.09, 9 min: 0.05, 10 min: 0.02
+ */
+const STOPPAGE_DISTRIBUTION: ReadonlyArray<readonly [number, number]> = [
+  [3, 0.10], [4, 0.18], [5, 0.22], [6, 0.20],
+  [7, 0.14], [8, 0.09], [9, 0.05], [10, 0.02],
+];
+
+/** Sample a 2H stoppage-time duration in minutes. */
+function sampleStoppageMinutes(): number {
+  const r = Math.random();
+  let cum = 0;
+  for (const [mins, p] of STOPPAGE_DISTRIBUTION) {
+    cum += p;
+    if (r <= cum) return mins;
+  }
+  return 10;
+}
+
+// Score-state hazard adjustments. The "urgency" of a deficit ramps up over the
+// match: a 1-goal trailer at 30' isn't pushing as hard as a 1-goal trailer at 85'.
+// Effective multipliers per goal of margin =
+//     base + late * urgencyFactor(minute)
+// where urgencyFactor goes 0 before minute 60, ramps to 1 over 60-75, stays at 1.
+//
+// Examples (per 1-goal margin):
+//   minute 30:  trail boost = +10%, lead damp = -5%   (mostly tactical baseline)
+//   minute 67:  trail boost = +25%, lead damp = -12%  (mid-ramp)
+//   minute 85:  trail boost = +40%, lead damp = -20%  (full late-game urgency)
+const TRAIL_BOOST_BASE = 0.10;
+const TRAIL_BOOST_LATE = 0.30;
+const LEAD_DAMP_BASE = 0.05;
+const LEAD_DAMP_LATE = 0.15;
 const MAX_MARGIN_EFFECT = 2;
+
+const URGENCY_RAMP_START = 60;
+const URGENCY_RAMP_END = 75;
+
+/** 0 before URGENCY_RAMP_START, linear up to 1 by URGENCY_RAMP_END, then 1. */
+function urgencyFactor(minute: number): number {
+  if (minute <= URGENCY_RAMP_START) return 0;
+  if (minute >= URGENCY_RAMP_END) return 1;
+  return (minute - URGENCY_RAMP_START) / (URGENCY_RAMP_END - URGENCY_RAMP_START);
+}
 
 /** Live MC sim count — enough for stable percentages, fast in-browser. */
 const LIVE_MC_SIMS = 4000;
@@ -126,24 +167,65 @@ function applyStageMultiplier(
 }
 
 /**
+ * Run one Monte Carlo trajectory of a match from `(scoreA, scoreB)` at minute
+ * `startMin` to full time. Returns the final scoreline. Stoppage time is
+ * sampled per trajectory from STOPPAGE_DISTRIBUTION (truncated if startMin
+ * already exceeds 90).
+ *
+ * Per-minute logic:
+ *   per-team rate = baseRate × HAZARD_BASE[minute] × scoreStateAdjust(margin, minute)
+ * Per-minute Bernoulli ≈ Poisson at these rates (~0.01-0.05/min) — at most one
+ * goal per team per minute, which empirically loses <0.1% of mass.
+ */
+function simulateMatchTrajectory(
+  baseRateA: number,
+  baseRateB: number,
+  scoreA: number,
+  scoreB: number,
+  startMin: number,
+): [number, number] {
+  let a = scoreA, b = scoreB;
+
+  // Sample the regulation portion (start..89).
+  const regEnd = 90;
+  for (let m = startMin; m < regEnd; m++) {
+    const hazard = HAZARD_BASE[m] ?? HAZARD_BASE[89];
+    const margin = a - b;
+    const adjA = scoreStateAdjust(margin, m);
+    const adjB = scoreStateAdjust(-margin, m);
+    if (Math.random() < baseRateA * hazard * adjA) a++;
+    if (Math.random() < baseRateB * hazard * adjB) b++;
+  }
+
+  // Sample stoppage time. If we already passed 90', whatever stoppage was
+  // observed (e.g. ESPN reports "90+5") is treated as elapsed; we still sample
+  // a remaining tail since real stoppage often runs a minute longer than the
+  // board says (refs add for late substitutions, VAR, etc.).
+  const stoppageTotal = sampleStoppageMinutes();
+  const stoppageStart = Math.max(regEnd, startMin);
+  const stoppageEnd = Math.min(MAX_MINUTE, regEnd + stoppageTotal);
+  for (let m = stoppageStart; m < stoppageEnd; m++) {
+    const hazard = HAZARD_BASE[m] ?? HAZARD_BASE[89];
+    const margin = a - b;
+    const adjA = scoreStateAdjust(margin, m);
+    const adjB = scoreStateAdjust(-margin, m);
+    if (Math.random() < baseRateA * hazard * adjA) a++;
+    if (Math.random() < baseRateB * hazard * adjB) b++;
+  }
+
+  return [a, b];
+}
+
+/**
  * Live in-game odds — Monte Carlo per-minute sim from the current state.
  *
- * For each remaining minute (capped at MATCH_LENGTH ≈ 95), sample a goal for
- * each team using a Poisson rate computed as:
- *   per-minute base rate = pre-match lambda / 90
- *   adjusted rate = base × HAZARD_BASE[minute] × scoreStateAdjustment
- * Score-state adjustment uses the lead/trail margin at THAT minute, not the
- * margin at kickoff — so a trailing team that equalizes loses the boost and
- * a newly-leading team starts to slow down.
+ * For each remaining minute, sample a goal for each team using a Poisson rate:
+ *   per-minute rate = (lambda / 90) × HAZARD_BASE[minute] × scoreStateAdjust(margin, minute)
+ * Score-state adjustment uses the lead/trail margin AT THAT MINUTE and ramps up
+ * after minute 60, so a 1-goal trailer at 30' is mostly tactical and a 1-goal
+ * trailer at 85' is throwing bodies forward.
  *
- * Stoppage time (minutes 90..MATCH_LENGTH) uses the late-match hazard.
- * Dixon-Coles correlation isn't applied minute-by-minute (it's a 90-minute
- * joint correction) — the score-state coupling already produces realistic
- * draw correlation in this simulator.
- *
- * @param scoreA          current goals for team A
- * @param scoreB          current goals for team B
- * @param minutesPlayed   0..95 — minutes elapsed
+ * Stoppage time is sampled per trajectory (3-10 min, mode at 5).
  */
 export function computeLiveOdds(
   teamA: string,
@@ -157,13 +239,12 @@ export function computeLiveOdds(
   if (!base) return null;
   const { lambdaA, lambdaB } = base;
 
-  const baseRateA = lambdaA / 90; // expected goals per neutral minute
+  const baseRateA = lambdaA / 90;
   const baseRateB = lambdaB / 90;
+  const startMin = Math.max(0, Math.min(Math.floor(minutesPlayed), MAX_MINUTE));
 
-  const startMin = Math.max(0, Math.min(Math.floor(minutesPlayed), MATCH_LENGTH));
-
-  // Game is essentially over (final whistle): just compare the current score.
-  if (startMin >= MATCH_LENGTH) {
+  // If we're past the realistic stoppage tail, the game is over.
+  if (startMin >= MAX_MINUTE) {
     if (scoreA > scoreB) return { winA: 1, draw: 0, winB: 0, expectedScoreA: scoreA, expectedScoreB: scoreB };
     if (scoreA < scoreB) return { winA: 0, draw: 0, winB: 1, expectedScoreA: scoreA, expectedScoreB: scoreB };
     return { winA: 0, draw: 1, winB: 0, expectedScoreA: scoreA, expectedScoreB: scoreB };
@@ -173,17 +254,7 @@ export function computeLiveOdds(
   let totalA = 0, totalB = 0;
 
   for (let s = 0; s < LIVE_MC_SIMS; s++) {
-    let a = scoreA, b = scoreB;
-    for (let m = startMin; m < MATCH_LENGTH; m++) {
-      const hazard = HAZARD_BASE[m] ?? HAZARD_BASE[89];
-      const margin = a - b; // positive: A leading
-      const adjA = scoreStateAdjust(margin);   // A's rate; margin > 0 = A leading
-      const adjB = scoreStateAdjust(-margin);  // B's rate; flip the sign
-      // Per-minute rate is small (~0.02 typical), so Math.random()<rate is a
-      // valid Bernoulli approximation to Poisson — at most one goal/team/min.
-      if (Math.random() < baseRateA * hazard * adjA) a++;
-      if (Math.random() < baseRateB * hazard * adjB) b++;
-    }
+    const [a, b] = simulateMatchTrajectory(baseRateA, baseRateB, scoreA, scoreB, startMin);
     if (a > b) winA++;
     else if (a < b) winB++;
     else draw++;
@@ -201,11 +272,9 @@ export function computeLiveOdds(
 }
 
 /**
- * Sample N final scorelines for an in-progress match using the same per-minute
- * Monte Carlo as computeLiveOdds. Each sample is a [scoreA, scoreB] tuple at
- * full time. Used by the tournament forecast to feed in-progress matches into
- * group standings — drawing a random sample per simulation iteration preserves
- * the proper joint distribution over score, points, and tiebreakers.
+ * Sample N final scorelines for an in-progress match. Used by the tournament
+ * forecast to feed in-progress matches into group standings — drawing a random
+ * sample per simulation iteration preserves the proper joint distribution.
  *
  * @returns null if either team isn't in PELE_RATINGS.
  */
@@ -224,10 +293,10 @@ export function sampleLiveScores(
 
   const baseRateA = lambdaA / 90;
   const baseRateB = lambdaB / 90;
-  const startMin = Math.max(0, Math.min(Math.floor(minutesPlayed), MATCH_LENGTH));
+  const startMin = Math.max(0, Math.min(Math.floor(minutesPlayed), MAX_MINUTE));
 
   // Game already over: every sample is the same final score.
-  if (startMin >= MATCH_LENGTH) {
+  if (startMin >= MAX_MINUTE) {
     const out: Array<[number, number]> = [];
     for (let i = 0; i < numSamples; i++) out.push([scoreA, scoreB]);
     return out;
@@ -235,30 +304,27 @@ export function sampleLiveScores(
 
   const samples: Array<[number, number]> = new Array(numSamples);
   for (let s = 0; s < numSamples; s++) {
-    let a = scoreA, b = scoreB;
-    for (let m = startMin; m < MATCH_LENGTH; m++) {
-      const hazard = HAZARD_BASE[m] ?? HAZARD_BASE[89];
-      const margin = a - b;
-      const adjA = scoreStateAdjust(margin);
-      const adjB = scoreStateAdjust(-margin);
-      if (Math.random() < baseRateA * hazard * adjA) a++;
-      if (Math.random() < baseRateB * hazard * adjB) b++;
-    }
-    samples[s] = [a, b];
+    samples[s] = simulateMatchTrajectory(baseRateA, baseRateB, scoreA, scoreB, startMin);
   }
   return samples;
 }
 
 /**
- * Score-state hazard multiplier. Positive `margin` means this team is
- * leading; negative means trailing. Returns the rate adjustment for THIS
- * team's scoring (leaders score less, trailers score more).
+ * Score-state hazard multiplier — varies with both margin and game minute.
+ * Late-game urgency ramps up the trailing-team boost and leading-team damp,
+ * so a deficit at 30' has much milder behavioral effect than the same deficit
+ * at 85'. Positive `margin` = this team is leading.
  */
-function scoreStateAdjust(margin: number): number {
+function scoreStateAdjust(margin: number, minute: number): number {
   const m = Math.max(-MAX_MARGIN_EFFECT, Math.min(MAX_MARGIN_EFFECT, margin));
-  if (m > 0) return Math.max(0.5, 1 - LEAD_DAMP_PER_GOAL * m);
-  if (m < 0) return 1 + TRAIL_BOOST_PER_GOAL * (-m);
-  return 1;
+  if (m === 0) return 1;
+  const u = urgencyFactor(minute);
+  if (m > 0) {
+    const damp = LEAD_DAMP_BASE + LEAD_DAMP_LATE * u;
+    return Math.max(0.4, 1 - damp * m);
+  }
+  const boost = TRAIL_BOOST_BASE + TRAIL_BOOST_LATE * u;
+  return 1 + boost * (-m);
 }
 
 /** Internal: compute pre-match Poisson lambdas for both teams. */

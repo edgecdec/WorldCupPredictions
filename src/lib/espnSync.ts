@@ -57,6 +57,18 @@ function parseCompetitor(c: any): { espnId: number; name: string; score: string;
   };
 }
 
+function detectStageFromHeadline(headline: string): 'group' | 'knockout' | undefined {
+  const h = headline.toLowerCase();
+  if (/group\s+[a-l]/i.test(h)) return 'group';
+  if (h.includes('round of 32') || h.includes('r32')) return 'knockout';
+  if (h.includes('round of 16') || h.includes('r16')) return 'knockout';
+  if (h.includes('quarter')) return 'knockout';
+  if (h.includes('semi')) return 'knockout';
+  if (h.includes('third') || h.includes('3rd')) return 'knockout';
+  if (h.includes('final')) return 'knockout';
+  return undefined;
+}
+
 export async function fetchLiveScores(bracketData: BracketData): Promise<LiveGame[]> {
   const res = await fetch(SCOREBOARD_URL, { next: { revalidate: 30 } });
   if (!res.ok) return [];
@@ -73,6 +85,9 @@ export async function fetchLiveScores(bracketData: BracketData): Promise<LiveGam
 
     const homeParsed = parseCompetitor(home ?? {});
     const awayParsed = parseCompetitor(away ?? {});
+
+    const headline = (competition?.notes?.[0]?.headline ?? '') + ' ' + (competition?.type?.text ?? '');
+    const stage = detectStageFromHeadline(headline);
 
     return {
       id: String(event.id ?? ''),
@@ -92,6 +107,7 @@ export async function fetchLiveScores(bracketData: BracketData): Promise<LiveGam
         score: awayParsed.score,
         logo: awayParsed.logo,
       },
+      stage,
     };
   });
 }

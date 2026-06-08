@@ -176,6 +176,8 @@ export interface LiveGame {
   period: number;
   home: { name: string; score: string; logo: string };
   away: { name: string; score: string; logo: string };
+  /** 'group' for group-stage matches, 'knockout' for R32 onward, undefined if unknown. */
+  stage?: 'group' | 'knockout';
 }
 
 export const KNOCKOUT_ROUNDS = ['R32', 'R16', 'QF', 'SF', '3rd', 'Final'] as const;

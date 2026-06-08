@@ -446,34 +446,47 @@ export default function SimulatePage() {
   const [actualResults, setActualResults] = useState<ActualResults | undefined>(undefined);
 
   useEffect(() => {
-    fetch('/api/tournaments')
-      .then((r) => r.json())
-      .then((d) => {
-        if (!d.ok || !d.tournament) return;
-        const t = d.tournament;
-        if (t.lock_time_groups) {
-          setTournamentStarted(new Date() >= new Date(t.lock_time_groups));
-        }
-        // Pull actual results into the shape the worker expects
-        const rd = t.results_data;
-        const ar: ActualResults = {};
-        if (rd?.groupStage?.groupResults?.length) {
-          const standings: Record<string, string[]> = {};
-          for (const gr of rd.groupStage.groupResults) {
-            standings[gr.groupName] = gr.order;
+    const fetchTournament = () => {
+      fetch('/api/tournaments')
+        .then((r) => r.json())
+        .then((d) => {
+          if (!d.ok || !d.tournament) return;
+          const t = d.tournament;
+          if (t.lock_time_groups) {
+            setTournamentStarted(new Date() >= new Date(t.lock_time_groups));
           }
-          ar.finalGroupStandings = standings;
-          ar.finalAdvancing3rd = rd.groupStage.advancingThirdPlace ?? [];
-        } else if (rd?.groupMatches && Object.keys(rd.groupMatches).length > 0) {
-          // Group stage in progress — pass per-match scores so the worker locks them in
-          ar.groupMatches = rd.groupMatches;
-        }
-        if (rd?.knockout && Object.keys(rd.knockout).length > 0) {
-          ar.knockoutWinners = rd.knockout;
-        }
-        if (Object.keys(ar).length > 0) setActualResults(ar);
-      })
-      .catch(() => {});
+          // Pull actual results into the shape the worker expects
+          const rd = t.results_data;
+          const ar: ActualResults = {};
+          if (rd?.groupStage?.groupResults?.length) {
+            const standings: Record<string, string[]> = {};
+            for (const gr of rd.groupStage.groupResults) {
+              standings[gr.groupName] = gr.order;
+            }
+            ar.finalGroupStandings = standings;
+            ar.finalAdvancing3rd = rd.groupStage.advancingThirdPlace ?? [];
+          } else if (rd?.groupMatches && Object.keys(rd.groupMatches).length > 0) {
+            // Group stage in progress — pass per-match scores so the worker locks them in
+            ar.groupMatches = rd.groupMatches;
+          }
+          if (rd?.knockout && Object.keys(rd.knockout).length > 0) {
+            ar.knockoutWinners = rd.knockout;
+          }
+          if (Object.keys(ar).length > 0) {
+            setActualResults((prev) => {
+              // Only update if data has actually changed to avoid an unnecessary re-sim
+              if (JSON.stringify(prev) === JSON.stringify(ar)) return prev;
+              return ar;
+            });
+          }
+        })
+        .catch(() => {});
+    };
+    fetchTournament();
+    // Re-poll every 5 minutes so the forecast picks up newly-completed games
+    // without a hard refresh. Underlying ESPN sync is debounced 60s server-side.
+    const interval = setInterval(fetchTournament, 5 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {

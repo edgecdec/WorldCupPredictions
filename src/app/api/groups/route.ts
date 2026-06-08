@@ -85,7 +85,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Group not found" }, { status: 404 });
     }
     const memberCount = (
-      db.prepare("SELECT COUNT(*) as count FROM group_members WHERE group_id = ?").get(group.id) as { count: number }
+      db.prepare(
+        `SELECT COUNT(*) as count FROM group_members gm
+         JOIN predictions p ON p.id = gm.prediction_id
+         JOIN users u ON u.id = p.user_id AND u.is_hidden = 0
+         WHERE gm.group_id = ?`,
+      ).get(group.id) as { count: number }
     ).count;
     const isMember = !!db
       .prepare(
@@ -112,7 +117,7 @@ export async function GET(req: NextRequest) {
         `SELECT gm.prediction_id, u.username, p.bracket_name
          FROM group_members gm
          JOIN predictions p ON p.id = gm.prediction_id
-         JOIN users u ON u.id = p.user_id
+         JOIN users u ON u.id = p.user_id AND u.is_hidden = 0
          WHERE gm.group_id = ?
          ORDER BY u.username`
       )
@@ -124,7 +129,7 @@ export async function GET(req: NextRequest) {
   const groups = db
     .prepare(
       `SELECT DISTINCT g.*, COALESCE(u.username, 'System') as creator_name,
-        (SELECT COUNT(*) FROM group_members gm2 WHERE gm2.group_id = g.id) as member_count
+        (SELECT COUNT(*) FROM group_members gm2 JOIN predictions p2 ON p2.id = gm2.prediction_id JOIN users u2 ON u2.id = p2.user_id AND u2.is_hidden = 0 WHERE gm2.group_id = g.id) as member_count
        FROM groups g
        JOIN group_members gm ON g.id = gm.group_id
        JOIN predictions p ON p.id = gm.prediction_id
@@ -132,13 +137,13 @@ export async function GET(req: NextRequest) {
        WHERE p.user_id = ?
        UNION
        SELECT g.*, COALESCE(u.username, 'System') as creator_name,
-        (SELECT COUNT(*) FROM group_members gm2 WHERE gm2.group_id = g.id) as member_count
+        (SELECT COUNT(*) FROM group_members gm2 JOIN predictions p2 ON p2.id = gm2.prediction_id JOIN users u2 ON u2.id = p2.user_id AND u2.is_hidden = 0 WHERE gm2.group_id = g.id) as member_count
        FROM groups g
        LEFT JOIN users u ON g.created_by = u.id
        WHERE g.created_by = ?
        UNION
        SELECT g.*, COALESCE(u.username, 'System') as creator_name,
-        (SELECT COUNT(*) FROM group_members gm2 WHERE gm2.group_id = g.id) as member_count
+        (SELECT COUNT(*) FROM group_members gm2 JOIN predictions p2 ON p2.id = gm2.prediction_id JOIN users u2 ON u2.id = p2.user_id AND u2.is_hidden = 0 WHERE gm2.group_id = g.id) as member_count
        FROM groups g
        LEFT JOIN users u ON g.created_by = u.id
        WHERE g.id = ?

@@ -92,6 +92,7 @@ function initDb(db: Database.Database) {
   migrateCountryCodes(db);
   migrateCreatorsToOwnGroups(db);
   migrateResultsUpdatedAt(db);
+  migrateUserIsHidden(db);
 
   // Auto-assign any existing unassigned predictions to Everyone
   try {
@@ -158,6 +159,15 @@ function migrateResultsUpdatedAt(db: Database.Database) {
     const cols = db.prepare("PRAGMA table_info(tournaments)").all() as { name: string }[];
     if (!cols.some((c) => c.name === 'results_updated_at')) {
       db.prepare("ALTER TABLE tournaments ADD COLUMN results_updated_at TEXT").run();
+    }
+  } catch { /* ignore migration errors */ }
+}
+
+function migrateUserIsHidden(db: Database.Database) {
+  try {
+    const cols = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
+    if (!cols.some((c) => c.name === 'is_hidden')) {
+      db.prepare("ALTER TABLE users ADD COLUMN is_hidden INTEGER DEFAULT 0").run();
     }
   } catch { /* ignore migration errors */ }
 }

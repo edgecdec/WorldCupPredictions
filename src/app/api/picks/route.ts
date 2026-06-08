@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
       .prepare(
         `SELECT p.*, u.username
          FROM predictions p
-         JOIN users u ON p.user_id = u.id
+         JOIN users u ON p.user_id = u.id AND u.is_hidden = 0
          JOIN group_members gm ON gm.prediction_id = p.id
          WHERE gm.group_id = ? AND p.tournament_id = ?`
       )

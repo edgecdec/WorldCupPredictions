@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
   const db = getDb();
 
   const userRow = db
-    .prepare('SELECT id, username, created_at FROM users WHERE LOWER(username) = LOWER(?)')
+    .prepare('SELECT id, username, created_at FROM users WHERE LOWER(username) = LOWER(?) AND is_hidden = 0')
     .get(username) as UserRow | undefined;
   if (!userRow) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 });

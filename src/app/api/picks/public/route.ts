@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
   const row = db
     .prepare(
       `SELECT p.* FROM predictions p
-       JOIN users u ON p.user_id = u.id
+       JOIN users u ON p.user_id = u.id AND u.is_hidden = 0
        WHERE LOWER(u.username) = LOWER(?) AND p.tournament_id = ?`
     )
     .get(username, tournament.id) as PredictionRow | undefined;

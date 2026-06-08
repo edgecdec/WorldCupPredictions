@@ -174,10 +174,14 @@ export interface LiveGame {
   state: string;
   clock: string;
   period: number;
+  /** ISO 8601 kickoff time (e.g. "2026-06-11T19:00Z"). */
+  date: string;
   home: { name: string; score: string; logo: string };
   away: { name: string; score: string; logo: string };
   /** 'group' for group-stage matches, 'knockout' for R32 onward, undefined if unknown. */
   stage?: 'group' | 'knockout';
+  /** Venue name + city + country (e.g. "Estadio Banorte • Mexico City"). */
+  venue?: string;
 }
 
 export const KNOCKOUT_ROUNDS = ['R32', 'R16', 'QF', 'SF', '3rd', 'Final'] as const;

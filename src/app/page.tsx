@@ -30,8 +30,12 @@ export default function Home() {
     tournament?.lock_time_groups && new Date(tournament.lock_time_groups) <= new Date()
   );
   // Show ESPN games (upcoming + live + recent) any time the user is logged in.
-  // The component returns null when ESPN has no events, so this is safe pre-tournament.
-  const { games, loading: scoresLoading } = useLiveScores(Boolean(user));
+  // Day-by-day pagination — defaults to today, prev/next arrows in the header.
+  const [scoreDate, setScoreDate] = useState<Date>(() => {
+    const d = new Date();
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  });
+  const { games, loading: scoresLoading } = useLiveScores(Boolean(user), scoreDate);
 
   const countryCodeMap: Record<string, string> = {};
   if (tournament?.bracket_data?.groups) {
@@ -156,11 +160,15 @@ export default function Home() {
         </Box>
       )}
 
-      {(games.length > 0 || scoresLoading) && (
-        <Box sx={{ mt: 4, textAlign: "left" }}>
-          <LiveScores games={games} loading={scoresLoading} countryCodeMap={countryCodeMap} />
-        </Box>
-      )}
+      <Box sx={{ mt: 4, textAlign: "left" }}>
+        <LiveScores
+          games={games}
+          loading={scoresLoading}
+          countryCodeMap={countryCodeMap}
+          date={scoreDate}
+          onDateChange={setScoreDate}
+        />
+      </Box>
     </Box>
   );
 }

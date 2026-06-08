@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { parseBracketData } from '@/lib/bracketData';
-import { fetchLiveScores, fetchGroupStandings } from '@/lib/espnSync';
+import { fetchLiveScores, fetchScoresByDate, fetchGroupStandings } from '@/lib/espnSync';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const type = searchParams.get('type') ?? 'scores';
+  const date = searchParams.get('date'); // YYYYMMDD
 
   const db = getDb();
   const row = db.prepare('SELECT bracket_data FROM tournaments ORDER BY year DESC LIMIT 1').get() as
@@ -23,6 +24,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, standings });
   }
 
-  const games = await fetchLiveScores(bracketData);
+  // When a date is provided, fetch fixtures for that specific day.
+  // Otherwise default to ESPN's "current" scoreboard (which only returns today/live).
+  const games = date
+    ? await fetchScoresByDate(bracketData, date)
+    : await fetchLiveScores(bracketData);
   return NextResponse.json({ ok: true, games });
 }

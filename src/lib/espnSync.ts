@@ -69,49 +69,66 @@ function detectStageFromHeadline(headline: string): 'group' | 'knockout' | undef
   return undefined;
 }
 
+function parseEvent(event: any, bracketData: BracketData): LiveGame {
+  const competition = event.competitions?.[0];
+  const status = competition?.status ?? event.status ?? {};
+  const competitors = competition?.competitors ?? [];
+
+  const home = competitors.find((c: any) => c.homeAway === 'home') ?? competitors[0];
+  const away = competitors.find((c: any) => c.homeAway === 'away') ?? competitors[1];
+
+  const homeParsed = parseCompetitor(home ?? {});
+  const awayParsed = parseCompetitor(away ?? {});
+
+  const headline = (competition?.notes?.[0]?.headline ?? '') + ' ' + (competition?.type?.text ?? '');
+  const seasonSlug: string = event.season?.slug ?? '';
+  const stage = detectStageFromHeadline(headline)
+    ?? (seasonSlug.includes('group') ? 'group' : seasonSlug ? 'knockout' : undefined);
+
+  // Venue: just the city (e.g. "Mexico City") — date is implied by the day
+  // pagination, full venue name is too long for the narrow card.
+  const venueObj = competition?.venue ?? {};
+  const venue = venueObj?.address?.city || undefined;
+
+  return {
+    id: String(event.id ?? ''),
+    name: event.name ?? '',
+    status: status.type?.description ?? '',
+    detail: status.type?.detail ?? status.detail ?? '',
+    state: status.type?.state ?? '',
+    clock: status.displayClock ?? '',
+    period: status.period ?? 0,
+    date: event.date ?? competition?.date ?? '',
+    home: {
+      name: resolveTeamName(homeParsed.espnId, homeParsed.name, bracketData),
+      score: homeParsed.score,
+      logo: homeParsed.logo,
+    },
+    away: {
+      name: resolveTeamName(awayParsed.espnId, awayParsed.name, bracketData),
+      score: awayParsed.score,
+      logo: awayParsed.logo,
+    },
+    stage,
+    venue,
+  };
+}
+
 export async function fetchLiveScores(bracketData: BracketData): Promise<LiveGame[]> {
   const res = await fetch(SCOREBOARD_URL, { next: { revalidate: 30 } });
   if (!res.ok) return [];
   const data = await res.json();
   const events: any[] = data.events ?? [];
+  return events.map((e) => parseEvent(e, bracketData));
+}
 
-  return events.map((event: any) => {
-    const competition = event.competitions?.[0];
-    const status = competition?.status ?? event.status ?? {};
-    const competitors = competition?.competitors ?? [];
-
-    const home = competitors.find((c: any) => c.homeAway === 'home') ?? competitors[0];
-    const away = competitors.find((c: any) => c.homeAway === 'away') ?? competitors[1];
-
-    const homeParsed = parseCompetitor(home ?? {});
-    const awayParsed = parseCompetitor(away ?? {});
-
-    const headline = (competition?.notes?.[0]?.headline ?? '') + ' ' + (competition?.type?.text ?? '');
-    const seasonSlug: string = event.season?.slug ?? '';
-    const stage = detectStageFromHeadline(headline)
-      ?? (seasonSlug.includes('group') ? 'group' : seasonSlug ? 'knockout' : undefined);
-
-    return {
-      id: String(event.id ?? ''),
-      name: event.name ?? '',
-      status: status.type?.description ?? '',
-      detail: status.type?.detail ?? status.detail ?? '',
-      state: status.type?.state ?? '',
-      clock: status.displayClock ?? '',
-      period: status.period ?? 0,
-      home: {
-        name: resolveTeamName(homeParsed.espnId, homeParsed.name, bracketData),
-        score: homeParsed.score,
-        logo: homeParsed.logo,
-      },
-      away: {
-        name: resolveTeamName(awayParsed.espnId, awayParsed.name, bracketData),
-        score: awayParsed.score,
-        logo: awayParsed.logo,
-      },
-      stage,
-    };
-  });
+/** Fetch ESPN fixtures for a specific date (YYYYMMDD format). */
+export async function fetchScoresByDate(bracketData: BracketData, date: string): Promise<LiveGame[]> {
+  const res = await fetch(`${SCOREBOARD_URL}?dates=${encodeURIComponent(date)}`, { next: { revalidate: 60 } });
+  if (!res.ok) return [];
+  const data = await res.json();
+  const events: any[] = data.events ?? [];
+  return events.map((e) => parseEvent(e, bracketData));
 }
 
 function parseStat(stats: any[], name: string): number {

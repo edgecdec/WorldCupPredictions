@@ -581,7 +581,14 @@ export default function SimulatePage() {
   }, [user, groupId]);
 
   const { results, progress, running, numSims, rerun } = useTournamentSim(players, scoring, actualResults);
-  const { games: liveGames, loading: liveLoading } = useLiveScores(Boolean(user));
+
+  // Day-by-day scoreboard. Default to "today" (UTC). Each click of prev/next
+  // bumps by one day; the hook re-fetches ESPN for that date.
+  const [scoreDate, setScoreDate] = useState<Date>(() => {
+    const d = new Date();
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  });
+  const { games: liveGames, loading: liveLoading } = useLiveScores(Boolean(user), scoreDate);
 
   const countryCodeMap = useMemo(() => {
     const m: Record<string, string> = {};
@@ -628,11 +635,15 @@ export default function SimulatePage() {
         <LinearProgress variant="determinate" value={(progress / numSims) * 100} sx={{ mb: 2, height: 6, borderRadius: 3 }} />
       )}
 
-      {(liveGames.length > 0 || liveLoading) && (
-        <Box sx={{ mb: 3 }}>
-          <LiveScores games={liveGames} loading={liveLoading} countryCodeMap={countryCodeMap} />
-        </Box>
-      )}
+      <Box sx={{ mb: 3 }}>
+        <LiveScores
+          games={liveGames}
+          loading={liveLoading}
+          countryCodeMap={countryCodeMap}
+          date={scoreDate}
+          onDateChange={setScoreDate}
+        />
+      </Box>
 
       {results && (
         <>

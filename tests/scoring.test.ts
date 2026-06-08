@@ -132,8 +132,31 @@ describe('scoreGroupStage', () => {
     expect(score.perGroup[0].upsetBonusPoints).toBe(2);
   });
 
-  it('denies upset bonus when team finishes below prediction', () => {
-    // Seed 4 (TeamA4) predicted 2nd, finishes 3rd → no bonus
+  it('gives full bold-call credit when seed-4 predicted 1st actually finishes 2nd', () => {
+    // User-requested behavior: predict Turkey (seed 4) 1st, they finish 2nd
+    // → bonus = 4 - max(1,2) = 2. Full credit for spotting the upset, with
+    // the slot shortfall captured by max(predicted, actual).
+    const predictions: GroupPrediction[] = [
+      { groupName: 'A', order: ['TeamA4', 'TeamA1', 'TeamA2', 'TeamA3'] },
+    ];
+    const results: GroupStageResults = {
+      groupResults: [{ groupName: 'A', order: ['TeamA1', 'TeamA4', 'TeamA2', 'TeamA3'] }],
+      advancingThirdPlace: [],
+    };
+
+    const score = scoreGroupStage(predictions, [], results, BRACKET_DATA, DEFAULT_GROUP_SETTINGS);
+
+    // TeamA4: seed=4, predicted=1st, actual=2nd → bonus = 4 - max(1,2) = 2
+    // TeamA1: seed=1, never bonus
+    // TeamA2: seed=2, predicted=3rd, actual=3rd → bonus = 2 - max(3,3) = 0
+    // TeamA3: seed=3, predicted=4th, actual=4th → bonus = 3 - max(4,4) = 0
+    expect(score.perGroup[0].upsetBonusPoints).toBe(2);
+  });
+
+  it('gives partial upset credit when team falls one slot short of bold call', () => {
+    // Seed 4 (TeamA4) predicted 2nd, actual 3rd → bonus = 4 - max(2,3) = 1.
+    // The bold call wasn't fully realized, but the team still over-performed
+    // its seed, so partial credit is awarded.
     const predictions: GroupPrediction[] = [
       { groupName: 'A', order: ['TeamA1', 'TeamA4', 'TeamA3', 'TeamA2'] },
     ];
@@ -144,9 +167,10 @@ describe('scoreGroupStage', () => {
 
     const score = scoreGroupStage(predictions, [], results, BRACKET_DATA, DEFAULT_GROUP_SETTINGS);
 
-    // TeamA4: predicted 2nd, actual 3rd → 3 > 2, no bonus
-    // TeamA3: seed=3, predicted 3rd, actual 2nd → actual(2) <= predicted(3) → bonus = 3-3 = 0
-    expect(score.perGroup[0].upsetBonusPoints).toBe(0);
+    // TeamA4: seed=4, predicted=2nd, actual=3rd → bonus = 4 - max(2,3) = 1
+    // TeamA3: seed=3, predicted=3rd, actual=2nd → bonus = 3 - max(3,2) = 0 (already at seed)
+    // TeamA1: seed=1, never bonus.   TeamA2: seed=2, predicted=4th, actual=4th → 0
+    expect(score.perGroup[0].upsetBonusPoints).toBe(1);
   });
 
   it('awards upset bonus for seed 3 predicted 1st finishing 1st', () => {

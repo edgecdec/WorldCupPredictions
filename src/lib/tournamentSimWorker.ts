@@ -823,11 +823,12 @@ function scoreGroupStageEntry(
       if (predPos === actualPos) exactPts += settings.exactPosition;
       else allPosCorrect = false;
 
+      // Upset bonus uses max(predPos, actualPos) so a bold call that lands one
+      // slot short still earns partial credit. Mirrors src/lib/scoring.ts.
       const seed = teamSeeds[team] ?? 4;
-      if (actualPos <= predPos) {
-        const bonus = Math.max(0, seed - predPos);
-        upsetPts += bonus * settings.upsetBonusPerPlace;
-      }
+      const effectivePos = Math.max(predPos, actualPos);
+      const bonus = Math.max(0, seed - effectivePos);
+      upsetPts += bonus * settings.upsetBonusPerPlace;
     }
 
     total += advCorrectPts + exactPts + upsetPts

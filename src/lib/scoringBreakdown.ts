@@ -64,10 +64,13 @@ export function getGroupTeamBreakdown(
       const advCorrect = predAdv === actAdv;
       const exactPos = predPos === actualPos;
 
+      // Upset bonus: bold low-pot pick gets partial credit even when actual
+      // finish is one slot short of prediction. See src/lib/scoring.ts for math.
       let upsetPts = 0;
       const seed = getTeamSeed(bracketData, teamName);
-      if (seed !== undefined && actualPos <= predPos) {
-        upsetPts = Math.max(0, seed - predPos) * settings.upsetBonusPerPlace;
+      if (seed !== undefined) {
+        const effectivePos = Math.max(predPos, actualPos);
+        upsetPts = Math.max(0, seed - effectivePos) * settings.upsetBonusPerPlace;
       }
 
       details.push({

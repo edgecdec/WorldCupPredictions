@@ -7,23 +7,15 @@
 import { scoreGroupStage } from '../src/lib/scoring';
 import { DEFAULT_SCORING, type BracketData, type GroupPrediction, type GroupStageResults } from '../src/types';
 
-// Group D facts (seeds = pots in our schema).
-const GROUP_D = [
-  { name: 'USA',        rank: 14, pot: 1 as const },
-  { name: 'Paraguay',   rank: 39, pot: 3 as const },
-  { name: 'Australia',  rank: 26, pot: 2 as const },
-  { name: 'Turkiye',    rank: 25, pot: 4 as const },
-];
-
 const bracketData: BracketData = {
   groups: [{
     name: 'D',
     teams: [
-      { ...GROUP_D[0], groupSeed: 1, espnId: 0 },
-      { ...GROUP_D[1], groupSeed: 3, espnId: 0 },
-      { ...GROUP_D[2], groupSeed: 2, espnId: 0 },
-      { ...GROUP_D[3], groupSeed: 4, espnId: 0 },
-    ] as BracketData['groups'][0]['teams'],
+      { name: 'USA',        fifaRanking: 14, pot: 1, groupSeed: 1, espnId: 0 },
+      { name: 'Paraguay',   fifaRanking: 39, pot: 3, groupSeed: 3, espnId: 0 },
+      { name: 'Australia',  fifaRanking: 26, pot: 2, groupSeed: 2, espnId: 0 },
+      { name: 'Turkiye',    fifaRanking: 25, pot: 4, groupSeed: 4, espnId: 0 },
+    ],
   }],
 };
 
@@ -98,19 +90,19 @@ function explainTeam(team: string, actualPos: number, order: string[], thirdAdva
   const exactMatch = predPos === actualPos;
   const exactPts = exactMatch ? RULES.exactPosition : 0;
 
-  // Upset bonus: only when team finished AT or BETTER than predicted, and seed > predictedPos
-  let upsetPts = 0;
-  let upsetExplanation = '';
-  if (actualPos <= predPos) {
-    const bonus = Math.max(0, seed - predPos);
-    upsetPts = bonus * RULES.upsetBonusPerPlace;
-    if (bonus > 0) {
-      upsetExplanation = `seed ${seed} - predicted ${predPos} = +${bonus}`;
-    } else {
-      upsetExplanation = `seed ${seed} ≤ predicted ${predPos}, no upset`;
-    }
+  // Upset bonus: seed - max(predictedPos, actualPos), floored at 0.
+  // Rewards identifying a low-pot overperformer; bold calls get partial credit
+  // even when the team falls one slot short of the prediction.
+  const effectivePos = Math.max(predPos, actualPos);
+  const bonus = Math.max(0, seed - effectivePos);
+  const upsetPts = bonus * RULES.upsetBonusPerPlace;
+  let upsetExplanation: string;
+  if (bonus === 0) {
+    upsetExplanation = `seed ${seed} ≤ max(pred ${predPos}, actual ${actualPos}), no upset`;
+  } else if (predPos === actualPos) {
+    upsetExplanation = `seed ${seed} - ${predPos} = +${bonus}`;
   } else {
-    upsetExplanation = `actual ${actualPos} > predicted ${predPos}, no upset bonus possible`;
+    upsetExplanation = `seed ${seed} - max(pred ${predPos}, act ${actualPos}) = +${bonus}`;
   }
 
   return {

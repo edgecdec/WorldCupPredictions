@@ -89,10 +89,20 @@ export function scoreGroupStage(
         allPositionsCorrect = false;
       }
 
-      // Upset bonus (prediction-gated, capped at prediction)
+      // Upset bonus: reward identifying a low-pot team that overperforms its
+      // seed. The bonus is computed against whichever is WORSE of (predictedPos,
+      // actualPos) — so you get partial credit for spotting the upset even if
+      // the team fell one slot short of your bold call.
+      //
+      // Examples (Turkiye = seed 4):
+      //   pred=1, actual=2 → bonus = 4 - max(1,2) = 2   (you get partial credit)
+      //   pred=3, actual=2 → bonus = 4 - max(3,2) = 1   (you predicted 3rd, they did better)
+      //   pred=1, actual=1 → bonus = 4 - 1 = 3          (max bold call, fully realized)
+      //   pred=2, actual=4 → bonus = 4 - max(2,4) = 0   (Turkiye finished at seed, no upset)
       const seed = getTeamSeed(bracketData, teamName);
-      if (seed !== undefined && actualPosition <= predictedPosition) {
-        const bonus = Math.max(0, seed - predictedPosition);
+      if (seed !== undefined) {
+        const effectivePos = Math.max(predictedPosition, actualPosition);
+        const bonus = Math.max(0, seed - effectivePos);
         upsetBonusPoints += bonus * settings.upsetBonusPerPlace;
       }
     }

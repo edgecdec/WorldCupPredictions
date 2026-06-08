@@ -87,7 +87,9 @@ export async function fetchLiveScores(bracketData: BracketData): Promise<LiveGam
     const awayParsed = parseCompetitor(away ?? {});
 
     const headline = (competition?.notes?.[0]?.headline ?? '') + ' ' + (competition?.type?.text ?? '');
-    const stage = detectStageFromHeadline(headline);
+    const seasonSlug: string = event.season?.slug ?? '';
+    const stage = detectStageFromHeadline(headline)
+      ?? (seasonSlug.includes('group') ? 'group' : seasonSlug ? 'knockout' : undefined);
 
     return {
       id: String(event.id ?? ''),

@@ -3,7 +3,30 @@ import { Box, Card, CardActionArea, CardContent, Typography, Chip, CircularProgr
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import type { LiveGame } from '@/types';
 import TeamFlag from '@/components/common/TeamFlag';
-import { computeMatchOdds, type MatchOdds } from '@/lib/matchOdds';
+import { computeMatchOdds, computeLiveOdds, type MatchOdds } from '@/lib/matchOdds';
+
+/**
+ * Parse ESPN's clock string (e.g. "45'", "67:23", "HT") into minutes elapsed.
+ * Returns null if it can't be parsed (we'll skip live odds for that game).
+ */
+function parseMinutesPlayed(clock: string, period: number): number | null {
+  const c = (clock || '').trim();
+  if (!c) return null;
+  // "45'" or "45+2'" — minutes followed by apostrophe
+  const m = c.match(/^(\d+)(?:\+(\d+))?'?$/);
+  if (m) return parseInt(m[1], 10) + (m[2] ? parseInt(m[2], 10) : 0);
+  // "67:23" — MM:SS
+  const m2 = c.match(/^(\d+):(\d+)$/);
+  if (m2) return parseInt(m2[1], 10);
+  // "HT" — halftime
+  if (/^ht$/i.test(c)) return 45;
+  // "FT" — full time
+  if (/^ft$/i.test(c)) return 90;
+  // Fall back to period: 1 = first half, 2 = second half
+  if (period === 1) return 1;
+  if (period === 2) return 46;
+  return null;
+}
 
 const STATE_IN = 'in';
 const STATE_POST = 'post';
@@ -102,14 +125,20 @@ export default function LiveScores({ games, loading, countryCodeMap = {} }: Live
         {sorted.map((game) => {
           const isLive = game.state === STATE_IN;
           const isFinal = game.state === STATE_POST;
-          // Pre-match odds — only shown for scheduled games. (Live in-progress
-          // odds need a minute-aware model; we don't have that yet.)
-          let odds: MatchOdds | null = null;
-          // Stage comes from ESPN's headline (group A/B/...) so it's correct
-          // even in the rare case where two same-group teams meet again in
-          // the knockouts. Default to 'group' when ESPN gives no hint.
+          // Stage comes from ESPN's headline/season so it's correct even in
+          // the rare case where two same-group teams meet again in the knockouts.
+          // Default to 'group' when ESPN gives no hint.
           const stage = game.stage ?? 'group';
-          if (!isLive && !isFinal) {
+          let odds: MatchOdds | null = null;
+          if (isLive) {
+            // Live: simulate the remaining minutes from the current scoreline.
+            const minutesPlayed = parseMinutesPlayed(game.clock, game.period);
+            if (minutesPlayed !== null) {
+              const sA = parseInt(game.home.score, 10) || 0;
+              const sB = parseInt(game.away.score, 10) || 0;
+              odds = computeLiveOdds(game.home.name, game.away.name, sA, sB, minutesPlayed, { stage });
+            }
+          } else if (!isFinal) {
             odds = computeMatchOdds(game.home.name, game.away.name, { stage });
           }
           const showDraw = odds && stage === 'group';

@@ -90,10 +90,6 @@ src/
 - Nova Act for browser verification against production (see .ralph/specs/anti-patterns.md for test pattern)
 - Test creds in `.ralph/.test-creds` (gitignored)
 
-## Known Issues
-
-- 3 pre-existing test failures in `tests/scoring.test.ts` (knockout upset bonus and champion bonus tests) — not caused by recent changes, need investigation
-
 ## Task System
 
 Legacy task backlog in `.ralph/prd.json` (103 tasks, all done). Progress log in `.ralph/progress.txt`. Spec documents in `.ralph/specs/`. For new work, use Claude Code's native task tracking or create new entries in prd.json.

@@ -331,8 +331,9 @@ describe('scoreKnockout', () => {
   });
 
   it('awards upset bonus using FIFA ranking difference and modulus', () => {
-    // TeamB4 (rank 90) beats TeamB1 (rank 3), user predicted it, R32
-    // rankDiff = 90 - 3 = 87, floor(87/10) * 1 = 8
+    // TeamB4 (rank 90) beats TeamB1 (rank 3), user predicted it, R32 (round 0).
+    // DEFAULT_KO_SETTINGS: upsetModulus=5, upsetMultiplierPerRound[0]=1.
+    // rankDiff = 90 - 3 = 87, floor(87/5) * 1 = 17 * 1 = 17
     const matchups = [makeMatchup('R32-1', 0, 'TeamB1', 'TeamB4')];
     const results: KnockoutResults = { 'R32-1': 'TeamB4' };
     const picks = { 'R32-1': 'TeamB4' };
@@ -340,13 +341,14 @@ describe('scoreKnockout', () => {
     const score = scoreKnockout(picks, results, matchups, BRACKET_DATA, DEFAULT_KO_SETTINGS);
 
     expect(score.perRound[0].basePoints).toBe(3);
-    expect(score.perRound[0].upsetBonusPoints).toBe(8);
-    expect(score.total).toBe(11);
+    expect(score.perRound[0].upsetBonusPoints).toBe(17);
+    expect(score.total).toBe(20);
   });
 
   it('applies round-specific multiplier to upset bonus', () => {
-    // QF (round 2, multiplier 2): TeamA4 (rank 80) beats TeamA1 (rank 5)
-    // rankDiff = 80 - 5 = 75, floor(75/10) * 2 = 7 * 2 = 14
+    // QF (round 2, multiplier 3): TeamA4 (rank 80) beats TeamA1 (rank 5).
+    // DEFAULT_KO_SETTINGS: upsetModulus=5, upsetMultiplierPerRound[2]=3.
+    // rankDiff = 80 - 5 = 75, floor(75/5) * 3 = 15 * 3 = 45
     const matchups = [makeMatchup('QF-1', 2, 'TeamA1', 'TeamA4')];
     const results: KnockoutResults = { 'QF-1': 'TeamA4' };
     const picks = { 'QF-1': 'TeamA4' };
@@ -354,8 +356,8 @@ describe('scoreKnockout', () => {
     const score = scoreKnockout(picks, results, matchups, BRACKET_DATA, DEFAULT_KO_SETTINGS);
 
     expect(score.perRound[2].basePoints).toBe(8);
-    expect(score.perRound[2].upsetBonusPoints).toBe(14);
-    expect(score.total).toBe(22);
+    expect(score.perRound[2].upsetBonusPoints).toBe(45);
+    expect(score.total).toBe(53);
   });
 
   it('gives no upset bonus when higher-ranked team wins', () => {
@@ -381,16 +383,34 @@ describe('scoreKnockout', () => {
     expect(score.perRound[0].basePoints).toBe(0);
   });
 
-  it('awards champion bonus for correct Final pick', () => {
+  it('awards champion bonus for correct Final pick when bonus is enabled', () => {
+    // The default championBonus is 0 (championship pick is already the most
+    // valuable due to 21 base points), but the bonus is configurable per-group.
+    // Verify the code path still pays out when a custom setting turns it on.
+    const settingsWithBonus: KnockoutScoringSettings = { ...DEFAULT_KO_SETTINGS, championBonus: 5 };
+    const matchups = [makeMatchup('FINAL', 5, 'TeamA1', 'TeamB1')];
+    const results: KnockoutResults = { FINAL: 'TeamA1' };
+    const picks = { FINAL: 'TeamA1' };
+
+    const score = scoreKnockout(picks, results, matchups, BRACKET_DATA, settingsWithBonus);
+
+    expect(score.championBonus).toBe(5);
+    expect(score.perRound[5].basePoints).toBe(21);
+    expect(score.total).toBe(26); // 21 base + 5 champion
+  });
+
+  it('does not award champion bonus by default (championBonus = 0)', () => {
+    // With DEFAULT_KO_SETTINGS, championBonus is 0 — picking the champion
+    // already pays 21 base points and that's intentional.
     const matchups = [makeMatchup('FINAL', 5, 'TeamA1', 'TeamB1')];
     const results: KnockoutResults = { FINAL: 'TeamA1' };
     const picks = { FINAL: 'TeamA1' };
 
     const score = scoreKnockout(picks, results, matchups, BRACKET_DATA, DEFAULT_KO_SETTINGS);
 
-    expect(score.championBonus).toBe(5);
+    expect(score.championBonus).toBe(0);
     expect(score.perRound[5].basePoints).toBe(21);
-    expect(score.total).toBe(26); // 21 base + 5 champion
+    expect(score.total).toBe(21);
   });
 
   it('does not award champion bonus for wrong Final pick', () => {

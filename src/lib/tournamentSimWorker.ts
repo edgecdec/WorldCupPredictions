@@ -109,6 +109,17 @@ interface TournamentSimRequest {
    */
   actualGroupMatches?: Record<string, ActualMatch[]>;
   /**
+   * In-progress group matches keyed by group name. Each entry carries
+   * pre-sampled final scorelines from the live model — the worker draws a
+   * random one per iteration so the standings distribution captures the
+   * uncertainty in how an unfinished match might end.
+   */
+  inProgressGroupMatches?: Record<string, Array<{
+    teamA: string;
+    teamB: string;
+    sampledScores: Array<[number, number]>;
+  }>>;
+  /**
    * Final group stage standings (when the group stage is complete).
    * If provided, simulation skips group stage entirely and uses these orders.
    * Format: { groupName: [1stTeam, 2ndTeam, 3rdTeam, 4thTeam] }
@@ -547,6 +558,11 @@ function simulateGroupStage(
   avgGA: number,
   actualGroupMatches?: Record<string, ActualMatch[]>,
   form?: Record<string, number>,
+  inProgressGroupMatches?: Record<string, Array<{
+    teamA: string;
+    teamB: string;
+    sampledScores: Array<[number, number]>;
+  }>>,
 ): GroupStageResult {
   const order: Record<string, string[]> = {};
   const tables: Record<string, Record<string, TeamStats>> = {};
@@ -554,16 +570,29 @@ function simulateGroupStage(
     const table: Record<string, TeamStats> = {};
     for (const t of teams) table[t] = { pts: 0, gf: 0, ga: 0, gd: 0 };
     const actualLookup = buildActualLookup(actualGroupMatches?.[name]);
+    const inProgressLookup = buildInProgressLookup(inProgressGroupMatches?.[name]);
 
     // In group stage, hosts play all 3 of their matches at home — find the host (if any) in this group
     const hostTeam = teams.find((t) => ratings[t]?.homeField);
 
     for (let i = 0; i < teams.length; i++) {
       for (let j = i + 1; j < teams.length; j++) {
-        // Use real result if it exists, otherwise simulate (with home field if applicable)
-        const actual = actualLookup.get(`${teams[i]}|${teams[j]}`);
+        const matchKey = `${teams[i]}|${teams[j]}`;
+        const actual = actualLookup.get(matchKey);
+        const inProgressSamples = inProgressLookup.get(matchKey);
         const homeFor = (teams[i] === hostTeam || teams[j] === hostTeam) ? hostTeam : undefined;
-        const [ga, gb] = actual ?? simulateGroupMatch(teams[i], teams[j], ratings, avgGA, homeFor, GROUP_STAGE_MULT, form);
+
+        let ga: number, gb: number;
+        if (actual) {
+          [ga, gb] = actual;
+        } else if (inProgressSamples) {
+          // Draw a random pre-sampled scoreline (already keyed teamA→teamB
+          // when the lookup was built — see buildInProgressLookup).
+          const sample = inProgressSamples[Math.floor(Math.random() * inProgressSamples.length)];
+          [ga, gb] = sample;
+        } else {
+          [ga, gb] = simulateGroupMatch(teams[i], teams[j], ratings, avgGA, homeFor, GROUP_STAGE_MULT, form);
+        }
         table[teams[i]].gf += ga; table[teams[i]].ga += gb;
         table[teams[j]].gf += gb; table[teams[j]].ga += ga;
         if (ga > gb) table[teams[i]].pts += 3;
@@ -578,6 +607,27 @@ function simulateGroupStage(
     );
   }
   return { order, tables };
+}
+
+/**
+ * Build a lookup keyed by the pair-iteration order used in simulateGroupStage:
+ * `${teams[i]}|${teams[j]}` → samples in that team order. Caller may pass the
+ * teams in either order, so we register both keys with appropriately flipped
+ * scoreline samples.
+ */
+function buildInProgressLookup(
+  matches?: Array<{ teamA: string; teamB: string; sampledScores: Array<[number, number]> }>,
+): Map<string, Array<[number, number]>> {
+  const lookup = new Map<string, Array<[number, number]>>();
+  if (!matches) return lookup;
+  for (const m of matches) {
+    if (!m.sampledScores?.length) continue;
+    lookup.set(`${m.teamA}|${m.teamB}`, m.sampledScores);
+    // Flipped so the iteration order doesn't matter.
+    const flipped: Array<[number, number]> = m.sampledScores.map(([a, b]) => [b, a]);
+    lookup.set(`${m.teamB}|${m.teamA}`, flipped);
+  }
+  return lookup;
 }
 
 function getBest3rdPlace(
@@ -820,7 +870,7 @@ function scoreKnockoutEntry(
 const ctx = self as unknown as Worker;
 
 ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
-  const { ratings, avgGA, groups, numSims, entries, scoring, teamSeeds, teamRankings, thirdPlaceLookup, actualGroupMatches, actualKnockoutResults, finalGroupStandings, finalAdvancing3rd, knockoutHosts } = e.data;
+  const { ratings, avgGA, groups, numSims, entries, scoring, teamSeeds, teamRankings, thirdPlaceLookup, actualGroupMatches, actualKnockoutResults, finalGroupStandings, finalAdvancing3rd, knockoutHosts, inProgressGroupMatches } = e.data;
 
   // Accumulators
   const groupPos: Record<string, number[][]> = {};
@@ -867,7 +917,7 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
       groupOrder = finalGroupStandings!;
       advancing3rd = finalAdvancing3rd ?? [];
     } else {
-      const gsResult = simulateGroupStage(groups, ratings, avgGA, actualGroupMatches, form);
+      const gsResult = simulateGroupStage(groups, ratings, avgGA, actualGroupMatches, form, inProgressGroupMatches);
       groupOrder = gsResult.order;
       advancing3rd = getBest3rdPlace(groupOrder, gsResult.tables);
     }

@@ -11,7 +11,8 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useTournamentSim, GROUPS } from '@/hooks/useTournamentSim';
-import type { PlayerEntry, ActualResults } from '@/hooks/useTournamentSim';
+import type { PlayerEntry, ActualResults, InProgressGroupMatch } from '@/hooks/useTournamentSim';
+import { sampleLiveScores } from '@/lib/matchOdds';
 import { useSelectedGroup } from '@/hooks/useSelectedGroup';
 import AuthForm from '@/components/auth/AuthForm';
 import TeamFlag from '@/components/common/TeamFlag';
@@ -48,6 +49,21 @@ function getCountryCode(team: string): string | undefined {
 
 function pct(count: number, total: number): string {
   return `${Math.round((count / total) * 100)}%`;
+}
+
+/** Parse ESPN's clock string into minutes elapsed. Mirrors LiveScores.tsx. */
+function parseEspnMinute(clock: string, period: number): number | null {
+  const c = (clock || '').trim();
+  if (!c) return null;
+  const m = c.match(/^(\d+)(?:\+(\d+))?'?$/);
+  if (m) return parseInt(m[1], 10) + (m[2] ? parseInt(m[2], 10) : 0);
+  const m2 = c.match(/^(\d+):(\d+)$/);
+  if (m2) return parseInt(m2[1], 10);
+  if (/^ht$/i.test(c)) return 45;
+  if (/^ft$/i.test(c)) return 90;
+  if (period === 1) return 1;
+  if (period === 2) return 46;
+  return null;
 }
 
 function pctNum(count: number, total: number): number {
@@ -446,46 +462,90 @@ export default function SimulatePage() {
   const [actualResults, setActualResults] = useState<ActualResults | undefined>(undefined);
 
   useEffect(() => {
-    const fetchTournament = () => {
-      fetch('/api/tournaments')
-        .then((r) => r.json())
-        .then((d) => {
-          if (!d.ok || !d.tournament) return;
-          const t = d.tournament;
-          if (t.lock_time_groups) {
-            setTournamentStarted(new Date() >= new Date(t.lock_time_groups));
+    // Pre-compute team → group for in-progress matches.
+    const teamToGroup: Record<string, string> = {};
+    for (const [g, teams] of Object.entries(GROUPS)) {
+      for (const t of teams) teamToGroup[t] = g;
+    }
+
+    const fetchAll = async () => {
+      try {
+        // Fire both fetches in parallel — completed match data and live scores.
+        const [tRes, sRes] = await Promise.all([
+          fetch('/api/tournaments').then((r) => r.json()),
+          fetch('/api/scores').then((r) => r.json()).catch(() => ({ ok: false })),
+        ]);
+        if (!tRes.ok || !tRes.tournament) return;
+        const t = tRes.tournament;
+        if (t.lock_time_groups) {
+          setTournamentStarted(new Date() >= new Date(t.lock_time_groups));
+        }
+        const rd = t.results_data;
+        const ar: ActualResults = {};
+        if (rd?.groupStage?.groupResults?.length) {
+          const standings: Record<string, string[]> = {};
+          for (const gr of rd.groupStage.groupResults) {
+            standings[gr.groupName] = gr.order;
           }
-          // Pull actual results into the shape the worker expects
-          const rd = t.results_data;
-          const ar: ActualResults = {};
-          if (rd?.groupStage?.groupResults?.length) {
-            const standings: Record<string, string[]> = {};
-            for (const gr of rd.groupStage.groupResults) {
-              standings[gr.groupName] = gr.order;
-            }
-            ar.finalGroupStandings = standings;
-            ar.finalAdvancing3rd = rd.groupStage.advancingThirdPlace ?? [];
-          } else if (rd?.groupMatches && Object.keys(rd.groupMatches).length > 0) {
-            // Group stage in progress — pass per-match scores so the worker locks them in
-            ar.groupMatches = rd.groupMatches;
-          }
-          if (rd?.knockout && Object.keys(rd.knockout).length > 0) {
-            ar.knockoutWinners = rd.knockout;
-          }
-          if (Object.keys(ar).length > 0) {
-            setActualResults((prev) => {
-              // Only update if data has actually changed to avoid an unnecessary re-sim
-              if (JSON.stringify(prev) === JSON.stringify(ar)) return prev;
-              return ar;
+          ar.finalGroupStandings = standings;
+          ar.finalAdvancing3rd = rd.groupStage.advancingThirdPlace ?? [];
+        } else if (rd?.groupMatches && Object.keys(rd.groupMatches).length > 0) {
+          ar.groupMatches = rd.groupMatches;
+        }
+        if (rd?.knockout && Object.keys(rd.knockout).length > 0) {
+          ar.knockoutWinners = rd.knockout;
+        }
+
+        // Identify in-progress group matches and sample their scorelines,
+        // so the forecast captures uncertainty in how unfinished games end.
+        // Skip if the group stage is already locked (no point sampling).
+        if (!ar.finalGroupStandings && sRes?.ok && Array.isArray(sRes.games)) {
+          const inProgress: Record<string, InProgressGroupMatch[]> = {};
+          for (const g of sRes.games) {
+            if (g.state !== 'in') continue;
+            if ((g.stage ?? 'group') !== 'group') continue;
+            const groupName = teamToGroup[g.home?.name];
+            if (!groupName || teamToGroup[g.away?.name] !== groupName) continue;
+            const minutesPlayed = parseEspnMinute(g.clock, g.period);
+            if (minutesPlayed === null) continue;
+            const sA = parseInt(g.home.score, 10) || 0;
+            const sB = parseInt(g.away.score, 10) || 0;
+            const samples = sampleLiveScores(g.home.name, g.away.name, sA, sB, minutesPlayed, 1000, { stage: 'group' });
+            if (!samples) continue;
+            (inProgress[groupName] ??= []).push({
+              teamA: g.home.name,
+              teamB: g.away.name,
+              sampledScores: samples,
             });
           }
-        })
-        .catch(() => {});
+          if (Object.keys(inProgress).length > 0) {
+            ar.inProgressGroupMatches = inProgress;
+          }
+        }
+
+        if (Object.keys(ar).length > 0) {
+          setActualResults((prev) => {
+            // Compare without sampledScores (random per fetch — would always differ)
+            const stripSamples = (x: ActualResults | undefined) => {
+              if (!x?.inProgressGroupMatches) return x;
+              const stripped: Record<string, Array<{ teamA: string; teamB: string }>> = {};
+              for (const [g, ms] of Object.entries(x.inProgressGroupMatches)) {
+                stripped[g] = ms.map((m) => ({ teamA: m.teamA, teamB: m.teamB }));
+              }
+              return { ...x, inProgressGroupMatches: stripped };
+            };
+            if (JSON.stringify(stripSamples(prev)) === JSON.stringify(stripSamples(ar))) return prev;
+            return ar;
+          });
+        }
+      } catch {
+        // ignore network failures
+      }
     };
-    fetchTournament();
-    // Re-poll every 5 minutes so the forecast picks up newly-completed games
-    // without a hard refresh. Underlying ESPN sync is debounced 60s server-side.
-    const interval = setInterval(fetchTournament, 5 * 60 * 1000);
+    fetchAll();
+    // Poll every minute so live games refresh in near-real-time. Underlying
+    // ESPN sync is debounced 60s server-side, so this is cheap.
+    const interval = setInterval(fetchAll, 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 

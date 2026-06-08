@@ -89,9 +89,19 @@ export interface ActualMatch {
   scoreB: number;
 }
 
+export interface InProgressGroupMatch {
+  teamA: string;
+  teamB: string;
+  /** Pre-sampled final scorelines from the live model — the worker draws one
+   *  per simulation iteration to capture the joint distribution. */
+  sampledScores: Array<[number, number]>;
+}
+
 export interface ActualResults {
   /** Completed group stage matches keyed by group name. */
   groupMatches?: Record<string, ActualMatch[]>;
+  /** In-progress group matches keyed by group name. */
+  inProgressGroupMatches?: Record<string, InProgressGroupMatch[]>;
   /**
    * Final group stage standings (when the group stage is complete and locked).
    * If set, the simulation uses these orders directly instead of simulating
@@ -154,6 +164,7 @@ export function useTournamentSim(
       thirdPlaceLookup: THIRD_PLACE_LOOKUP,
       knockoutHosts: KNOCKOUT_HOST,
       actualGroupMatches: actualResults?.groupMatches,
+      inProgressGroupMatches: actualResults?.inProgressGroupMatches,
       finalGroupStandings: actualResults?.finalGroupStandings,
       finalAdvancing3rd: actualResults?.finalAdvancing3rd,
       actualKnockoutResults: actualResults?.knockoutWinners,

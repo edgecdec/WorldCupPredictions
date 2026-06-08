@@ -80,6 +80,11 @@ const MAX_MARGIN_EFFECT = 2;
 /** Live MC sim count — enough for stable percentages, fast in-browser. */
 const LIVE_MC_SIMS = 4000;
 
+/** Default scoreline-sample count when feeding in-progress matches into the
+ *  forecast. 1000 is enough that re-sampling per tournament-sim iteration
+ *  doesn't introduce noticeable quantization. */
+export const DEFAULT_SCORELINE_SAMPLES = 1000;
+
 export interface MatchOdds {
   winA: number;
   draw: number;
@@ -193,6 +198,55 @@ export function computeLiveOdds(
     expectedScoreA: totalA / LIVE_MC_SIMS,
     expectedScoreB: totalB / LIVE_MC_SIMS,
   };
+}
+
+/**
+ * Sample N final scorelines for an in-progress match using the same per-minute
+ * Monte Carlo as computeLiveOdds. Each sample is a [scoreA, scoreB] tuple at
+ * full time. Used by the tournament forecast to feed in-progress matches into
+ * group standings — drawing a random sample per simulation iteration preserves
+ * the proper joint distribution over score, points, and tiebreakers.
+ *
+ * @returns null if either team isn't in PELE_RATINGS.
+ */
+export function sampleLiveScores(
+  teamA: string,
+  teamB: string,
+  scoreA: number,
+  scoreB: number,
+  minutesPlayed: number,
+  numSamples: number = DEFAULT_SCORELINE_SAMPLES,
+  opts: { stage?: 'group' | 'knockout'; matchId?: string | null } = {},
+): Array<[number, number]> | null {
+  const base = computeBaseLambdas(teamA, teamB, opts);
+  if (!base) return null;
+  const { lambdaA, lambdaB } = base;
+
+  const baseRateA = lambdaA / 90;
+  const baseRateB = lambdaB / 90;
+  const startMin = Math.max(0, Math.min(Math.floor(minutesPlayed), MATCH_LENGTH));
+
+  // Game already over: every sample is the same final score.
+  if (startMin >= MATCH_LENGTH) {
+    const out: Array<[number, number]> = [];
+    for (let i = 0; i < numSamples; i++) out.push([scoreA, scoreB]);
+    return out;
+  }
+
+  const samples: Array<[number, number]> = new Array(numSamples);
+  for (let s = 0; s < numSamples; s++) {
+    let a = scoreA, b = scoreB;
+    for (let m = startMin; m < MATCH_LENGTH; m++) {
+      const hazard = HAZARD_BASE[m] ?? HAZARD_BASE[89];
+      const margin = a - b;
+      const adjA = scoreStateAdjust(margin);
+      const adjB = scoreStateAdjust(-margin);
+      if (Math.random() < baseRateA * hazard * adjA) a++;
+      if (Math.random() < baseRateB * hazard * adjB) b++;
+    }
+    samples[s] = [a, b];
+  }
+  return samples;
 }
 
 /**

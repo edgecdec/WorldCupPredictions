@@ -65,6 +65,8 @@ export interface PlayerScoreResult {
   avgScore: number;
   avgRank: number;
   winPct: number;
+  /** Score → fraction of sims producing exactly that score. Sparse map. */
+  scoreDistribution: Record<number, number>;
 }
 
 export interface TournamentSimResults {

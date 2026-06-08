@@ -3,8 +3,9 @@ import { useState, useMemo, useEffect } from 'react';
 import {
   Container, Typography, Box, LinearProgress, Paper, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, TableSortLabel, Grid, Chip,
-  Tabs, Tab, IconButton, Tooltip,
+  Tabs, Tab, IconButton, Tooltip, Popover,
 } from '@mui/material';
+import ScoreHistogram from '@/components/common/ScoreHistogram';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
@@ -337,10 +338,59 @@ function GroupForecastTable({ groupData, numSims }: {
   );
 }
 
+/** Hoverable avg-score cell that pops up a score distribution histogram. */
+function AvgScoreCell({
+  avgScore,
+  scoreDistribution,
+  playerLabel,
+}: {
+  avgScore: number;
+  scoreDistribution: Record<number, number>;
+  playerLabel: string;
+}) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const hasData = Object.keys(scoreDistribution).length > 0;
+
+  return (
+    <TableCell align="right" sx={{ py: 0.5, px: 1, fontWeight: 700 }}>
+      <Box
+        component="span"
+        onMouseEnter={hasData ? (e) => setAnchor(e.currentTarget) : undefined}
+        onMouseLeave={() => setAnchor(null)}
+        sx={{
+          cursor: hasData ? 'help' : 'default',
+          textDecoration: hasData ? 'underline dotted' : 'none',
+          textUnderlineOffset: '3px',
+        }}
+      >
+        {avgScore.toFixed(1)}
+      </Box>
+      <Popover
+        open={Boolean(anchor)}
+        anchorEl={anchor}
+        onClose={() => setAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+        disableRestoreFocus
+        sx={{ pointerEvents: 'none' }}
+        slotProps={{ paper: { sx: { p: 1.5 } } }}
+      >
+        <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', display: 'block', mb: 0.5, textTransform: 'uppercase', fontSize: '0.65rem' }}>
+          {playerLabel} — score distribution
+        </Typography>
+        <ScoreHistogram distribution={scoreDistribution} avgScore={avgScore} />
+        <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', mt: 0.5, fontSize: '0.65rem' }}>
+          Each bar = % of simulations with that exact score.
+        </Typography>
+      </Popover>
+    </TableCell>
+  );
+}
+
 type StandingsSortKey = 'rank' | 'player' | 'avgScore' | 'avgRank' | 'winPct';
 
 function ExpectedStandingsTable({ playerScores, currentUsername, leadOnly }: {
-  playerScores: Array<{ key: string; avgScore: number; avgRank: number; winPct: number }>;
+  playerScores: Array<{ key: string; avgScore: number; avgRank: number; winPct: number; scoreDistribution: Record<number, number> }>;
   currentUsername: string;
   leadOnly: boolean;
 }) {
@@ -428,7 +478,11 @@ function ExpectedStandingsTable({ playerScores, currentUsername, leadOnly }: {
                     {isCurrentUser && <Chip label="You" size="small" sx={{ ml: 0.5, height: 18, fontSize: '0.65rem' }} />}
                   </Typography>
                 </TableCell>
-                <TableCell align="right" sx={{ py: 0.5, px: 1, fontWeight: 700 }}>{p.avgScore.toFixed(1)}</TableCell>
+                <AvgScoreCell
+                  avgScore={p.avgScore}
+                  scoreDistribution={p.scoreDistribution}
+                  playerLabel={`${username}${bracketName ? ` — ${bracketName}` : ''}`}
+                />
                 <TableCell align="right" sx={{ py: 0.5, px: 1 }}>{p.avgRank.toFixed(1)}</TableCell>
                 <TableCell align="right" sx={{ py: 0.5, px: 1, color: p.winPct > 0 ? 'success.main' : 'text.secondary', fontWeight: p.winPct > 0 ? 700 : 400 }}>
                   {p.winPct > 0 ? `${p.winPct}%` : '—'}

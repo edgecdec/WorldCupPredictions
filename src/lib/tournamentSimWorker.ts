@@ -157,6 +157,9 @@ interface PlayerScoreResult {
   avgScore: number;
   avgRank: number;
   winPct: number;
+  /** Score → fraction of sims that produced this exact score. Sums to 1.
+   *  Sparse: only buckets with non-zero probability are present. */
+  scoreDistribution: Record<number, number>;
 }
 
 interface SimResponse {
@@ -889,10 +892,17 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
   }
 
   // Player scoring accumulators
-  const playerTotals: Record<string, { score: number; rank: number; wins: number }> = {};
+  const playerTotals: Record<string, {
+    score: number;
+    rank: number;
+    wins: number;
+    scoreCounts: Record<number, number>;
+  }> = {};
   const hasPlayers = entries && entries.length > 0 && scoring && teamSeeds;
   if (hasPlayers) {
-    for (const ent of entries!) playerTotals[ent.key] = { score: 0, rank: 0, wins: 0 };
+    for (const ent of entries!) {
+      playerTotals[ent.key] = { score: 0, rank: 0, wins: 0, scoreCounts: {} };
+    }
   }
 
   const PROGRESS_INTERVAL = Math.max(1, Math.floor(numSims / 20));
@@ -991,9 +1001,12 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
       scores.sort((a, b) => b.score - a.score);
       for (let i = 0; i < scores.length; i++) {
         const t = playerTotals[scores[i].key];
-        t.score += scores[i].score;
+        const s = scores[i].score;
+        t.score += s;
         t.rank += i + 1;
         if (i === 0) t.wins++;
+        // Tally score histogram (integer buckets — group + knockout always integer).
+        t.scoreCounts[s] = (t.scoreCounts[s] ?? 0) + 1;
       }
     }
   }
@@ -1031,11 +1044,19 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
   if (hasPlayers) {
     playerScores = entries!.map((ent) => {
       const t = playerTotals[ent.key];
+      // Convert raw counts → probability mass function. Round to 5 decimals
+      // (avoids float bloat in the postMessage payload — at numSims=10000
+      // the smallest count is 1/10000 = 0.0001, well above the rounding floor).
+      const dist: Record<number, number> = {};
+      for (const [score, count] of Object.entries(t.scoreCounts)) {
+        dist[Number(score)] = Math.round((count / numSims) * 100000) / 100000;
+      }
       return {
         key: ent.key,
         avgScore: Math.round((t.score / numSims) * 10) / 10,
         avgRank: Math.round((t.rank / numSims) * 10) / 10,
         winPct: Math.round((t.wins / numSims) * 1000) / 10,
+        scoreDistribution: dist,
       };
     }).sort((a, b) => b.avgScore - a.avgScore);
   }

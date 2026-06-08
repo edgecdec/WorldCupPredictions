@@ -29,7 +29,9 @@ export default function Home() {
   const tournamentStarted = Boolean(
     tournament?.lock_time_groups && new Date(tournament.lock_time_groups) <= new Date()
   );
-  const { games, loading: scoresLoading } = useLiveScores(tournamentStarted && Boolean(user));
+  // Show ESPN games (upcoming + live + recent) any time the user is logged in.
+  // The component returns null when ESPN has no events, so this is safe pre-tournament.
+  const { games, loading: scoresLoading } = useLiveScores(Boolean(user));
 
   const countryCodeMap: Record<string, string> = {};
   if (tournament?.bracket_data?.groups) {
@@ -154,7 +156,7 @@ export default function Home() {
         </Box>
       )}
 
-      {tournamentStarted && (
+      {(games.length > 0 || scoresLoading) && (
         <Box sx={{ mt: 4, textAlign: "left" }}>
           <LiveScores games={games} loading={scoresLoading} countryCodeMap={countryCodeMap} />
         </Box>

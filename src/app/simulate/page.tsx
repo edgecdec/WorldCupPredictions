@@ -508,7 +508,7 @@ export default function SimulatePage() {
   }, [user, groupId]);
 
   const { results, progress, running, numSims, rerun } = useTournamentSim(players, scoring, actualResults);
-  const { games: liveGames, loading: liveLoading } = useLiveScores(tournamentStarted && Boolean(user));
+  const { games: liveGames, loading: liveLoading } = useLiveScores(Boolean(user));
 
   const countryCodeMap = useMemo(() => {
     const m: Record<string, string> = {};
@@ -555,7 +555,7 @@ export default function SimulatePage() {
         <LinearProgress variant="determinate" value={(progress / numSims) * 100} sx={{ mb: 2, height: 6, borderRadius: 3 }} />
       )}
 
-      {tournamentStarted && (liveGames.length > 0 || liveLoading) && (
+      {(liveGames.length > 0 || liveLoading) && (
         <Box sx={{ mb: 3 }}>
           <LiveScores games={liveGames} loading={liveLoading} countryCodeMap={countryCodeMap} />
         </Box>

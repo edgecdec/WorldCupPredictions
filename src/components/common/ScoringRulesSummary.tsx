@@ -48,10 +48,11 @@ export default function ScoringRulesSummary({ mode, settings }: ScoringRulesSumm
             <Bullet>Correct advance/not advance: +{s.groupStage.advanceCorrect} per team</Bullet>
             <Bullet>Exact finishing position: +{s.groupStage.exactPosition} per team</Bullet>
             <Bullet>
-              Upset bonus: +{s.groupStage.upsetBonusPerPlace} for each position a low-pot team
-              over-performs its seed. Computed against whichever is worse of (your prediction,
-              their actual finish) — bold calls get partial credit even if the team falls a
-              slot short.
+              Upset bonus: +{s.groupStage.upsetBonusPerPlace} per position a pot 2–4 team beats
+              its pot. Calculated as <code>pot − worse(predicted, actual)</code> so a bold call
+              still earns partial credit if the team falls a slot short.
+              <em> Examples (Turkiye, pot 4): predict 1st, finish 1st → +3 · predict 1st, finish
+              2nd → +2 · predict 3rd, finish 2nd → +1 · predict 2nd, finish 4th → 0.</em>
             </Bullet>
             <Bullet>All advancement calls correct in a group: +{s.groupStage.advancementCorrectBonus} bonus</Bullet>
             <Bullet>Perfect group order (all 4 positions exact): +{s.groupStage.perfectOrderBonus} bonus</Bullet>

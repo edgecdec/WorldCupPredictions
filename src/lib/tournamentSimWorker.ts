@@ -20,10 +20,11 @@
 //        lambdaB = teamB.gf * (teamA.ga / AVG_GA)
 //      Lower opponent GA → fewer expected goals from us. Higher opponent
 //      GF → more expected goals against us.
-//   3. Goals are sampled from a Dixon-Coles-corrected joint Poisson, which
-//      adjusts for the well-known under-prediction of low-scoring outcomes
-//      in pure Poisson (0-0, 1-1 happen more in real soccer than independent
-//      Poisson predicts).
+//   3. Goals are sampled from independent Poisson distributions per team.
+//      We previously used a Dixon-Coles correction; back-testing on 1080
+//      international matches showed that correction wasn't justified for
+//      international play (0-0 came in slightly UNDER Poisson, not over).
+//      See sampleGoals() doc-block below.
 //   4. Three additional adjustments per Silver Bulletin's published method:
 //      a. HOME FIELD ADVANTAGE: a host nation playing in their own country
 //         gets a homeField PELE bonus, applied only to that team's GF/GA
@@ -252,50 +253,19 @@ function poissonSample(lambda: number): number {
 }
 
 /**
- * Dixon-Coles correlation parameter (rho).
+ * Goals are sampled from independent Poisson distributions for each team.
  *
- * Pure independent Poisson sampling has a well-documented problem in soccer:
- * it under-predicts both 0-0 draws AND blowouts. Real soccer has more
- * correlated low-scoring outcomes than independent Poisson assumes (because
- * teams' tactics depend on the current score).
- *
- * Dixon-Coles (1997) introduced a tau correction applied to the joint
- * probability of the 4 lowest-scoring cells (0-0, 0-1, 1-0, 1-1):
- *   tau(0,0) = 1 - lambda_a * lambda_b * rho
- *   tau(0,1) = 1 + lambda_a * rho
- *   tau(1,0) = 1 + lambda_b * rho
- *   tau(1,1) = 1 - rho
- *
- * Standard rho for soccer is around -0.13. With rho < 0:
- *   tau(0,0) > 1: 0-0 happens MORE often than independent Poisson predicts
- *   tau(1,1) > 1: 1-1 happens MORE often
- *   tau(0,1) < 1: 0-1 happens LESS often
- *   tau(1,0) < 1: 1-0 happens LESS often
- * This shifts probability mass from (0,1)/(1,0) to (0,0)/(1,1) — i.e., more draws.
+ * Note: we previously applied a Dixon-Coles tau correction (rho = -0.13) to
+ * inflate 0-0 / 1-1 draws and reduce 0-1 / 1-0 outcomes, per the 1997 DC
+ * paper that fit English league data. After back-testing against 1080
+ * international matches (888 WC qualifiers + 192 prior World Cups), we found
+ * 0-0 actually came in slightly UNDER Poisson (8.5% actual vs 9.4% pure-Poisson)
+ * and overall draw rate matched Poisson within 0.2pp. International football
+ * doesn't have the defensive draw inflation DC was correcting for, so we now
+ * use pure independent Poisson sampling.
  */
-const DC_RHO = -0.13;
-
 function sampleGoals(lambdaA: number, lambdaB: number): [number, number] {
-  // Independent Poisson sample, then check if the cell needs adjustment
-  const a = poissonSample(lambdaA);
-  const b = poissonSample(lambdaB);
-
-  // Apply tau adjustment via acceptance-rejection on low-score cells
-  let tau = 1;
-  if (a === 0 && b === 0) tau = 1 - lambdaA * lambdaB * DC_RHO;
-  else if (a === 0 && b === 1) tau = 1 + lambdaA * DC_RHO;
-  else if (a === 1 && b === 0) tau = 1 + lambdaB * DC_RHO;
-  else if (a === 1 && b === 1) tau = 1 - DC_RHO;
-
-  // For DC_RHO < 0, tau >= 1 for (0,0) and (1,1) and tau <= 1 for (0,1) and (1,0)
-  // Reject with probability (1 - tau) when tau < 1 (resample from a different cell)
-  if (tau < 1 && Math.random() > tau) {
-    // Resample but bias toward (0,0) and (1,1) — flip to a draw nearby
-    if (a === 0 && b === 1) return [0, 0];
-    if (a === 1 && b === 0) return [1, 1];
-  }
-  // For tau > 1 (0-0, 1-1), the cell is already favored by the independent draw
-  return [a, b];
+  return [poissonSample(lambdaA), poissonSample(lambdaB)];
 }
 
 

@@ -5,8 +5,10 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import PlaceIcon from '@mui/icons-material/Place';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import type { LiveGame } from '@/types';
 import TeamFlag from '@/components/common/TeamFlag';
+import type { BracketSlotResult } from '@/hooks/useTournamentSim';
 import { computeMatchOdds, computeLiveOdds, sampleLiveScores, type MatchOdds } from '@/lib/matchOdds';
 
 const STATE_IN = 'in';
@@ -79,6 +81,51 @@ interface ScorelineFreq {
   count: number;
 }
 
+/**
+ * Try to parse one of ESPN's TBD-team placeholder strings into the FIFA slot
+ * ID our forecast tracks. Returns e.g. 'R32-5-W' for "Round of 32 5 Winner",
+ * '1A' for "Group A 1st Place", etc. Returns null if the name isn't a TBD.
+ */
+function parseTbdSlot(name: string): string | null {
+  if (!name) return null;
+  let m: RegExpMatchArray | null;
+
+  // "Round of 32 5 Winner" → R32-5-W
+  m = name.match(/^Round of 32 (\d+) Winner$/i);
+  if (m) return `R32-${m[1]}-W`;
+
+  // "Round of 16 3 Winner" → R16-3-W
+  m = name.match(/^Round of 16 (\d+) Winner$/i);
+  if (m) return `R16-${m[1]}-W`;
+
+  // "Quarterfinal 2 Winner" → QF-2-W
+  m = name.match(/^Quarterfinal (\d+) Winner$/i);
+  if (m) return `QF-${m[1]}-W`;
+
+  // "Semifinal 1 Winner" → SF-1-W
+  m = name.match(/^Semifinal (\d+) Winner$/i);
+  if (m) return `SF-${m[1]}-W`;
+
+  // "Group A 1st Place" → 1A   "Group H 2nd Place" → 2H
+  m = name.match(/^Group ([A-L]) (1st|2nd|3rd) Place$/i);
+  if (m) {
+    const pos = m[2].toLowerCase().startsWith('1') ? '1'
+      : m[2].toLowerCase().startsWith('2') ? '2' : '3';
+    return `${pos}${m[1].toUpperCase()}`;
+  }
+
+  return null;
+}
+
+/**
+ * For a slot like "R32-5-W", return the bracketSlot result. For group placement
+ * like "1A", we don't have a direct slot — return null and we'll show a generic
+ * advancement hint instead.
+ */
+function findSlotResult(slotId: string, slots: BracketSlotResult[]): BracketSlotResult | null {
+  return slots.find((s) => s.slotId === slotId) ?? null;
+}
+
 /** Compute the top-N scorelines from a sample list, sorted by frequency desc. */
 function topScorelines(samples: Array<[number, number]>, n: number): ScorelineFreq[] {
   const map = new Map<string, ScorelineFreq>();
@@ -123,12 +170,98 @@ function DrawRow({ drawPct }: { drawPct: number }) {
   );
 }
 
+const TBD_TOP_TEAMS = 6;
+
+/**
+ * Row for a team that hasn't been determined yet — shows the placeholder name
+ * (e.g. "R32-5 Winner") and a hover popover listing the most likely teams.
+ * Probabilities come from the forecast's bracket-slot tallies.
+ */
+function TbdTeamRow({
+  placeholder,
+  slotResult,
+  numSims,
+  countryCodeMap,
+}: {
+  placeholder: string;
+  slotResult: BracketSlotResult | null;
+  numSims: number;
+  countryCodeMap: Record<string, string>;
+}) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const hasData = !!slotResult && slotResult.teams.length > 0;
+
+  return (
+    <Box
+      onMouseEnter={hasData ? (e) => setAnchor(e.currentTarget) : undefined}
+      onMouseLeave={() => setAnchor(null)}
+      sx={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        py: 0.25,
+        gap: 0.5,
+        cursor: hasData ? 'help' : 'default',
+      }}
+    >
+      <HelpOutlineIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+      <Typography
+        variant="caption"
+        noWrap
+        sx={{
+          flex: 1,
+          color: 'text.secondary',
+          fontStyle: 'italic',
+          fontSize: '0.7rem',
+          textDecoration: hasData ? 'underline dotted' : 'none',
+          textUnderlineOffset: '2px',
+        }}
+      >
+        {placeholder}
+      </Typography>
+      <Popover
+        open={Boolean(anchor) && hasData}
+        anchorEl={anchor}
+        onClose={() => setAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+        disableRestoreFocus
+        sx={{ pointerEvents: 'none' }}
+        slotProps={{ paper: { sx: { p: 1, minWidth: 180 } } }}
+      >
+        <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', display: 'block', mb: 0.5, textTransform: 'uppercase', fontSize: '0.6rem' }}>
+          Most likely teams
+        </Typography>
+        {slotResult?.teams.slice(0, TBD_TOP_TEAMS).map((t) => {
+          const pct = (t.count / numSims) * 100;
+          return (
+            <Box key={t.team} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 0.2 }}>
+              {countryCodeMap[t.team] && <TeamFlag countryCode={countryCodeMap[t.team]} size={12} />}
+              <Typography variant="caption" sx={{ flex: 1, fontSize: '0.72rem' }}>{t.team}</Typography>
+              <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.72rem' }}>
+                {pct.toFixed(0)}%
+              </Typography>
+            </Box>
+          );
+        })}
+        {slotResult && slotResult.teams.length > TBD_TOP_TEAMS && (
+          <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.6rem', display: 'block', mt: 0.25 }}>
+            +{slotResult.teams.length - TBD_TOP_TEAMS} more
+          </Typography>
+        )}
+      </Popover>
+    </Box>
+  );
+}
+
 interface GameCardProps {
   game: LiveGame;
   countryCodeMap: Record<string, string>;
+  bracketSlots?: BracketSlotResult[];
+  numSims?: number;
 }
 
-function GameCard({ game, countryCodeMap }: GameCardProps) {
+function GameCard({ game, countryCodeMap, bracketSlots, numSims }: GameCardProps) {
   const isLive = game.state === STATE_IN;
   const isFinal = game.state === STATE_POST;
   const stage = game.stage ?? 'group';
@@ -136,7 +269,17 @@ function GameCard({ game, countryCodeMap }: GameCardProps) {
   const scoreA = parseInt(game.home.score, 10) || 0;
   const scoreB = parseInt(game.away.score, 10) || 0;
 
+  // TBD detection: ESPN gives placeholder names like "Round of 32 5 Winner"
+  // until real teams are known. We map those to forecast slot IDs.
+  const homeSlotId = parseTbdSlot(game.home.name);
+  const awaySlotId = parseTbdSlot(game.away.name);
+  const homeIsTbd = homeSlotId !== null;
+  const awayIsTbd = awaySlotId !== null;
+  const anyTbd = homeIsTbd || awayIsTbd;
+
+  // Real-team odds only make sense when both sides are known.
   const odds = useMemo<MatchOdds | null>(() => {
+    if (anyTbd) return null;
     if (isLive) {
       if (minutesPlayed === null) return null;
       return computeLiveOdds(game.home.name, game.away.name, scoreA, scoreB, minutesPlayed, { stage });
@@ -145,7 +288,7 @@ function GameCard({ game, countryCodeMap }: GameCardProps) {
       return computeMatchOdds(game.home.name, game.away.name, { stage });
     }
     return null;
-  }, [isLive, isFinal, minutesPlayed, scoreA, scoreB, game.home.name, game.away.name, stage]);
+  }, [anyTbd, isLive, isFinal, minutesPlayed, scoreA, scoreB, game.home.name, game.away.name, stage]);
 
   const showDraw = odds && stage === 'group';
 
@@ -196,8 +339,26 @@ function GameCard({ game, countryCodeMap }: GameCardProps) {
             )}
             <OpenInNewIcon sx={{ fontSize: 12, color: 'text.secondary' }} />
           </Box>
-          <TeamRow name={game.home.name} score={game.home.score} isLive={isLive} countryCode={countryCodeMap[game.home.name]} winPct={odds?.winA} />
-          <TeamRow name={game.away.name} score={game.away.score} isLive={isLive} countryCode={countryCodeMap[game.away.name]} winPct={odds?.winB} />
+          {homeIsTbd ? (
+            <TbdTeamRow
+              placeholder={game.home.name}
+              slotResult={bracketSlots && homeSlotId ? findSlotResult(homeSlotId, bracketSlots) : null}
+              numSims={numSims ?? 0}
+              countryCodeMap={countryCodeMap}
+            />
+          ) : (
+            <TeamRow name={game.home.name} score={game.home.score} isLive={isLive} countryCode={countryCodeMap[game.home.name]} winPct={odds?.winA} />
+          )}
+          {awayIsTbd ? (
+            <TbdTeamRow
+              placeholder={game.away.name}
+              slotResult={bracketSlots && awaySlotId ? findSlotResult(awaySlotId, bracketSlots) : null}
+              numSims={numSims ?? 0}
+              countryCodeMap={countryCodeMap}
+            />
+          ) : (
+            <TeamRow name={game.away.name} score={game.away.score} isLive={isLive} countryCode={countryCodeMap[game.away.name]} winPct={odds?.winB} />
+          )}
           {odds && showDraw && <DrawRow drawPct={odds.draw} />}
           {game.venue && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, mt: 0.5, color: 'text.secondary' }}>
@@ -248,9 +409,13 @@ interface LiveScoresProps {
    *  prev/next buttons. */
   date?: Date;
   onDateChange?: (d: Date) => void;
+  /** Forecast bracket slot tallies — used to render team probabilities for TBD
+   *  cards. Optional: TBD cards still render their placeholder name without it. */
+  bracketSlots?: BracketSlotResult[];
+  numSims?: number;
 }
 
-export default function LiveScores({ games, loading, countryCodeMap = {}, date, onDateChange }: LiveScoresProps) {
+export default function LiveScores({ games, loading, countryCodeMap = {}, date, onDateChange, bracketSlots, numSims }: LiveScoresProps) {
   const live = games.filter((g) => g.state === STATE_IN);
   const recent = games.filter((g) => g.state === STATE_POST);
   const upcoming = games.filter((g) => g.state !== STATE_IN && g.state !== STATE_POST);
@@ -306,7 +471,13 @@ export default function LiveScores({ games, loading, countryCodeMap = {}, date, 
           }}
         >
           {sorted.map((game) => (
-            <GameCard key={game.id} game={game} countryCodeMap={countryCodeMap} />
+            <GameCard
+              key={game.id}
+              game={game}
+              countryCodeMap={countryCodeMap}
+              bracketSlots={bracketSlots}
+              numSims={numSims}
+            />
           ))}
         </Box>
       )}

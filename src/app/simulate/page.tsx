@@ -696,6 +696,8 @@ export default function SimulatePage() {
           countryCodeMap={countryCodeMap}
           date={scoreDate}
           onDateChange={setScoreDate}
+          bracketSlots={results?.bracketSlots}
+          numSims={numSims}
         />
       </Box>
 

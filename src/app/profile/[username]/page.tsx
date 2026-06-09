@@ -68,6 +68,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // useParams returns percent-encoded values; decode once for everything else.
   const decodedUsername = decodeURIComponent(username);
   const isOwnProfile = user?.username?.toLowerCase() === decodedUsername.toLowerCase();
 
@@ -75,7 +76,7 @@ export default function ProfilePage() {
     async function load() {
       try {
         const [pRes, tRes] = await Promise.all([
-          fetch(`/api/profile?username=${encodeURIComponent(username)}`),
+          fetch(`/api/profile?username=${encodeURIComponent(decodedUsername)}`),
           fetch('/api/tournaments'),
         ]);
         const pData = await pRes.json();

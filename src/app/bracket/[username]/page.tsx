@@ -42,9 +42,11 @@ export default function PublicBracketPage() {
   useEffect(() => {
     async function load() {
       try {
+        // useParams returns percent-encoded; decode once before re-encoding for the fetch.
+        const decoded = decodeURIComponent(username);
         const [tRes, pRes] = await Promise.all([
           fetch('/api/tournaments'),
-          fetch(`/api/picks/public?username=${encodeURIComponent(username)}`),
+          fetch(`/api/picks/public?username=${encodeURIComponent(decoded)}`),
         ]);
         const tData = await tRes.json();
         const pData = await pRes.json();

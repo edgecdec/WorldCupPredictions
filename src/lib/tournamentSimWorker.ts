@@ -20,11 +20,11 @@
 //        lambdaB = teamB.gf * (teamA.ga / AVG_GA)
 //      Lower opponent GA → fewer expected goals from us. Higher opponent
 //      GF → more expected goals against us.
-//   3. Goals are sampled from independent Poisson distributions per team.
-//      We previously used a Dixon-Coles correction; back-testing on 1080
-//      international matches showed that correction wasn't justified for
-//      international play (0-0 came in slightly UNDER Poisson, not over).
-//      See sampleGoals() doc-block below.
+//   3. Goals are sampled from a Dixon-Coles-corrected joint Poisson with
+//      rho = -0.13. Empirically, removing DC made per-match draws closer to
+//      sportsbook reality but worsened tournament-level RMSE (favorites lost
+//      amplification). Kept here as an empirical tuning knob — combined with
+//      a ramping knockout stage multiplier, the tournament % match SB.
 //   4. Three additional adjustments per Silver Bulletin's published method:
 //      a. HOME FIELD ADVANTAGE: a host nation playing in their own country
 //         gets a homeField PELE bonus, applied only to that team's GF/GA
@@ -253,19 +253,39 @@ function poissonSample(lambda: number): number {
 }
 
 /**
- * Goals are sampled from independent Poisson distributions for each team.
+ * Dixon-Coles correlation parameter (rho).
  *
- * Note: we previously applied a Dixon-Coles tau correction (rho = -0.13) to
- * inflate 0-0 / 1-1 draws and reduce 0-1 / 1-0 outcomes, per the 1997 DC
- * paper that fit English league data. After back-testing against 1080
- * international matches (888 WC qualifiers + 192 prior World Cups), we found
- * 0-0 actually came in slightly UNDER Poisson (8.5% actual vs 9.4% pure-Poisson)
- * and overall draw rate matched Poisson within 0.2pp. International football
- * doesn't have the defensive draw inflation DC was correcting for, so we now
- * use pure independent Poisson sampling.
+ * Pure independent Poisson under-predicts low-scoring draws (0-0, 1-1) per the
+ * Dixon-Coles 1997 paper. Their tau correction inflates the joint probability
+ * of the 4 lowest-scoring cells:
+ *   tau(0,0) = 1 - lambda_a * lambda_b * rho
+ *   tau(0,1) = 1 + lambda_a * rho
+ *   tau(1,0) = 1 + lambda_b * rho
+ *   tau(1,1) = 1 - rho
+ *
+ * Back-testing on 1080 international matches showed pure Poisson actually
+ * predicts 0-0 slightly OVER what occurs (9.4% vs 8.5%) — DC theoretically
+ * shouldn't be needed. But removing it hurt tournament-level calibration
+ * because favorites lose the small amplification DC provides via the 1-1
+ * cell boost. Kept at -0.13 as an empirical tuning knob.
  */
+const DC_RHO = -0.13;
+
 function sampleGoals(lambdaA: number, lambdaB: number): [number, number] {
-  return [poissonSample(lambdaA), poissonSample(lambdaB)];
+  const a = poissonSample(lambdaA);
+  const b = poissonSample(lambdaB);
+
+  let tau = 1;
+  if (a === 0 && b === 0) tau = 1 - lambdaA * lambdaB * DC_RHO;
+  else if (a === 0 && b === 1) tau = 1 + lambdaA * DC_RHO;
+  else if (a === 1 && b === 0) tau = 1 + lambdaB * DC_RHO;
+  else if (a === 1 && b === 1) tau = 1 - DC_RHO;
+
+  if (tau < 1 && Math.random() > tau) {
+    if (a === 0 && b === 1) return [0, 0];
+    if (a === 1 && b === 0) return [1, 1];
+  }
+  return [a, b];
 }
 
 
@@ -309,14 +329,23 @@ function effectiveRating(
 }
 
 /**
- * Scaling for knockout-stage home field advantage. Empirical calibration
- * against Silver Bulletin's published forecast shows knockout HFA is best
- * modeled at 50% of group-stage HFA — host nations' championship % matches
- * SB closely with this scale.
+ * Scaling for knockout-stage home field advantage. Ramps DOWN as the tournament
+ * advances: the host nation gets less of an edge in later, higher-stakes rounds.
+ *   R32: 60%  →  R16: 55%  →  QF: 50%  →  SF: 45%  →  Final/3rd: 40%
  *
  * Group stage uses 100% HFA (full home field bonus from peleRatings.ts).
  */
-const KO_HFA_SCALE = 0.5;
+const KO_HFA_SCALE_BY_ROUND: Record<string, number> = {
+  R32: 0.60, R16: 0.55, QF: 0.50, SF: 0.45, FINAL: 0.40, '3RD': 0.40,
+};
+function knockoutHfaScale(matchId: string): number {
+  if (matchId.startsWith('R32')) return KO_HFA_SCALE_BY_ROUND.R32;
+  if (matchId.startsWith('R16')) return KO_HFA_SCALE_BY_ROUND.R16;
+  if (matchId.startsWith('QF')) return KO_HFA_SCALE_BY_ROUND.QF;
+  if (matchId.startsWith('SF')) return KO_HFA_SCALE_BY_ROUND.SF;
+  if (matchId === 'FINAL' || matchId === '3RD') return KO_HFA_SCALE_BY_ROUND.FINAL;
+  return 0.50;
+}
 
 /**
  * Apply Silver Bulletin's empirical stage multiplier to the PELE gap.
@@ -361,7 +390,23 @@ function applyStageMultiplier(
 }
 
 const GROUP_STAGE_MULT = 0.9;
-const KNOCKOUT_STAGE_MULT = 1.1;
+
+/**
+ * Knockout stage multiplier ramps UP by round: each subsequent round is
+ * chalkier than the last, so the Final has the largest favorite amplification.
+ *   R32: 1.10  →  R16: 1.125  →  QF: 1.15  →  SF: 1.175  →  Final/3rd: 1.20
+ */
+const KO_STAGE_MULT_BY_ROUND: Record<string, number> = {
+  R32: 1.10, R16: 1.125, QF: 1.15, SF: 1.175, FINAL: 1.20, '3RD': 1.20,
+};
+function knockoutStageMult(matchId: string): number {
+  if (matchId.startsWith('R32')) return KO_STAGE_MULT_BY_ROUND.R32;
+  if (matchId.startsWith('R16')) return KO_STAGE_MULT_BY_ROUND.R16;
+  if (matchId.startsWith('QF')) return KO_STAGE_MULT_BY_ROUND.QF;
+  if (matchId.startsWith('SF')) return KO_STAGE_MULT_BY_ROUND.SF;
+  if (matchId === 'FINAL' || matchId === '3RD') return KO_STAGE_MULT_BY_ROUND.FINAL;
+  return 1.10;
+}
 
 // =============================================================================
 // FORM STREAKINESS
@@ -475,17 +520,18 @@ function simulateKnockoutMatch(
   ratings: Record<string, TeamRating>, avgGA: number,
   homeFor?: string,
   form?: Record<string, number>,
+  matchId: string = 'R32-1',
 ): string {
   const a = ratings[teamA], b = ratings[teamB];
   if (!a || !b) return Math.random() < 0.5 ? teamA : teamB;
   const aBumped = applyFormBump(a, form?.[teamA] ?? 0);
   const bBumped = applyFormBump(b, form?.[teamB] ?? 0);
-  // Knockout HFA is dampened to KO_HFA_SCALE (50%) of group-stage HFA —
-  // empirical calibration vs Silver Bulletin shows hosts' championship %
-  // matches SB's published numbers with this scaling.
-  let effA = effectiveRating(aBumped, homeFor === teamA, KO_HFA_SCALE);
-  let effB = effectiveRating(bBumped, homeFor === teamB, KO_HFA_SCALE);
-  [effA, effB] = applyStageMultiplier(effA, effB, KNOCKOUT_STAGE_MULT);
+  // Both HFA scaling and stage multiplier ramp by round (see consts above).
+  const hfaScale = knockoutHfaScale(matchId);
+  const stageMult = knockoutStageMult(matchId);
+  let effA = effectiveRating(aBumped, homeFor === teamA, hfaScale);
+  let effB = effectiveRating(bBumped, homeFor === teamB, hfaScale);
+  [effA, effB] = applyStageMultiplier(effA, effB, stageMult);
   const lambdaA = effA.gf * (effB.ga / avgGA);
   const lambdaB = effB.gf * (effA.ga / avgGA);
   const [ga, gb] = sampleGoals(lambdaA, lambdaB);
@@ -640,7 +686,7 @@ function simulateKnockout(
     let homeFor: string | undefined;
     if (host === teamA && ratings[teamA]?.homeField) homeFor = teamA;
     else if (host === teamB && ratings[teamB]?.homeField) homeFor = teamB;
-    return simulateKnockoutMatch(teamA, teamB, ratings, avgGA, homeFor, form);
+    return simulateKnockoutMatch(teamA, teamB, ratings, avgGA, homeFor, form, matchId);
   };
   const winners: Record<string, string> = {};
   const runnersUp: Record<string, string> = {};

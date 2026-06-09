@@ -1,22 +1,49 @@
-// Pre-match analytic win/draw/loss probabilities using PELE goal expectations
-// fed into independent Poisson goal counts (no Dixon-Coles correction —
-// see note below), computed as a grid sum instead of Monte Carlo.
-//
-// Why no Dixon-Coles? DC's 1997 paper found that 0-0/1-1 are over-represented
-// vs Poisson in 1992-95 English league play. We tested this on 1080 international
-// matches (888 WC qualifiers + 192 prior World Cups): 0-0 actually came in
-// SLIGHTLY UNDER Poisson (8.5% actual vs 9.4% Poisson predicts), and overall
-// draws were 21.4% actual vs 21.6% Poisson — within 0.2pp. International play
-// doesn't have the defensive draw inflation DC was correcting for, so applying
-// rho=-0.13 was inflating our draws by ~5pp on average and ~10pp on lopsided
-// matches. The current model uses pure independent Poisson.
+// Pre-match analytic win/draw/loss probabilities using the same PELE +
+// Dixon-Coles model as the simulator, computed as a Poisson grid sum
+// instead of Monte Carlo (faster, deterministic, exact to ~5 decimals).
 
 import { PELE_RATINGS, AVG_GA, type PeleRating } from '@/lib/peleRatings';
 import { teamHasHomeField } from '@/lib/matchVenues';
 
+const DC_RHO = -0.13;
 const GROUP_STAGE_MULT = 0.9;
-const KNOCKOUT_STAGE_MULT = 1.1;
-const KO_HFA_SCALE = 0.5;
+
+// Knockout stage multiplier ramps up by round: each subsequent round is
+// chalkier than the last, so the Final has the largest favorite amplification.
+// R32 → 1.10, R16 → 1.125, QF → 1.15, SF → 1.175, Final/3rd → 1.20.
+const KO_STAGE_MULT_BY_ROUND = {
+  R32: 1.10, R16: 1.125, QF: 1.15, SF: 1.175, FINAL: 1.20, '3RD': 1.20,
+} as const;
+const KNOCKOUT_STAGE_MULT_DEFAULT = 1.10;
+
+// Knockout HFA dampens DOWN as the tournament advances: the host nation gets
+// less of an edge in later, more intense rounds (less crowd support relative
+// to away contingent, neutralizing tactics, etc.). R32 keeps 60% of the
+// group-stage HFA, ramping down to 40% by the Final.
+const KO_HFA_SCALE_BY_ROUND = {
+  R32: 0.60, R16: 0.55, QF: 0.50, SF: 0.45, FINAL: 0.40, '3RD': 0.40,
+} as const;
+const KO_HFA_SCALE_DEFAULT = 0.50;
+
+function rampedKnockoutMult(matchId: string | null | undefined): number {
+  if (!matchId) return KNOCKOUT_STAGE_MULT_DEFAULT;
+  if (matchId.startsWith('R32')) return KO_STAGE_MULT_BY_ROUND.R32;
+  if (matchId.startsWith('R16')) return KO_STAGE_MULT_BY_ROUND.R16;
+  if (matchId.startsWith('QF')) return KO_STAGE_MULT_BY_ROUND.QF;
+  if (matchId.startsWith('SF')) return KO_STAGE_MULT_BY_ROUND.SF;
+  if (matchId === 'FINAL' || matchId === '3RD') return KO_STAGE_MULT_BY_ROUND.FINAL;
+  return KNOCKOUT_STAGE_MULT_DEFAULT;
+}
+
+function rampedKnockoutHfa(matchId: string | null | undefined): number {
+  if (!matchId) return KO_HFA_SCALE_DEFAULT;
+  if (matchId.startsWith('R32')) return KO_HFA_SCALE_BY_ROUND.R32;
+  if (matchId.startsWith('R16')) return KO_HFA_SCALE_BY_ROUND.R16;
+  if (matchId.startsWith('QF')) return KO_HFA_SCALE_BY_ROUND.QF;
+  if (matchId.startsWith('SF')) return KO_HFA_SCALE_BY_ROUND.SF;
+  if (matchId === 'FINAL' || matchId === '3RD') return KO_HFA_SCALE_BY_ROUND.FINAL;
+  return KO_HFA_SCALE_DEFAULT;
+}
 
 // Analytic grid bound — covers >99.99% of mass for any realistic lambda
 // (max lambda we see is ~5; e^-5 * 5^15 / 15! ≈ 1e-7).
@@ -346,9 +373,13 @@ function computeBaseLambdas(
   if (!rA || !rB) return null;
 
   const stage = opts.stage ?? 'group';
-  const stageMult = stage === 'knockout' ? KNOCKOUT_STAGE_MULT : GROUP_STAGE_MULT;
-  const hfaScale = stage === 'knockout' ? KO_HFA_SCALE : 1;
   const matchIdForHfa = opts.matchId !== undefined ? opts.matchId : null;
+  const stageMult = stage === 'knockout'
+    ? rampedKnockoutMult(matchIdForHfa)
+    : GROUP_STAGE_MULT;
+  const hfaScale = stage === 'knockout'
+    ? rampedKnockoutHfa(matchIdForHfa)
+    : 1;
   const aHasHfa = teamHasHomeField(teamA, matchIdForHfa);
   const bHasHfa = teamHasHomeField(teamB, matchIdForHfa);
 
@@ -396,7 +427,13 @@ export function computeMatchOdds(
 
   for (let a = 0; a <= MAX_GOALS; a++) {
     for (let b = 0; b <= MAX_GOALS; b++) {
-      const prob = pA[a] * pB[b];
+      let prob = pA[a] * pB[b];
+      // Dixon-Coles tau correction on the four lowest cells.
+      if (a === 0 && b === 0) prob *= 1 - lambdaA * lambdaB * DC_RHO;
+      else if (a === 0 && b === 1) prob *= 1 + lambdaA * DC_RHO;
+      else if (a === 1 && b === 0) prob *= 1 + lambdaB * DC_RHO;
+      else if (a === 1 && b === 1) prob *= 1 - DC_RHO;
+
       if (a > b) winA += prob;
       else if (a < b) winB += prob;
       else draw += prob;

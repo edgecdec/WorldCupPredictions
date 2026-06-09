@@ -4,7 +4,8 @@ import { useSearchParams } from 'next/navigation';
 import {
   Container, Typography, Box, CircularProgress, FormControl, InputLabel,
   Select, MenuItem, Paper, TextField, Chip, Card, CardContent, Stack,
-  Accordion, AccordionSummary, AccordionDetails, Tooltip,
+  Accordion, AccordionSummary, AccordionDetails, Tooltip, Popover,
+  Table, TableHead, TableBody, TableRow, TableCell, TableContainer,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useAuth } from '@/hooks/useAuth';
@@ -15,7 +16,6 @@ import type {
   BracketData, TournamentResults, GroupPrediction, KnockoutMatchup,
   UserPrediction,
 } from '@/types';
-import { KNOCKOUT_ROUNDS } from '@/types';
 
 interface GroupOption { id: string; name: string }
 
@@ -197,6 +197,36 @@ function GroupStageSection({
   );
 }
 
+/**
+ * For one group: tally per (team, position) how many users predicted that team
+ * to finish in that slot, plus an "advance" count = picked 1st OR 2nd OR (picked 3rd
+ * AND included in their third_place_picks).
+ */
+function buildGroupPickMatrix(
+  groupName: string,
+  teams: string[],
+  predictions: PredictionWithUser[],
+): Map<string, { pos: string[][]; advance: string[] }> {
+  // team -> { pos: [users-who-picked-1st, ...4th], advance: users-who-have-them-advancing }
+  const matrix = new Map<string, { pos: string[][]; advance: string[] }>();
+  for (const team of teams) {
+    matrix.set(team, { pos: [[], [], [], []], advance: [] });
+  }
+  for (const p of predictions) {
+    const gp = p.group_predictions?.find((g: GroupPrediction) => g.groupName === groupName);
+    if (!gp?.order) continue;
+    for (let i = 0; i < 4; i++) {
+      const team = gp.order[i];
+      const entry = matrix.get(team);
+      if (!entry) continue;
+      entry.pos[i].push(p.username);
+      const advances = i <= 1 || (i === 2 && (p.third_place_picks ?? []).includes(team));
+      if (advances) entry.advance.push(p.username);
+    }
+  }
+  return matrix;
+}
+
 function GroupPickCard({
   groupName, teams, predictions, actualOrder,
 }: {
@@ -205,66 +235,140 @@ function GroupPickCard({
   predictions: PredictionWithUser[];
   actualOrder?: string[];
 }) {
-  const positions = ['1st', '2nd', '3rd', '4th'];
-
-  // Build: for each position, which users picked which team
-  const positionPicks = useMemo(() => {
-    return positions.map((_, posIdx) => {
-      const teamCounts = new Map<string, string[]>();
-      for (const p of predictions) {
-        const gp = p.group_predictions?.find((g: GroupPrediction) => g.groupName === groupName);
-        const team = gp?.order?.[posIdx] ?? null;
-        if (team) {
-          const users = teamCounts.get(team) ?? [];
-          users.push(p.username);
-          teamCounts.set(team, users);
-        }
-      }
-      // Sort by count descending
-      return [...teamCounts.entries()]
-        .sort((a, b) => b[1].length - a[1].length)
-        .map(([team, users]) => ({ team, users, count: users.length }));
+  const matrix = useMemo(
+    () => buildGroupPickMatrix(groupName, teams, predictions),
+    [groupName, teams, predictions],
+  );
+  const total = predictions.length;
+  // Sort teams by descending advance %, mirroring the forecast table.
+  const sortedTeams = useMemo(() => {
+    return [...teams].sort((a, b) => {
+      const advA = matrix.get(a)?.advance.length ?? 0;
+      const advB = matrix.get(b)?.advance.length ?? 0;
+      return advB - advA;
     });
-  }, [predictions, groupName]);
+  }, [teams, matrix]);
 
   return (
     <Card variant="outlined">
       <CardContent sx={{ pb: 1, '&:last-child': { pb: 1 } }}>
         <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
           Group {groupName}
+          {actualOrder && (
+            <Typography variant="caption" component="span" color="text.secondary" sx={{ ml: 1, fontWeight: 400 }}>
+              (Actual: {actualOrder.join(' > ')})
+            </Typography>
+          )}
         </Typography>
-        {positions.map((pos, posIdx) => {
-          const actual = actualOrder?.[posIdx];
-          return (
-            <Box key={pos} sx={{ mb: 1 }}>
-              <Typography variant="caption" fontWeight="bold" color="text.secondary">
-                {pos}{actual ? ` — Actual: ${actual}` : ''}
-              </Typography>
-              <Stack spacing={0.5} sx={{ mt: 0.25 }}>
-                {positionPicks[posIdx].map(({ team, users, count }) => {
-                  const pct = Math.round((count / predictions.length) * 100);
-                  const isCorrect = actual === team;
-                  return (
-                    <PickBar
-                      key={team}
-                      team={team}
-                      users={users}
-                      count={count}
-                      total={predictions.length}
-                      pct={pct}
-                      isCorrect={actual ? isCorrect : undefined}
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ py: 0.25, px: 0.5, fontSize: '0.7rem' }}>Team</TableCell>
+                <TableCell align="center" sx={{ py: 0.25, px: 0.25, fontSize: '0.7rem' }}>1st</TableCell>
+                <TableCell align="center" sx={{ py: 0.25, px: 0.25, fontSize: '0.7rem' }}>2nd</TableCell>
+                <TableCell align="center" sx={{ py: 0.25, px: 0.25, fontSize: '0.7rem' }}>3rd</TableCell>
+                <TableCell align="center" sx={{ py: 0.25, px: 0.25, fontSize: '0.7rem' }}>4th</TableCell>
+                <TableCell align="center" sx={{ py: 0.25, px: 0.25, fontSize: '0.75rem', fontWeight: 700 }}>Adv</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {sortedTeams.map((team) => {
+                const entry = matrix.get(team);
+                if (!entry) return null;
+                const actualPos = actualOrder?.indexOf(team);
+                return (
+                  <TableRow key={team}>
+                    <TableCell sx={{ py: 0.25, px: 0.5, fontSize: '0.75rem', fontWeight: 600 }}>
+                      {team}
+                    </TableCell>
+                    {entry.pos.map((users, posIdx) => (
+                      <PickPctCell
+                        key={posIdx}
+                        users={users}
+                        total={total}
+                        label={`${team} — ${['1st','2nd','3rd','4th'][posIdx]}`}
+                        isActual={actualPos === posIdx}
+                      />
+                    ))}
+                    <PickPctCell
+                      users={entry.advance}
+                      total={total}
+                      label={`${team} — Advances`}
+                      isActual={actualPos !== undefined && actualPos <= 2}
+                      bold
                     />
-                  );
-                })}
-              </Stack>
-            </Box>
-          );
-        })}
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
       </CardContent>
     </Card>
   );
 }
 
+/**
+ * Cell showing "% of users with this pick", with a hover popover listing
+ * exactly which users.
+ */
+function PickPctCell({
+  users, total, label, isActual, bold,
+}: {
+  users: string[];
+  total: number;
+  label: string;
+  isActual?: boolean;
+  bold?: boolean;
+}) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const count = users.length;
+  const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+  const hasUsers = count > 0;
+
+  return (
+    <TableCell
+      align="center"
+      sx={{
+        py: 0.25, px: 0.25,
+        fontSize: bold ? '0.75rem' : '0.7rem',
+        fontWeight: bold ? 700 : undefined,
+        cursor: hasUsers ? 'pointer' : 'default',
+        bgcolor: isActual ? 'success.main' : undefined,
+        color: isActual ? 'success.contrastText' : (
+          bold ? (pct >= 70 ? 'success.main' : pct >= 40 ? 'warning.main' : 'error.main') : undefined
+        ),
+        '&:hover': hasUsers ? { bgcolor: isActual ? 'success.dark' : 'action.hover' } : undefined,
+      }}
+      onMouseEnter={hasUsers ? (e) => setAnchor(e.currentTarget) : undefined}
+      onMouseLeave={() => setAnchor(null)}
+    >
+      {pct}%
+      <Popover
+        open={Boolean(anchor)}
+        anchorEl={anchor}
+        onClose={() => setAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+        disableRestoreFocus
+        sx={{ pointerEvents: 'none' }}
+        slotProps={{ paper: { sx: { p: 1, maxWidth: 260 } } }}
+      >
+        <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', display: 'block', mb: 0.5, textTransform: 'uppercase', fontSize: '0.6rem' }}>
+          {label} — {count}/{total}
+        </Typography>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.4 }}>
+          {users.map((u) => (
+            <Chip key={u} label={u} size="small" sx={{ height: 18, fontSize: '0.65rem' }} />
+          ))}
+        </Box>
+      </Popover>
+    </TableCell>
+  );
+}
+
+/** Knockout matchup pick bar — kept the bar style here since it's per-match (not table). */
 function PickBar({
   team, users, count, total, pct, isCorrect,
 }: {

@@ -1,9 +1,10 @@
 'use client';
 import { useState, useMemo } from 'react';
-import { Box, Tabs, Tab, Typography } from '@mui/material';
+import { Box, Tabs, Tab, Typography, Button } from '@mui/material';
 import Matchup from './Matchup';
 import { KnockoutMatchup } from '@/types';
-import { getMatchupsByRound, ROUND_LABELS, ROUND_3RD } from '@/lib/bracketUtils';
+import { ROUND_R32, ROUND_R16, ROUND_QF, ROUND_SF, ROUND_3RD, ROUND_FINAL, ROUND_LABELS } from '@/lib/bracketUtils';
+import { getFeederMatchupIds } from '@/lib/knockoutBracket';
 
 interface MobileBracketProps {
   matchups: KnockoutMatchup[];
@@ -14,54 +15,160 @@ interface MobileBracketProps {
   countryCodeMap?: Record<string, string>;
 }
 
-/** Derive ordered round list from matchups. Normal rounds sorted ascending, then 3RD and Final at end. */
-function deriveRoundOrder(matchups: KnockoutMatchup[]): number[] {
-  const rounds = new Set(matchups.map((m) => m.round));
-  const normal = [...rounds].filter((r) => r !== ROUND_3RD).sort((a, b) => a - b);
-  // Insert 3RD before the final round if it exists
-  if (rounds.has(ROUND_3RD) && normal.length > 0) {
-    const finalRound = normal[normal.length - 1];
-    const idx = normal.indexOf(finalRound);
-    normal.splice(idx, 0, ROUND_3RD);
-  }
-  return normal;
+const TAB_LABELS = ['R32 → R16', 'R16 → QF', 'QF → SF', 'SF → Final'] as const;
+
+interface TabConfig {
+  leftRound: number;
+  rightRound: number;
+  /** Order of right-round matches; left feeders are derived from these. */
+  rightIds: string[];
+}
+
+/**
+ * Build the per-tab match layout. Mirrors the desktop split: each right-round
+ * match shows next to its 2 feeder matches (stacked) on the left.
+ *
+ * For SF → Final, the layout is special: 2 SF matches on the left, the Final
+ * AND the 3rd-place game on the right (since both are fed by SF losers/winners).
+ */
+function buildTabConfigs(): TabConfig[] {
+  // R32 → R16: 8 R16 games each fed by 2 R32 games.
+  const r16Ids = ['R16-1', 'R16-2', 'R16-3', 'R16-4', 'R16-5', 'R16-6', 'R16-7', 'R16-8'];
+  // R16 → QF
+  const qfIds = ['QF-1', 'QF-2', 'QF-3', 'QF-4'];
+  // QF → SF
+  const sfIds = ['SF-1', 'SF-2'];
+  return [
+    { leftRound: ROUND_R32, rightRound: ROUND_R16, rightIds: r16Ids },
+    { leftRound: ROUND_R16, rightRound: ROUND_QF, rightIds: qfIds },
+    { leftRound: ROUND_QF, rightRound: ROUND_SF, rightIds: sfIds },
+    // SF → Final tab handled specially — see render below.
+    { leftRound: ROUND_SF, rightRound: ROUND_FINAL, rightIds: ['FINAL', '3RD'] },
+  ];
+}
+
+/**
+ * Renders a single feeder pair: 2 left matches stacked, connector, 1 right match.
+ * For 3RD, both feeders are SF games — and we show the LOSERS as effective teams
+ * (already handled by the bracket engine's effective propagation upstream).
+ */
+function MatchupPair({
+  rightId,
+  leftIds,
+  matchups,
+  picks,
+  onPick,
+  readOnly,
+  results,
+  countryCodeMap,
+}: {
+  rightId: string;
+  leftIds: [string, string];
+  matchups: KnockoutMatchup[];
+  picks: Record<string, string>;
+  onPick?: (matchupId: string, team: string) => void;
+  readOnly?: boolean;
+  results?: Record<string, string>;
+  countryCodeMap?: Record<string, string>;
+}) {
+  const matchupMap = useMemo(() => new Map(matchups.map((m) => [m.id, m])), [matchups]);
+  const left0 = matchupMap.get(leftIds[0]);
+  const left1 = matchupMap.get(leftIds[1]);
+  const right = matchupMap.get(rightId);
+
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'stretch', mb: 1.5 }}>
+      {/* Left column: 2 feeder matches stacked */}
+      <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1, minWidth: 0, gap: 0.5 }}>
+        {left0 ? (
+          <Matchup matchup={left0} userPick={picks[left0.id]} onPick={onPick} readOnly={readOnly} result={results?.[left0.id]} countryCodeMap={countryCodeMap} />
+        ) : <Box sx={{ flex: 1 }} />}
+        {left1 ? (
+          <Matchup matchup={left1} userPick={picks[left1.id]} onPick={onPick} readOnly={readOnly} result={results?.[left1.id]} countryCodeMap={countryCodeMap} />
+        ) : <Box sx={{ flex: 1 }} />}
+      </Box>
+
+      {/* Connector */}
+      <Box sx={{ width: 12, flexShrink: 0, position: 'relative' }}>
+        <Box sx={{
+          position: 'absolute', top: '25%', bottom: '25%', left: 0, right: 0,
+          borderTop: 1, borderBottom: 1, borderRight: 1, borderColor: 'divider',
+        }} />
+      </Box>
+
+      {/* Right: target match centered */}
+      <Box sx={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
+        {right ? (
+          <Box sx={{ width: '100%' }}>
+            <Matchup matchup={right} userPick={picks[right.id]} onPick={onPick} readOnly={readOnly} result={results?.[right.id]} countryCodeMap={countryCodeMap} isChampionPick={right.id === 'FINAL'} />
+          </Box>
+        ) : null}
+      </Box>
+    </Box>
+  );
 }
 
 export default function MobileBracket({ matchups, picks, onPick, readOnly, results, countryCodeMap }: MobileBracketProps) {
   const [tab, setTab] = useState(0);
-  const byRound = getMatchupsByRound(matchups);
-  const roundOrder = useMemo(() => deriveRoundOrder(matchups), [matchups]);
-  const currentRound = roundOrder[tab] ?? 0;
-  const roundMatchups = byRound.get(currentRound) ?? [];
-  const finalRound = roundOrder.length > 0 ? roundOrder[roundOrder.length - 1] : -1;
+  const tabs = useMemo(buildTabConfigs, []);
+  const cfg = tabs[tab];
+
+  const handlePrev = () => setTab((t) => Math.max(0, t - 1));
+  const handleNext = () => setTab((t) => Math.min(tabs.length - 1, t + 1));
 
   return (
     <Box>
       <Tabs
         value={tab}
         onChange={(_, v) => setTab(v)}
-        variant="scrollable"
-        scrollButtons="auto"
-        sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
+        variant="fullWidth"
+        sx={{ mb: 2 }}
       >
-        {roundOrder.map((r) => (
-          <Tab key={r} label={ROUND_LABELS[r] ?? `Round ${r}`} />
+        {TAB_LABELS.map((label) => (
+          <Tab key={label} label={label} sx={{ fontSize: '0.7rem', minHeight: 40, px: 0.5 }} />
         ))}
       </Tabs>
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-        {roundMatchups.length === 0 ? (
-          <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-            No matchups in this round yet.
-          </Typography>
-        ) : (
-          roundMatchups.map((m) => (
-            <Box key={m.id}>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mb: 0.25, display: 'block' }}>
-                {m.id}
-              </Typography>
-              <Matchup matchup={m} userPick={picks[m.id]} onPick={onPick} readOnly={readOnly} result={results?.[m.id]} countryCodeMap={countryCodeMap} isChampionPick={currentRound === finalRound && m.id !== '3RD'} />
-            </Box>
-          ))
+
+      <Box sx={{ display: 'flex', gap: 0, mb: 1 }}>
+        <Typography variant="caption" sx={{ flex: 1, fontWeight: 700, textAlign: 'center', color: 'text.secondary', fontSize: '0.65rem' }}>
+          {ROUND_LABELS[cfg.leftRound]}
+        </Typography>
+        <Box sx={{ width: 12 }} />
+        <Typography variant="caption" sx={{ flex: 1, fontWeight: 700, textAlign: 'center', color: 'text.secondary', fontSize: '0.65rem' }}>
+          {ROUND_LABELS[cfg.rightRound]}
+        </Typography>
+      </Box>
+
+      <Box>
+        {cfg.rightIds.map((rid) => {
+          const feeders = getFeederMatchupIds(rid);
+          if (!feeders) return null;
+          return (
+            <MatchupPair
+              key={rid}
+              rightId={rid}
+              leftIds={feeders}
+              matchups={matchups}
+              picks={picks}
+              onPick={onPick}
+              readOnly={readOnly}
+              results={results}
+              countryCodeMap={countryCodeMap}
+            />
+          );
+        })}
+      </Box>
+
+      <Box sx={{ display: 'flex', justifyContent: tab === 0 ? 'flex-end' : tab === tabs.length - 1 ? 'flex-start' : 'space-between', mt: 2, mb: 1 }}>
+        {tab > 0 && (
+          <Button variant="outlined" size="small" onClick={handlePrev}>
+            ← {TAB_LABELS[tab - 1]}
+          </Button>
+        )}
+        {tab < tabs.length - 1 && (
+          <Button variant="outlined" size="small" onClick={handleNext}>
+            {TAB_LABELS[tab + 1]} →
+          </Button>
         )}
       </Box>
     </Box>

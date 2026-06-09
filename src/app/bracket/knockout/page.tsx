@@ -8,6 +8,7 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import { Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from '@mui/material';
 import Link from 'next/link';
 import KnockoutBracket from '@/components/bracket/KnockoutBracket';
+import MediumBracket from '@/components/bracket/MediumBracket';
 import MobileBracket from '@/components/bracket/MobileBracket';
 import CountdownTimer from '@/components/common/CountdownTimer';
 import { useAuth } from '@/hooks/useAuth';
@@ -120,7 +121,10 @@ export default function KnockoutPage() {
   );
 
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  // Three breakpoints: <768 = 2-round mobile tabs; 768-1799 = full horizontal
+  // medium layout; >=1800 = traditional split-with-Final-in-center.
+  const isMobile = useMediaQuery('(max-width:767px)');
+  const isMedium = useMediaQuery('(min-width:768px) and (max-width:1799px)');
 
   const isLocked = Boolean(
     tournament?.lock_time_knockout && new Date() > new Date(tournament.lock_time_knockout),
@@ -286,6 +290,15 @@ export default function KnockoutPage() {
       <Box ref={printRef} sx={!hasKnockoutBracket ? { opacity: 0.4, pointerEvents: 'none' } : undefined}>
         {isMobile ? (
           <MobileBracket
+            matchups={effectiveMatchups}
+            picks={picks}
+            onPick={disabled || !hasKnockoutBracket ? undefined : handlePick}
+            readOnly={disabled || !hasKnockoutBracket}
+            results={results?.knockout}
+            countryCodeMap={countryCodeMap}
+          />
+        ) : isMedium ? (
+          <MediumBracket
             matchups={effectiveMatchups}
             picks={picks}
             onPick={disabled || !hasKnockoutBracket ? undefined : handlePick}

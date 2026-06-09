@@ -1,6 +1,6 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { Box, Typography, Popover, Button, Tabs, Tab, useMediaQuery, useTheme } from '@mui/material';
+import { Box, Typography, Popover, Button, Tabs, Tab, useMediaQuery } from '@mui/material';
 import type { BracketSlotResult } from '@/hooks/useTournamentSim';
 import TeamFlag from '@/components/common/TeamFlag';
 import { getFeederMatchupIds } from '@/lib/knockoutBracket';
@@ -158,15 +158,6 @@ function ConnectorColumn({ pairCount, direction }: { pairCount: number; directio
   );
 }
 
-const ALL_ROUNDS = [
-  { key: 'R32', label: 'Round of 32', count: 16 },
-  { key: 'R16', label: 'Round of 16', count: 8 },
-  { key: 'QF', label: 'Quarterfinals', count: 4 },
-  { key: 'SF', label: 'Semifinals', count: 2 },
-  { key: 'FINAL', label: '🏆 Final', count: 1 },
-  { key: '3RD', label: '🥉 3rd Place', count: 1 },
-];
-
 function ChampionBanner({ slotMap, numSims, countryCodeMap }: {
   slotMap: Map<string, BracketSlotResult>;
   numSims: number;
@@ -249,31 +240,172 @@ function ChampionBanner({ slotMap, numSims, countryCodeMap }: {
   );
 }
 
+const MOBILE_TAB_LABELS = ['R32 → R16', 'R16 → QF', 'QF → SF', 'SF → Final'] as const;
+const MOBILE_TAB_RIGHTS: string[][] = [
+  ['R16-1', 'R16-2', 'R16-3', 'R16-4', 'R16-5', 'R16-6', 'R16-7', 'R16-8'],
+  ['QF-1', 'QF-2', 'QF-3', 'QF-4'],
+  ['SF-1', 'SF-2'],
+  ['FINAL', '3RD'],
+];
+
+function MobileMatchupPair({
+  rightId, leftIds, slotMap, numSims, countryCodeMap,
+}: {
+  rightId: string;
+  leftIds: [string, string];
+  slotMap: Map<string, BracketSlotResult>;
+  numSims: number;
+  countryCodeMap: Record<string, string>;
+}) {
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'stretch', mb: 1.5 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1, minWidth: 0, gap: 0.5 }}>
+        <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+          <MatchupCell matchId={leftIds[0]} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
+        </Box>
+        <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+          <MatchupCell matchId={leftIds[1]} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
+        </Box>
+      </Box>
+
+      <Box sx={{ width: 12, flexShrink: 0, position: 'relative' }}>
+        <Box sx={{
+          position: 'absolute', top: '25%', bottom: '25%', left: 0, right: 0,
+          borderTop: 1, borderBottom: 1, borderRight: 1, borderColor: 'divider',
+        }} />
+      </Box>
+
+      <Box sx={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
+        <Box sx={{ width: '100%', border: 1, borderColor: rightId === 'FINAL' ? 'warning.main' : 'divider', borderRadius: 1, overflow: 'hidden' }}>
+          <MatchupCell matchId={rightId} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
+        </Box>
+      </Box>
+    </Box>
+  );
+}
+
 function MobileForecastBracket({ slotMap, numSims, countryCodeMap }: { slotMap: Map<string, BracketSlotResult>; numSims: number; countryCodeMap: Record<string, string> }) {
   const [tab, setTab] = useState(0);
-  const round = ALL_ROUNDS[tab];
-  const matchIds = round.count === 1 ? [round.key] : Array.from({ length: round.count }, (_, i) => `${round.key}-${i + 1}`);
+  const cfg = MOBILE_TAB_RIGHTS[tab];
+  const labelLeft = ['Round of 32', 'Round of 16', 'Quarterfinals', 'Semifinals'][tab];
+  const labelRight = ['Round of 16', 'Quarterfinals', 'Semifinals', 'Final / 3rd'][tab];
 
   return (
     <Box>
       <ChampionBanner slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" sx={{ mb: 2 }}>
-        {ALL_ROUNDS.map((r) => <Tab key={r.key} label={r.label} sx={{ fontSize: '0.7rem', minWidth: 60, px: 1 }} />)}
-      </Tabs>
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-        {matchIds.map((id) => (
-          <Box key={id} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
-            <MatchupCell matchId={id} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
-          </Box>
+      <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="fullWidth" sx={{ mb: 2 }}>
+        {MOBILE_TAB_LABELS.map((label) => (
+          <Tab key={label} label={label} sx={{ fontSize: '0.7rem', minHeight: 40, px: 0.5 }} />
         ))}
+      </Tabs>
+
+      <Box sx={{ display: 'flex', gap: 0, mb: 1 }}>
+        <Typography variant="caption" sx={{ flex: 1, fontWeight: 700, textAlign: 'center', color: 'text.secondary', fontSize: '0.65rem' }}>
+          {labelLeft}
+        </Typography>
+        <Box sx={{ width: 12 }} />
+        <Typography variant="caption" sx={{ flex: 1, fontWeight: 700, textAlign: 'center', color: 'text.secondary', fontSize: '0.65rem' }}>
+          {labelRight}
+        </Typography>
+      </Box>
+
+      <Box>
+        {cfg.map((rid) => {
+          const feeders = getFeederMatchupIds(rid);
+          if (!feeders) return null;
+          return (
+            <MobileMatchupPair
+              key={rid}
+              rightId={rid}
+              leftIds={feeders}
+              slotMap={slotMap}
+              numSims={numSims}
+              countryCodeMap={countryCodeMap}
+            />
+          );
+        })}
+      </Box>
+
+      <Box sx={{ display: 'flex', justifyContent: tab === 0 ? 'flex-end' : tab === MOBILE_TAB_LABELS.length - 1 ? 'flex-start' : 'space-between', mt: 2, mb: 1 }}>
+        {tab > 0 && (
+          <Button variant="outlined" size="small" onClick={() => setTab(tab - 1)}>
+            ← {MOBILE_TAB_LABELS[tab - 1]}
+          </Button>
+        )}
+        {tab < MOBILE_TAB_LABELS.length - 1 && (
+          <Button variant="outlined" size="small" onClick={() => setTab(tab + 1)}>
+            {MOBILE_TAB_LABELS[tab + 1]} →
+          </Button>
+        )}
+      </Box>
+    </Box>
+  );
+}
+
+/** Medium-screen forecast: full bracket left-to-right, R32 → Final → 3rd. */
+function MediumForecastBracket({ slotMap, numSims, countryCodeMap }: { slotMap: Map<string, BracketSlotResult>; numSims: number; countryCodeMap: Record<string, string> }) {
+  // Same FIFA-correct ordering as the large layout, but flattened L→R.
+  const left = walkFeederIds('SF-1', 3);
+  const right = walkFeederIds('SF-2', 3);
+  const r32 = [...left[3], ...right[3]];
+  const r16 = [...left[2], ...right[2]];
+  const qf = [...left[1], ...right[1]];
+  const sf = [...left[0], ...right[0]];
+
+  return (
+    <Box>
+      <ChampionBanner slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
+      <Box sx={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', pb: 2 }}>
+        {/* Round labels row */}
+        <Box sx={{ display: 'flex', alignItems: 'flex-end', minWidth: 'fit-content', mb: 0.5 }}>
+          {[
+            { label: 'Round of 32' }, { label: 'Round of 16' }, { label: 'Quarterfinals' }, { label: 'Semifinals' },
+            { label: '🏆 Final', warning: true }, { label: '🥉 3rd Place' },
+          ].map((l, i, arr) => (
+            <Box key={i} sx={{ display: 'contents' }}>
+              <Box sx={{ minWidth: 130, flexShrink: 0, textAlign: 'center' }}>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: l.warning ? 'warning.main' : 'text.secondary', fontSize: '0.6rem' }}>
+                  {l.label}
+                </Typography>
+              </Box>
+              {i < arr.length - 1 && <Box sx={{ width: 12, flexShrink: 0 }} />}
+            </Box>
+          ))}
+        </Box>
+
+        {/* Bracket flow */}
+        <Box sx={{ display: 'flex', alignItems: 'stretch', minWidth: 'fit-content', height: 600 }}>
+          <RoundColumn matchIds={r32} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} isFirstRound />
+          <ConnectorColumn pairCount={r16.length} direction="left" />
+          <RoundColumn matchIds={r16} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
+          <ConnectorColumn pairCount={qf.length} direction="left" />
+          <RoundColumn matchIds={qf} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
+          <ConnectorColumn pairCount={sf.length} direction="left" />
+          <RoundColumn matchIds={sf} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
+          <ConnectorColumn pairCount={1} direction="left" />
+          {/* Final + 3rd — render Final highlighted, 3rd as a separate column. */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minWidth: 130, flexShrink: 0 }}>
+            <Box sx={{ border: 2, borderColor: 'warning.main', borderRadius: 1, p: 0.25, width: '100%' }}>
+              <MatchupCell matchId="FINAL" slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
+            </Box>
+          </Box>
+          <Box sx={{ width: 12, flexShrink: 0 }} />
+          <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minWidth: 130, flexShrink: 0, opacity: 0.85 }}>
+            <Box sx={{ width: '100%' }}>
+              <MatchupCell matchId="3RD" slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
+            </Box>
+          </Box>
+        </Box>
       </Box>
     </Box>
   );
 }
 
 export default function ForecastBracket({ bracketSlots, numSims, countryCodeMap }: ForecastBracketProps) {
-  const theme = useTheme();
-  const isSmall = useMediaQuery(theme.breakpoints.down('lg'));
+  // Three breakpoints: <768 = 2-round mobile tabs; 768-1799 = full horizontal
+  // medium layout; >=1800 = traditional split-with-Final-in-center.
+  const isMobile = useMediaQuery('(max-width:767px)');
+  const isMedium = useMediaQuery('(min-width:768px) and (max-width:1799px)');
 
   const slotMap = useMemo(() => {
     const map = new Map<string, BracketSlotResult>();
@@ -281,8 +413,11 @@ export default function ForecastBracket({ bracketSlots, numSims, countryCodeMap 
     return map;
   }, [bracketSlots]);
 
-  if (isSmall) {
+  if (isMobile) {
     return <MobileForecastBracket slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />;
+  }
+  if (isMedium) {
+    return <MediumForecastBracket slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />;
   }
 
   // Walk the FIFA feeder tree from each SF down through R32 so each R32 pair

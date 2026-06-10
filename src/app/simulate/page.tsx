@@ -6,6 +6,8 @@ import {
   Tabs, Tab, IconButton, Tooltip, Popover,
 } from '@mui/material';
 import ScoreHistogram from '@/components/common/ScoreHistogram';
+import UserLink from '@/components/common/UserLink';
+import BracketLink from '@/components/common/BracketLink';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
@@ -458,25 +460,17 @@ function ExpectedStandingsTable({ playerScores, currentUsername, leadOnly }: {
             const [username, bracketName] = p.key.split('|');
             const isCurrentUser = username === currentUsername;
             const rank = rankByKey.get(p.key);
-            const bracketHref = isCurrentUser ? '/bracket' : `/bracket/${encodeURIComponent(username)}`;
             return (
               <TableRow key={p.key} sx={isCurrentUser ? { bgcolor: 'action.selected' } : undefined}>
                 <TableCell sx={{ py: 0.5, px: 1 }}>{rank}</TableCell>
-                <TableCell sx={{ py: 0.5, px: 1 }}>
-                  <Typography
-                    variant="body2"
-                    component={Link}
-                    href={bracketHref}
-                    sx={{
-                      fontWeight: isCurrentUser ? 700 : 400,
-                      color: 'primary.main',
-                      textDecoration: 'none',
-                      '&:hover': { textDecoration: 'underline' },
-                    }}
-                  >
-                    {username}{bracketName ? ` — ${bracketName}` : ''}
-                    {isCurrentUser && <Chip label="You" size="small" sx={{ ml: 0.5, height: 18, fontSize: '0.65rem' }} />}
-                  </Typography>
+                <TableCell sx={{ py: 0.5, px: 1, fontSize: '0.875rem' }}>
+                  <UserLink username={username} isCurrentUser={isCurrentUser} bold={isCurrentUser} />
+                  {bracketName && (
+                    <>
+                      {' — '}
+                      <BracketLink username={username} bracketName={bracketName} />
+                    </>
+                  )}
                 </TableCell>
                 <AvgScoreCell
                   avgScore={p.avgScore}

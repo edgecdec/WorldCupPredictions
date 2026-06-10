@@ -14,6 +14,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useSelectedGroup } from '@/hooks/useSelectedGroup';
 import AuthForm from '@/components/auth/AuthForm';
 import PhaseGate from '@/components/common/PhaseGate';
+import UserLink from '@/components/common/UserLink';
+import BracketLink from '@/components/common/BracketLink';
 import type { StatsResponse } from '@/app/api/stats/route';
 
 interface GroupOption { id: string; name: string }
@@ -192,10 +194,11 @@ function ContrarianCard({ contrarian, currentUser }: { contrarian: StatsResponse
                 {sorted.map((c) => (
                   <TableRow key={`${c.username}-${c.bracket_name}`} sx={c.username === currentUser ? { bgcolor: 'action.hover' } : undefined}>
                     <TableCell>
-                      {c.username}
-                      {c.username === currentUser && <Chip label="You" size="small" sx={{ ml: 1 }} color="primary" variant="outlined" />}
+                      <UserLink username={c.username} isCurrentUser={c.username === currentUser} />
                     </TableCell>
-                    <TableCell>{c.bracket_name}</TableCell>
+                    <TableCell>
+                      <BracketLink username={c.username} bracketName={c.bracket_name} />
+                    </TableCell>
                     <TableCell align="right" sx={{ fontWeight: 'bold' }}>{c.rarityScore}</TableCell>
                   </TableRow>
                 ))}
@@ -245,10 +248,11 @@ function AccuracyCard({ accuracy, currentUser }: { accuracy: StatsResponse['accu
                 {sorted.map((a) => (
                   <TableRow key={`${a.username}-${a.bracket_name}`} sx={a.username === currentUser ? { bgcolor: 'action.hover' } : undefined}>
                     <TableCell>
-                      {a.username}
-                      {a.username === currentUser && <Chip label="You" size="small" sx={{ ml: 1 }} color="primary" variant="outlined" />}
+                      <UserLink username={a.username} isCurrentUser={a.username === currentUser} />
                     </TableCell>
-                    <TableCell>{a.bracket_name}</TableCell>
+                    <TableCell>
+                      <BracketLink username={a.username} bracketName={a.bracket_name} />
+                    </TableCell>
                     <TableCell align="right">{a.correctGroups}/{a.totalGroups}</TableCell>
                     <TableCell align="right">{a.correctKnockout}/{a.totalKnockout}</TableCell>
                     <TableCell align="right" sx={{ fontWeight: 'bold' }}>{a.accuracyPct}%</TableCell>
@@ -309,10 +313,11 @@ function ChalkCard({ chalkScores, currentUser }: { chalkScores: StatsResponse['c
                   return (
                     <TableRow key={`${c.username}-${c.bracket_name}`} sx={c.username === currentUser ? { bgcolor: 'action.hover' } : undefined}>
                       <TableCell>
-                        {c.username}
-                        {c.username === currentUser && <Chip label="You" size="small" sx={{ ml: 1 }} color="primary" variant="outlined" />}
+                        <UserLink username={c.username} isCurrentUser={c.username === currentUser} />
                       </TableCell>
-                      <TableCell>{c.bracket_name}</TableCell>
+                      <TableCell>
+                        <BracketLink username={c.username} bracketName={c.bracket_name} />
+                      </TableCell>
                       <TableCell align="right" sx={{ fontWeight: 'bold' }}>{c.deviation}</TableCell>
                       <TableCell align="right">
                         <Chip label={label} size="small" color={color} variant="outlined" />

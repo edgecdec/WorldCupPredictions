@@ -1,6 +1,7 @@
 'use client';
 import { Suspense, useEffect, useState, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import {
   Container, Typography, Box, CircularProgress, FormControl, InputLabel,
   Select, MenuItem, Paper, TextField, Chip, Card, CardContent, Stack,
@@ -358,9 +359,17 @@ function PickPctCell({
         <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', display: 'block', mb: 0.5, textTransform: 'uppercase', fontSize: '0.6rem' }}>
           {label} — {count}/{total}
         </Typography>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.4 }}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.4, pointerEvents: 'auto' }}>
           {users.map((u) => (
-            <Chip key={u} label={u} size="small" sx={{ height: 18, fontSize: '0.65rem' }} />
+            <Chip
+              key={u}
+              label={u}
+              size="small"
+              clickable
+              component={Link}
+              href={`/profile/${encodeURIComponent(u)}`}
+              sx={{ height: 18, fontSize: '0.65rem', textDecoration: 'none' }}
+            />
           ))}
         </Box>
       </Popover>
@@ -401,8 +410,16 @@ function PickBar({
         <Chip label={`${count} (${pct}%)`} size="small" sx={{ height: 20, fontSize: '0.7rem' }} />
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
           {users.map((u) => (
-            <Tooltip key={u} title={u}>
-              <Chip label={u} size="small" variant="outlined" sx={{ height: 18, fontSize: '0.65rem' }} />
+            <Tooltip key={u} title={`Go to ${u}'s profile`}>
+              <Chip
+                label={u}
+                size="small"
+                variant="outlined"
+                clickable
+                component={Link}
+                href={`/profile/${encodeURIComponent(u)}`}
+                sx={{ height: 18, fontSize: '0.65rem', textDecoration: 'none' }}
+              />
             </Tooltip>
           ))}
         </Box>

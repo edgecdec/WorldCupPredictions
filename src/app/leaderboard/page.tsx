@@ -16,6 +16,8 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import { useAuth } from '@/hooks/useAuth';
 import { useSelectedGroup } from '@/hooks/useSelectedGroup';
 import Link from 'next/link';
+import UserLink from '@/components/common/UserLink';
+import BracketLink from '@/components/common/BracketLink';
 import AuthForm from '@/components/auth/AuthForm';
 import ScoringBreakdownDialog from '@/components/common/ScoringBreakdownDialog';
 import GroupChat from '@/components/common/GroupChat';
@@ -279,16 +281,11 @@ function CompletionTable({ entries, currentUsername }: { entries: RankedEntry[];
                 sx={isCurrentUser ? { bgcolor: 'action.hover' } : undefined}
               >
                 <TableCell>
-                  <Box
-                    component={Link}
-                    href={`/profile/${encodeURIComponent(entry.username)}`}
-                    sx={{ color: 'inherit', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
-                  >
-                    {entry.username}
-                  </Box>
-                  {isCurrentUser && <Chip label="You" size="small" sx={{ ml: 1 }} color="primary" variant="outlined" />}
+                  <UserLink username={entry.username} isCurrentUser={isCurrentUser} />
                 </TableCell>
-                <TableCell>{entry.bracket_name}</TableCell>
+                <TableCell>
+                  <BracketLink username={entry.username} bracketName={entry.bracket_name} />
+                </TableCell>
                 <TableCell>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <CompletionIcon filled={c.groupsFilled} total={TOTAL_GROUPS} />
@@ -376,14 +373,7 @@ function ScoreTable({ entries, currentUsername, sortKey, sortDir, onSort, onBrea
                   </Box>
                 </TableCell>
                 <TableCell>
-                  <Box
-                    component={Link}
-                    href={`/profile/${encodeURIComponent(entry.username)}`}
-                    sx={{ color: 'inherit', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
-                  >
-                    {entry.username}
-                  </Box>
-                  {isCurrentUser && <Chip label="You" size="small" sx={{ ml: 1 }} color="primary" variant="outlined" />}
+                  <UserLink username={entry.username} isCurrentUser={isCurrentUser} />
                   {entry.eliminated && (
                     <Tooltip title="Eliminated — max possible score is below the leader"><span style={{ marginLeft: 4 }}>☠️</span></Tooltip>
                   )}
@@ -400,7 +390,9 @@ function ScoreTable({ entries, currentUsername, sortKey, sortDir, onSort, onBrea
                     <Tooltip title={`${entry.contrarianPicks} contrarian pick${entry.contrarianPicks === 1 ? '' : 's'} that hit — predicted by less than 10% of the group`}><span style={{ marginLeft: 4 }}>😱{entry.contrarianPicks}</span></Tooltip>
                   )}
                 </TableCell>
-                <TableCell>{entry.bracket_name}</TableCell>
+                <TableCell>
+                  <BracketLink username={entry.username} bracketName={entry.bracket_name} />
+                </TableCell>
                 <TableCell
                   align="right"
                   sx={{ cursor: 'pointer', '&:hover': { color: 'primary.main' } }}

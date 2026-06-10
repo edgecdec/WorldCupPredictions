@@ -980,10 +980,9 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
     return { groupResults: groupResultsOut, bracketSlots, championProbs, advanceProbs, playerScores };
   }
 
-  // Sim-count checkpoints at which to emit partial results. Page can show
-  // a usable forecast at 1k (very fast) while the rest streams in.
-  const PARTIAL_CHECKPOINTS = [1000, 2000, 5000].filter((n) => n < numSims);
-  const partialSet = new Set(PARTIAL_CHECKPOINTS);
+  // Sim-count checkpoints at which to emit partial results. Every 1000 sims
+  // the page gets a refined snapshot (1k, 2k, 3k, ..., 9k); 10k is the final.
+  const PARTIAL_STEP = 1000;
 
   // If final group standings are provided (group stage complete), use them as-is
   const groupStageLocked = finalGroupStandings && Object.keys(finalGroupStandings).length === Object.keys(groups).length;
@@ -992,7 +991,7 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
     if (sim % PROGRESS_INTERVAL === 0) {
       ctx.postMessage({ type: 'progress', progress: sim } as SimResponse);
     }
-    if (sim > 0 && partialSet.has(sim)) {
+    if (sim > 0 && sim < numSims && sim % PARTIAL_STEP === 0) {
       ctx.postMessage({
         type: 'partial',
         simsCompleted: sim,

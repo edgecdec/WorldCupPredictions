@@ -238,13 +238,20 @@ export default function GroupsPage() {
             const canEdit = g.created_by === user.id || (isEveryone && user.is_admin);
             return (
             <Paper key={g.id} sx={{ p: 2 }}>
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  {isEveryone && <PublicIcon color="primary" />}
-                  <Box>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Box sx={{
+                display: "flex",
+                flexDirection: { xs: "column", sm: "row" },
+                justifyContent: "space-between",
+                alignItems: { xs: "stretch", sm: "center" },
+                gap: 1.5,
+              }}>
+                {/* Header: name + scoring chip + meta */}
+                <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1, minWidth: 0, flex: 1 }}>
+                  {isEveryone && <PublicIcon color="primary" sx={{ mt: 0.25 }} />}
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
                       <Typography variant="h6" component="a" href={`/leaderboard?group=${g.id}`}
-                        sx={{ textDecoration: "none", color: "text.primary", "&:hover": { color: "primary.main" } }}>
+                        sx={{ textDecoration: "none", color: "text.primary", "&:hover": { color: "primary.main" }, wordBreak: "break-word" }}>
                         {g.name}
                       </Typography>
                       <Tooltip title={scoringSummary(g.scoring_settings)}>
@@ -256,7 +263,15 @@ export default function GroupsPage() {
                     </Typography>
                   </Box>
                 </Box>
-                <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+
+                {/* Actions: wraps to next line on small screens */}
+                <Box sx={{
+                  display: "flex",
+                  gap: 1,
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  justifyContent: { xs: "flex-start", sm: "flex-end" },
+                }}>
                   {canEdit && (
                     <>
                       {!isEveryone && (
@@ -281,12 +296,12 @@ export default function GroupsPage() {
                     </Tooltip>
                   )}
                   {!isEveryone && (
-                    <>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                       <Chip label={g.invite_code} size="small" variant="outlined" />
                       <IconButton size="small" onClick={() => copyInviteLink(g.invite_code)} title="Copy invite link">
                         <ContentCopyIcon fontSize="small" />
                       </IconButton>
-                    </>
+                    </Box>
                   )}
                   <Button size="small" variant="outlined" href={`/leaderboard?group=${g.id}`}>
                     Leaderboard

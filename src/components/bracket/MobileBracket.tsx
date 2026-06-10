@@ -25,19 +25,42 @@ interface TabConfig {
 }
 
 /**
+ * Walk the FIFA feeder tree from SF down so the mobile order matches the
+ * desktop's top-to-bottom layout. Returns matches in [SF-1 subtree, SF-2 subtree]
+ * order.
+ */
+function walkFromSf(depth: number): string[] {
+  const collect = (root: string, d: number): string[] => {
+    let layers: string[][] = [[root]];
+    for (let i = 0; i < d; i++) {
+      const next: string[] = [];
+      for (const id of layers[layers.length - 1]) {
+        const f = getFeederMatchupIds(id);
+        if (f) next.push(...f);
+      }
+      layers.push(next);
+    }
+    return layers[layers.length - 1];
+  };
+  return [...collect('SF-1', depth), ...collect('SF-2', depth)];
+}
+
+/**
  * Build the per-tab match layout. Mirrors the desktop split: each right-round
- * match shows next to its 2 feeder matches (stacked) on the left.
+ * match shows next to its 2 feeder matches (stacked) on the left. The right-side
+ * round IDs use the FIFA-walk order from SF down so mobile reads top-to-bottom
+ * the same way the desktop does.
  *
  * For SF → Final, the layout is special: 2 SF matches on the left, the Final
  * AND the 3rd-place game on the right (since both are fed by SF losers/winners).
  */
 function buildTabConfigs(): TabConfig[] {
-  // R32 → R16: 8 R16 games each fed by 2 R32 games.
-  const r16Ids = ['R16-1', 'R16-2', 'R16-3', 'R16-4', 'R16-5', 'R16-6', 'R16-7', 'R16-8'];
-  // R16 → QF
-  const qfIds = ['QF-1', 'QF-2', 'QF-3', 'QF-4'];
-  // QF → SF
-  const sfIds = ['SF-1', 'SF-2'];
+  // R16 in FIFA-walk order: [R16-1, R16-2, R16-5, R16-6, R16-3, R16-4, R16-7, R16-8]
+  const r16Ids = walkFromSf(2);
+  // QF in FIFA-walk order: [QF-1, QF-2, QF-3, QF-4]
+  const qfIds = walkFromSf(1);
+  // SF in FIFA-walk order: [SF-1, SF-2]
+  const sfIds = walkFromSf(0);
   return [
     { leftRound: ROUND_R32, rightRound: ROUND_R16, rightIds: r16Ids },
     { leftRound: ROUND_R16, rightRound: ROUND_QF, rightIds: qfIds },

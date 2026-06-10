@@ -131,7 +131,18 @@ function ConnectorColumn({ pairCount, direction }: { pairCount: number; directio
 
 function RoundLabel({ label }: { label: string }) {
   return (
-    <Typography variant="caption" sx={{ textAlign: 'center', fontWeight: 700, color: 'text.secondary', mb: 0.5 }}>
+    <Typography
+      variant="caption"
+      component="div"
+      sx={{
+        textAlign: 'center',
+        fontWeight: 700,
+        color: 'text.secondary',
+        mb: 0.5,
+        width: '100%',
+        minWidth: 160,
+      }}
+    >
       {label}
     </Typography>
   );

@@ -108,42 +108,72 @@ export default function MediumBracket({ matchups, picks, onPick, readOnly, resul
   const finalIds = ['FINAL'];
   const thirdIds = ['3RD'];
 
+  // Stack the labels and bracket flow as siblings so a single shared layout
+  // keeps them aligned. We render each round's label + matchups in one column.
+  const cols: Array<{ key: string; label: string; ids: string[]; isConnector?: boolean; isFinalCol?: boolean; pairCount?: number; direction?: 'left' | 'right' }> = [
+    { key: 'r32', label: ROUND_LABELS[ROUND_R32], ids: layers.r32 },
+    { key: 'conn-r32-r16', label: '', ids: [], isConnector: true, pairCount: layers.r16.length, direction: 'left' },
+    { key: 'r16', label: ROUND_LABELS[ROUND_R16], ids: layers.r16 },
+    { key: 'conn-r16-qf', label: '', ids: [], isConnector: true, pairCount: layers.qf.length, direction: 'left' },
+    { key: 'qf', label: ROUND_LABELS[ROUND_QF], ids: layers.qf },
+    { key: 'conn-qf-sf', label: '', ids: [], isConnector: true, pairCount: layers.sf.length, direction: 'left' },
+    { key: 'sf', label: ROUND_LABELS[ROUND_SF], ids: layers.sf },
+    { key: 'conn-sf-final', label: '', ids: [], isConnector: true, pairCount: 1, direction: 'left' },
+    { key: 'final', label: '🏆 Final', ids: finalIds, isFinalCol: true },
+    { key: 'gap-final-3rd', label: '', ids: [], isConnector: true, pairCount: 0 },
+    { key: 'third', label: '🥉 3rd Place', ids: thirdIds },
+  ];
+
   return (
     <Box sx={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', pb: 2 }}>
-      {/* Round labels row */}
-      <Box sx={{ display: 'flex', alignItems: 'flex-end', minWidth: 'fit-content', mb: 0.5 }}>
-        {[
-          { round: ROUND_R32, count: layers.r32.length },
-          { round: ROUND_R16, count: layers.r16.length },
-          { round: ROUND_QF, count: layers.qf.length },
-          { round: ROUND_SF, count: layers.sf.length },
-          { round: ROUND_FINAL, count: 1 },
-          { round: ROUND_3RD, count: 1 },
-        ].map(({ round }, i, arr) => (
-          <Box key={round} sx={{ display: 'contents' }}>
-            <Box sx={{ minWidth: 160, flexShrink: 0, textAlign: 'center' }}>
-              <Typography variant="caption" sx={{ fontWeight: 700, color: round === ROUND_FINAL ? 'warning.main' : 'text.secondary', fontSize: '0.65rem' }}>
-                {round === ROUND_FINAL ? '🏆 Final' : round === ROUND_3RD ? '🥉 3rd Place' : ROUND_LABELS[round]}
+      <Box sx={{ display: 'flex', alignItems: 'stretch', minWidth: 'fit-content' }}>
+        {cols.map((c) => {
+          if (c.isConnector) {
+            // Connector column: empty header space + connector content stacked vertically.
+            return (
+              <Box key={c.key} sx={{ display: 'flex', flexDirection: 'column', flexShrink: 0, width: 14 }}>
+                {/* Spacer matching the label row height */}
+                <Box sx={{ visibility: 'hidden', mb: 0.5 }}>
+                  <Typography variant="caption" sx={{ fontSize: '0.65rem' }}>·</Typography>
+                </Box>
+                {(c.pairCount ?? 0) > 0 ? (
+                  <Box sx={{ flex: 1, minHeight: 480 }}>
+                    <ConnectorColumn pairCount={c.pairCount!} direction={c.direction ?? 'left'} />
+                  </Box>
+                ) : (
+                  <Box sx={{ flex: 1 }} />
+                )}
+              </Box>
+            );
+          }
+          return (
+            <Box key={c.key} sx={{ display: 'flex', flexDirection: 'column', flexShrink: 0, minWidth: 160 }}>
+              <Typography
+                variant="caption"
+                component="div"
+                sx={{
+                  textAlign: 'center', fontWeight: 700,
+                  color: c.key === 'final' ? 'warning.main' : 'text.secondary',
+                  fontSize: '0.65rem', mb: 0.5,
+                }}
+              >
+                {c.label}
               </Typography>
+              <Box sx={{ flex: 1, minHeight: 480 }}>
+                <RoundColumn
+                  ids={c.ids}
+                  matchupMap={matchupMap}
+                  picks={picks}
+                  onPick={onPick}
+                  readOnly={readOnly}
+                  results={results}
+                  countryCodeMap={countryCodeMap}
+                  isFinalCol={c.isFinalCol}
+                />
+              </Box>
             </Box>
-            {i < arr.length - 1 && <Box sx={{ width: 14, flexShrink: 0 }} />}
-          </Box>
-        ))}
-      </Box>
-
-      {/* Bracket flow */}
-      <Box sx={{ display: 'flex', alignItems: 'stretch', minWidth: 'fit-content', minHeight: 480 }}>
-        <RoundColumn ids={layers.r32} matchupMap={matchupMap} picks={picks} onPick={onPick} readOnly={readOnly} results={results} countryCodeMap={countryCodeMap} />
-        <ConnectorColumn pairCount={layers.r16.length} direction="left" />
-        <RoundColumn ids={layers.r16} matchupMap={matchupMap} picks={picks} onPick={onPick} readOnly={readOnly} results={results} countryCodeMap={countryCodeMap} />
-        <ConnectorColumn pairCount={layers.qf.length} direction="left" />
-        <RoundColumn ids={layers.qf} matchupMap={matchupMap} picks={picks} onPick={onPick} readOnly={readOnly} results={results} countryCodeMap={countryCodeMap} />
-        <ConnectorColumn pairCount={layers.sf.length} direction="left" />
-        <RoundColumn ids={layers.sf} matchupMap={matchupMap} picks={picks} onPick={onPick} readOnly={readOnly} results={results} countryCodeMap={countryCodeMap} />
-        <ConnectorColumn pairCount={1} direction="left" />
-        <RoundColumn ids={finalIds} matchupMap={matchupMap} picks={picks} onPick={onPick} readOnly={readOnly} results={results} countryCodeMap={countryCodeMap} isFinalCol />
-        <Box sx={{ width: 14, flexShrink: 0 }} />
-        <RoundColumn ids={thirdIds} matchupMap={matchupMap} picks={picks} onPick={onPick} readOnly={readOnly} results={results} countryCodeMap={countryCodeMap} />
+          );
+        })}
       </Box>
     </Box>
   );

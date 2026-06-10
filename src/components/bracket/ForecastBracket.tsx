@@ -241,10 +241,32 @@ function ChampionBanner({ slotMap, numSims, countryCodeMap }: {
 }
 
 const MOBILE_TAB_LABELS = ['R32 → R16', 'R16 → QF', 'QF → SF', 'SF → Final'] as const;
+
+/**
+ * Walk the FIFA feeder tree from each SF down to a given depth, returning the
+ * matches at that depth in [SF-1 subtree, SF-2 subtree] order. Same ordering
+ * as the desktop split, so mobile reads top-to-bottom matching desktop.
+ */
+function walkFromSf(depth: number): string[] {
+  const collect = (root: string, d: number): string[] => {
+    let layers: string[][] = [[root]];
+    for (let i = 0; i < d; i++) {
+      const next: string[] = [];
+      for (const id of layers[layers.length - 1]) {
+        const f = getFeederMatchupIds(id);
+        if (f) next.push(...f);
+      }
+      layers.push(next);
+    }
+    return layers[layers.length - 1];
+  };
+  return [...collect('SF-1', depth), ...collect('SF-2', depth)];
+}
+
 const MOBILE_TAB_RIGHTS: string[][] = [
-  ['R16-1', 'R16-2', 'R16-3', 'R16-4', 'R16-5', 'R16-6', 'R16-7', 'R16-8'],
-  ['QF-1', 'QF-2', 'QF-3', 'QF-4'],
-  ['SF-1', 'SF-2'],
+  walkFromSf(2), // R16 in FIFA-walk order: [R16-1, R16-2, R16-5, R16-6, R16-3, R16-4, R16-7, R16-8]
+  walkFromSf(1), // QF: [QF-1, QF-2, QF-3, QF-4]
+  walkFromSf(0), // SF: [SF-1, SF-2]
   ['FINAL', '3RD'],
 ];
 

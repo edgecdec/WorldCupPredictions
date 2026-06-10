@@ -127,6 +127,10 @@ export function useTournamentSim(
   const [results, setResults] = useState<TournamentSimResults | null>(null);
   const [progress, setProgress] = useState(0);
   const [running, setRunning] = useState(false);
+  // simsCompleted = the sim count the current `results` are computed against.
+  // Counts/percentages need to divide by this, not NUM_SIMS, while partials
+  // are streaming in. Falls back to NUM_SIMS once 'done' fires.
+  const [simsCompleted, setSimsCompleted] = useState(0);
 
   const run = useCallback(() => {
     if (workerRef.current) {
@@ -136,6 +140,7 @@ export function useTournamentSim(
     setRunning(true);
     setProgress(0);
     setResults(null);
+    setSimsCompleted(0);
 
     const worker = new Worker(
       new URL('../lib/tournamentSimWorker.ts', import.meta.url),
@@ -150,8 +155,10 @@ export function useTournamentSim(
         // show numbers fast. The worker keeps running and will follow up with
         // refined results at later checkpoints, ending with 'done'.
         setResults(e.data.results);
+        if (typeof e.data.simsCompleted === 'number') setSimsCompleted(e.data.simsCompleted);
       } else if (e.data.type === 'done') {
         setResults(e.data.results);
+        setSimsCompleted(e.data.simsCompleted ?? NUM_SIMS);
         setRunning(false);
         worker.terminate();
         workerRef.current = null;
@@ -188,5 +195,5 @@ export function useTournamentSim(
     };
   }, [run]);
 
-  return { results, progress, running, numSims: NUM_SIMS, rerun: run };
+  return { results, progress, running, numSims: NUM_SIMS, simsCompleted, rerun: run };
 }

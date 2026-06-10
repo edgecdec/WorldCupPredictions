@@ -628,7 +628,11 @@ export default function SimulatePage() {
       .catch(() => {});
   }, [user, groupId]);
 
-  const { results, progress, running, numSims, rerun } = useTournamentSim(players, scoring, actualResults);
+  const { results, progress, running, numSims, simsCompleted, rerun } = useTournamentSim(players, scoring, actualResults);
+  // While partial results stream in, divide raw counts by simsCompleted (not
+  // numSims) so percentages reflect the actual sample size. Falls back to
+  // numSims at the end (or to 1 to avoid division-by-zero before any sims).
+  const effectiveNumSims = simsCompleted > 0 ? simsCompleted : numSims;
 
   // Day-by-day scoreboard. Default to "today" (UTC). Each click of prev/next
   // bumps by one day; the hook re-fetches ESPN for that date.
@@ -693,7 +697,7 @@ export default function SimulatePage() {
           date={scoreDate}
           onDateChange={setScoreDate}
           bracketSlots={results?.bracketSlots}
-          numSims={numSims}
+          numSims={effectiveNumSims}
         />
       </Box>
 
@@ -718,7 +722,7 @@ export default function SimulatePage() {
                   <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={g}>
                     <Paper sx={{ p: 1.5 }}>
                       <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 0.5 }}>Group {g}</Typography>
-                      <GroupForecastTable groupData={groupData} numSims={numSims} />
+                      <GroupForecastTable groupData={groupData} numSims={effectiveNumSims} />
                     </Paper>
                   </Grid>
                 );
@@ -733,7 +737,7 @@ export default function SimulatePage() {
               </Typography>
               <ForecastBracket
                 bracketSlots={results.bracketSlots}
-                numSims={numSims}
+                numSims={effectiveNumSims}
                 countryCodeMap={Object.fromEntries(
                   Object.keys(PELE_RATINGS).map(t => [t, getCountryCode(t) ?? ''])
                 )}
@@ -746,7 +750,7 @@ export default function SimulatePage() {
               bracketSlots={results.bracketSlots}
               advanceProbs={results.advanceProbs}
               championProbs={results.championProbs}
-              numSims={numSims}
+              numSims={effectiveNumSims}
             />
           )}
 
@@ -787,7 +791,7 @@ export default function SimulatePage() {
                   return (
                     <>
                       <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                        Based on {numSims.toLocaleString()} simulated tournaments, here is how each player&apos;s picks are expected to perform.
+                        Based on {effectiveNumSims.toLocaleString()} simulated tournaments, here is how each player&apos;s picks are expected to perform.
                         {!anyKnockoutPicks && ' Lead % = chance of having the top score after the group stage (knockout picks not yet locked in).'}
                       </Typography>
                       <ExpectedStandingsTable

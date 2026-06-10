@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
-import { getTeamRanking } from '@/lib/bracketData';
+import { getTeamSeed } from '@/lib/bracketData';
 import type {
   BracketData, GroupPrediction, GroupStageResults, KnockoutResults,
   TournamentResults,
@@ -30,7 +30,12 @@ interface ChampionCount {
 interface ContrarianPick {
   username: string;
   bracket_name: string;
-  uniquePicks: number;
+  /** Rarity score, 0-100. Higher = more contrarian.
+   *  Computed as 100 × (1 - avg match rate vs OTHER brackets, across all 48
+   *  group-position picks). Pool of 1 returns 0 (no one to compare against). */
+  rarityScore: number;
+  /** Number of brackets in the pool excluding this one (denominator for context). */
+  poolSize: number;
 }
 
 interface AccuracyStat {
@@ -46,7 +51,10 @@ interface AccuracyStat {
 interface ChalkScore {
   username: string;
   bracket_name: string;
-  chalkScore: number;
+  /** Sum of |predicted position - team's pot| across all 48 group picks.
+   *  0 = perfectly chalk (every pot-N team predicted at position N).
+   *  Higher = more upset-heavy. */
+  deviation: number;
 }
 
 export interface StatsResponse {
@@ -121,7 +129,9 @@ export async function GET(req: NextRequest) {
     .map(([team, count]) => ({ team, count }))
     .sort((a, b) => b.count - a.count);
 
-  // Most contrarian picks — count unique group position picks per user
+  // Rarity score: for each pick, count brackets that made the same pick
+  // (group + position + team), then divide by (totalBrackets - 1) to get the
+  // self-excluded match rate. Average across all 48 picks, flip to get rarity.
   const groupPositionCounts = new Map<string, number>();
   for (const p of parsed) {
     for (const gp of p.groupPredictions) {
@@ -132,20 +142,27 @@ export async function GET(req: NextRequest) {
     }
   }
   const totalBrackets = parsed.length;
+  const otherBrackets = Math.max(0, totalBrackets - 1);
   const contrarianPicks: ContrarianPick[] = parsed.map((p) => {
-    let uniquePicks = 0;
+    if (otherBrackets === 0) {
+      return { username: p.username, bracket_name: p.bracket_name, rarityScore: 0, poolSize: otherBrackets };
+    }
+    let totalMatchRate = 0;
+    let pickCount = 0;
     for (const gp of p.groupPredictions) {
       gp.order.forEach((team, pos) => {
         const key = `${gp.groupName}:${pos}:${team}`;
-        const count = groupPositionCounts.get(key) ?? 0;
-        // A pick is "contrarian" if fewer than 25% of brackets made it
-        if (count / totalBrackets < 0.25) {
-          uniquePicks++;
-        }
+        const totalCount = groupPositionCounts.get(key) ?? 0;
+        // Subtract self from numerator: how many OTHER brackets made the same pick
+        const otherCount = Math.max(0, totalCount - 1);
+        totalMatchRate += otherCount / otherBrackets;
+        pickCount++;
       });
     }
-    return { username: p.username, bracket_name: p.bracket_name, uniquePicks };
-  }).sort((a, b) => b.uniquePicks - a.uniquePicks);
+    const avgMatchRate = pickCount > 0 ? totalMatchRate / pickCount : 0;
+    const rarityScore = Math.round((1 - avgMatchRate) * 100);
+    return { username: p.username, bracket_name: p.bracket_name, rarityScore, poolSize: otherBrackets };
+  }).sort((a, b) => b.rarityScore - a.rarityScore);
 
   // Group accuracy %
   const groupStageResults: GroupStageResults | undefined = resultsData.groupStage;
@@ -189,20 +206,23 @@ export async function GET(req: NextRequest) {
     };
   }).sort((a, b) => b.accuracyPct - a.accuracyPct);
 
-  // Chalk vs upset-heavy — lower ranking = higher seed = more "chalk"
+  // Chalk-deviation: how far each pick is from the team's pot/seed.
+  // Pure chalk = each pot-N team predicted at position N → deviation 0.
+  // Predicting Turkey (pot 4) at #1 contributes |1 - 4| = 3 deviation.
+  // Sum across all 48 group-position picks. Higher = more upset-heavy.
   const chalkScores: ChalkScore[] = parsed.map((p) => {
-    let chalkScore = 0;
+    let deviation = 0;
     for (const gp of p.groupPredictions) {
       gp.order.forEach((team, pos) => {
-        const ranking = getTeamRanking(bracketData, team);
-        if (ranking == null) return;
-        // If predicted position matches seed order (lower ranking = higher position), it's chalk
-        // Score: sum of (ranking * position_weight). Lower = more chalk.
-        chalkScore += ranking * (pos + 1);
+        const seed = getTeamSeed(bracketData, team);
+        if (seed == null) return;
+        // pos is 0-indexed (0..3), seed is 1-indexed (1..4) → both to 1..4
+        const predPos = pos + 1;
+        deviation += Math.abs(predPos - seed);
       });
     }
-    return { username: p.username, bracket_name: p.bracket_name, chalkScore };
-  }).sort((a, b) => a.chalkScore - b.chalkScore);
+    return { username: p.username, bracket_name: p.bracket_name, deviation };
+  }).sort((a, b) => a.deviation - b.deviation);
 
   return NextResponse.json({
     popularChampions,

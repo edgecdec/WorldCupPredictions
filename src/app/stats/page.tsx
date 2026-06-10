@@ -153,16 +153,23 @@ function ChampionCard({ champions }: { champions: StatsResponse['popularChampion
 
 function ContrarianCard({ contrarian, currentUser }: { contrarian: StatsResponse['contrarianPicks']; currentUser: string }) {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-  const sorted = [...contrarian].sort((a, b) => sortDir === 'desc' ? b.uniquePicks - a.uniquePicks : a.uniquePicks - b.uniquePicks);
+  const sorted = [...contrarian].sort((a, b) => sortDir === 'desc' ? b.rarityScore - a.rarityScore : a.rarityScore - b.rarityScore);
+  const poolSize = contrarian[0]?.poolSize ?? 0;
 
   return (
     <Card>
       <CardContent>
-        <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+        <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
           <TrendingDownIcon color="primary" /> Most Contrarian Brackets
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Rarity score (0–100): for each of your 48 group-position picks, we measure how many <em>other</em> brackets made the same pick. The score is 100 × (1 − avg match rate). Higher = more contrarian.
+          {poolSize > 0 && ` Pool size: ${poolSize} other bracket${poolSize === 1 ? '' : 's'}.`}
         </Typography>
         {contrarian.length === 0 ? (
           <Typography color="text.secondary">No predictions yet.</Typography>
+        ) : poolSize === 0 ? (
+          <Typography color="text.secondary">Need at least 2 brackets in this pool to compute rarity.</Typography>
         ) : (
           <TableContainer>
             <Table size="small">
@@ -176,7 +183,7 @@ function ContrarianCard({ contrarian, currentUser }: { contrarian: StatsResponse
                       direction={sortDir}
                       onClick={() => setSortDir(sortDir === 'desc' ? 'asc' : 'desc')}
                     >
-                      Unique Picks
+                      Rarity Score
                     </TableSortLabel>
                   </TableCell>
                 </TableRow>
@@ -189,7 +196,7 @@ function ContrarianCard({ contrarian, currentUser }: { contrarian: StatsResponse
                       {c.username === currentUser && <Chip label="You" size="small" sx={{ ml: 1 }} color="primary" variant="outlined" />}
                     </TableCell>
                     <TableCell>{c.bracket_name}</TableCell>
-                    <TableCell align="right">{c.uniquePicks}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 'bold' }}>{c.rarityScore}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -258,16 +265,16 @@ function AccuracyCard({ accuracy, currentUser }: { accuracy: StatsResponse['accu
 
 function ChalkCard({ chalkScores, currentUser }: { chalkScores: StatsResponse['chalkScores']; currentUser: string }) {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
-  const sorted = [...chalkScores].sort((a, b) => sortDir === 'asc' ? a.chalkScore - b.chalkScore : b.chalkScore - a.chalkScore);
+  const sorted = [...chalkScores].sort((a, b) => sortDir === 'asc' ? a.deviation - b.deviation : b.deviation - a.deviation);
 
   return (
     <Card>
       <CardContent>
-        <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+        <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
           <BalanceIcon color="primary" /> Chalk vs Upset-Heavy
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Lower score = more chalk (favorites predicted higher). Higher score = more upsets predicted.
+          Sum of |predicted position − team's pot| across all 48 group-position picks. <strong>0 = perfect chalk</strong> (every pot-N team predicted at position N). Higher = more upsets predicted. Each pick can contribute 0–3.
         </Typography>
         {chalkScores.length === 0 ? (
           <Typography color="text.secondary">No predictions yet.</Typography>
@@ -284,15 +291,21 @@ function ChalkCard({ chalkScores, currentUser }: { chalkScores: StatsResponse['c
                       direction={sortDir}
                       onClick={() => setSortDir(sortDir === 'desc' ? 'asc' : 'desc')}
                     >
-                      Chalk Score
+                      Deviation
                     </TableSortLabel>
                   </TableCell>
                   <TableCell align="right" sx={{ fontWeight: 'bold' }}>Style</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {sorted.map((c, i) => {
-                  const isChalk = i < sorted.length / 2;
+                {sorted.map((c) => {
+                  // Absolute thresholds based on the picks themselves, not the
+                  // pool. With 48 picks max possible deviation is 144 (all ±3).
+                  // Realistic ranges: 0-12 chalk, 13-24 mainstream, 25+ upset-heavy.
+                  let label: string; let color: 'success' | 'default' | 'warning';
+                  if (c.deviation <= 12) { label = 'Chalk'; color = 'success'; }
+                  else if (c.deviation <= 24) { label = 'Mainstream'; color = 'default'; }
+                  else { label = 'Upset-Heavy'; color = 'warning'; }
                   return (
                     <TableRow key={`${c.username}-${c.bracket_name}`} sx={c.username === currentUser ? { bgcolor: 'action.hover' } : undefined}>
                       <TableCell>
@@ -300,14 +313,9 @@ function ChalkCard({ chalkScores, currentUser }: { chalkScores: StatsResponse['c
                         {c.username === currentUser && <Chip label="You" size="small" sx={{ ml: 1 }} color="primary" variant="outlined" />}
                       </TableCell>
                       <TableCell>{c.bracket_name}</TableCell>
-                      <TableCell align="right">{c.chalkScore}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 'bold' }}>{c.deviation}</TableCell>
                       <TableCell align="right">
-                        <Chip
-                          label={isChalk ? 'Chalk' : 'Upset-Heavy'}
-                          size="small"
-                          color={isChalk ? 'success' : 'warning'}
-                          variant="outlined"
-                        />
+                        <Chip label={label} size="small" color={color} variant="outlined" />
                       </TableCell>
                     </TableRow>
                   );

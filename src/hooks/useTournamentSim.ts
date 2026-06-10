@@ -145,6 +145,11 @@ export function useTournamentSim(
     worker.onmessage = (e) => {
       if (e.data.type === 'progress') {
         setProgress(e.data.progress);
+      } else if (e.data.type === 'partial') {
+        // Render with partial results (e.g. 1000-sim snapshot) so the UI can
+        // show numbers fast. The worker keeps running and will follow up with
+        // refined results at later checkpoints, ending with 'done'.
+        setResults(e.data.results);
       } else if (e.data.type === 'done') {
         setResults(e.data.results);
         setRunning(false);

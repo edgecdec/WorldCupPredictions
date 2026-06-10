@@ -164,8 +164,10 @@ interface PlayerScoreResult {
 }
 
 interface SimResponse {
-  type: 'progress' | 'done';
+  type: 'progress' | 'partial' | 'done';
   progress?: number;
+  /** When the message is 'partial', this is the sim count the partial covers. */
+  simsCompleted?: number;
   results?: {
     groupResults: Record<string, GroupPositionResult[]>;
     bracketSlots: BracketSlotResult[];
@@ -923,12 +925,80 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
 
   const PROGRESS_INTERVAL = Math.max(1, Math.floor(numSims / 20));
 
+  /**
+   * Build the result payload from current accumulator state. Called once at
+   * each partial-result checkpoint (so the page can render fast) and once at
+   * completion. Each call divides counts by `simsSoFar`, NOT the total numSims,
+   * so the percentages reflect the data actually accumulated.
+   */
+  function buildResults(simsSoFar: number) {
+    const groupResultsOut: Record<string, GroupPositionResult[]> = {};
+    for (const [g, teams] of Object.entries(groups)) {
+      groupResultsOut[g] = teams.map((team, idx) => ({
+        team,
+        pos: groupPos[g][idx],
+        advance: advanceCounts[team],
+      }));
+    }
+
+    const bracketSlots: BracketSlotResult[] = [];
+    for (const [slotId, counts] of Object.entries(slotCounts)) {
+      const teams = Object.entries(counts)
+        .map(([team, count]) => ({ team, count }))
+        .sort((a, b) => b.count - a.count);
+      const round = slotId.split('-')[0];
+      bracketSlots.push({ slotId, round, teams });
+    }
+
+    const championProbs = Object.entries(championCounts)
+      .filter(([, c]) => c > 0)
+      .map(([team, count]) => ({ team, pct: Math.round((count / simsSoFar) * 1000) / 10 }))
+      .sort((a, b) => b.pct - a.pct);
+
+    const advanceProbs = Object.entries(advanceCounts)
+      .map(([team, count]) => ({ team, pct: Math.round((count / simsSoFar) * 1000) / 10 }))
+      .sort((a, b) => b.pct - a.pct);
+
+    let playerScores: PlayerScoreResult[] | undefined;
+    if (hasPlayers) {
+      playerScores = entries!.map((ent) => {
+        const t = playerTotals[ent.key];
+        const dist: Record<number, number> = {};
+        for (const [score, count] of Object.entries(t.scoreCounts)) {
+          dist[Number(score)] = Math.round((count / simsSoFar) * 100000) / 100000;
+        }
+        return {
+          key: ent.key,
+          avgScore: Math.round((t.score / simsSoFar) * 10) / 10,
+          avgRank: Math.round((t.rank / simsSoFar) * 10) / 10,
+          winPct: Math.round((t.wins / simsSoFar) * 1000) / 10,
+          scoreDistribution: dist,
+        };
+      }).sort((a, b) => b.avgScore - a.avgScore);
+    }
+
+    return { groupResults: groupResultsOut, bracketSlots, championProbs, advanceProbs, playerScores };
+  }
+
+  // Sim-count checkpoints at which to emit partial results. Page can show
+  // a usable forecast at 1k (very fast) while the rest streams in.
+  const PARTIAL_CHECKPOINTS = [1000, 2000, 5000].filter((n) => n < numSims);
+  const partialSet = new Set(PARTIAL_CHECKPOINTS);
+
   // If final group standings are provided (group stage complete), use them as-is
   const groupStageLocked = finalGroupStandings && Object.keys(finalGroupStandings).length === Object.keys(groups).length;
 
   for (let sim = 0; sim < numSims; sim++) {
     if (sim % PROGRESS_INTERVAL === 0) {
       ctx.postMessage({ type: 'progress', progress: sim } as SimResponse);
+    }
+    if (sim > 0 && partialSet.has(sim)) {
+      ctx.postMessage({
+        type: 'partial',
+        simsCompleted: sim,
+        progress: sim,
+        results: buildResults(sim),
+      } as SimResponse);
     }
 
     // Form bumps: per-team PELE adjustments accumulated within this single simulation.
@@ -1027,58 +1097,9 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
     }
   }
 
-  // Build results
-  const groupResultsOut: Record<string, GroupPositionResult[]> = {};
-  for (const [g, teams] of Object.entries(groups)) {
-    groupResultsOut[g] = teams.map((team, idx) => ({
-      team,
-      pos: groupPos[g][idx],
-      advance: advanceCounts[team],
-    }));
-  }
-
-  const bracketSlots: BracketSlotResult[] = [];
-  for (const [slotId, counts] of Object.entries(slotCounts)) {
-    const teams = Object.entries(counts)
-      .map(([team, count]) => ({ team, count }))
-      .sort((a, b) => b.count - a.count);
-    const round = slotId.split('-')[0];
-    bracketSlots.push({ slotId, round, teams });
-  }
-
-  const championProbs = Object.entries(championCounts)
-    .filter(([, c]) => c > 0)
-    .map(([team, count]) => ({ team, pct: Math.round((count / numSims) * 1000) / 10 }))
-    .sort((a, b) => b.pct - a.pct);
-
-  const advanceProbs = Object.entries(advanceCounts)
-    .map(([team, count]) => ({ team, pct: Math.round((count / numSims) * 1000) / 10 }))
-    .sort((a, b) => b.pct - a.pct);
-
-  // Player score results
-  let playerScores: PlayerScoreResult[] | undefined;
-  if (hasPlayers) {
-    playerScores = entries!.map((ent) => {
-      const t = playerTotals[ent.key];
-      // Convert raw counts → probability mass function. Round to 5 decimals
-      // (avoids float bloat in the postMessage payload — at numSims=10000
-      // the smallest count is 1/10000 = 0.0001, well above the rounding floor).
-      const dist: Record<number, number> = {};
-      for (const [score, count] of Object.entries(t.scoreCounts)) {
-        dist[Number(score)] = Math.round((count / numSims) * 100000) / 100000;
-      }
-      return {
-        key: ent.key,
-        avgScore: Math.round((t.score / numSims) * 10) / 10,
-        avgRank: Math.round((t.rank / numSims) * 10) / 10,
-        winPct: Math.round((t.wins / numSims) * 1000) / 10,
-        scoreDistribution: dist,
-      };
-    }).sort((a, b) => b.avgScore - a.avgScore);
-  }
-
   ctx.postMessage({
     type: 'done',
-    results: { groupResults: groupResultsOut, bracketSlots, championProbs, advanceProbs, playerScores },
+    simsCompleted: numSims,
+    results: buildResults(numSims),
   } as SimResponse);
 };

@@ -681,7 +681,9 @@ export default function SimulatePage() {
       </Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         {running
-          ? `Simulating ${numSims.toLocaleString()} tournaments...`
+          ? results
+            ? `Showing early forecast (${progress.toLocaleString()} of ${numSims.toLocaleString()} sims) — refining…`
+            : `Simulating ${numSims.toLocaleString()} tournaments…`
           : `Based on ${numSims.toLocaleString()} simulated tournaments using Nate Silver's PELE ratings.`}
       </Typography>
 

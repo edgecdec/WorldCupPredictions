@@ -255,7 +255,7 @@ export default function ProfilePage() {
                     <TableCell align="right" sx={{ fontWeight: 'bold' }}>{gs.totalScore}</TableCell>
                     <TableCell align="right" sx={{ color: 'text.secondary' }}>{gs.bonusPoints}</TableCell>
                     <TableCell align="right">
-                      <Chip label={`Top ${gs.percentile}%`} size="small" color={gs.percentile >= 75 ? 'success' : gs.percentile >= 50 ? 'primary' : 'default'} variant="outlined" />
+                      <Chip label={`Top ${gs.percentile}%`} size="small" color={gs.percentile <= 25 ? 'success' : gs.percentile <= 50 ? 'primary' : 'default'} variant="outlined" />
                     </TableCell>
                   </TableRow>
                 ))}

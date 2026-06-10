@@ -151,9 +151,24 @@ export async function GET(req: NextRequest) {
         return 0;
       });
 
-      const rank = scores.findIndex((s) => s.userId === userRow.id) + 1;
+      const userScore = scores.find((s) => s.userId === userRow.id);
+      const userTotal = userScore?.total ?? 0;
+      const userTiebreaker = userScore?.tiebreaker ?? null;
+      // Competition-rank with proper tie handling: count how many brackets
+      // strictly outscore us (lower tiebreaker also breaks ties). All tied
+      // entries share the same rank (the lowest in the tie group).
+      const strictlyAhead = scores.filter((s) => {
+        if (s.total > userTotal) return true;
+        if (s.total < userTotal) return false;
+        // Same total — compare tiebreaker if both have one
+        if (s.tiebreaker != null && userTiebreaker != null) return s.tiebreaker < userTiebreaker;
+        return false;
+      }).length;
+      const rank = strictlyAhead + 1;
       const totalMembers = scores.length;
-      const percentile = totalMembers > 1 ? Math.round((1 - (rank - 1) / (totalMembers - 1)) * 100) : 100;
+      // "Top X%" = our position is in the top X percent of the field.
+      // rank=1 of 10 → Top 10%. rank=10 of 10 → Top 100%. Lower X = better.
+      const percentile = totalMembers > 0 ? Math.max(1, Math.round((rank / totalMembers) * 100)) : 100;
 
       // Indicators
       const allParsed = allPreds.map((ap) => ({

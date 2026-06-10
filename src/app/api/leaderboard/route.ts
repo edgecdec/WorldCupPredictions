@@ -212,11 +212,24 @@ export async function GET(req: NextRequest) {
   if (!isPreTournament || isAdmin) {
     const leaderScore = leaderboard.length > 0 ? leaderboard[0].totalScore : 0;
     const totalMembers = leaderboard.length;
+    // Competition ranking: tied entries share the lowest rank in their tie group.
     for (let i = 0; i < leaderboard.length; i++) {
       const entry = leaderboard[i];
       entry.eliminated = (entry.maxPossible ?? 0) < leaderScore;
-      entry.percentile = totalMembers > 1
-        ? Math.round((1 - i / (totalMembers - 1)) * 100)
+      // How many entries strictly outscore this one? (Same total + same tiebreaker
+      // doesn't beat us; lower tiebreaker beats us when totals are tied.)
+      const strictlyAhead = leaderboard.filter((other) => {
+        if (other.totalScore > entry.totalScore) return true;
+        if (other.totalScore < entry.totalScore) return false;
+        if (other.tiebreaker != null && entry.tiebreaker != null) {
+          return other.tiebreaker < entry.tiebreaker;
+        }
+        return false;
+      }).length;
+      const rank = strictlyAhead + 1;
+      // "Top X%" — lower is better. rank 1 of 10 → Top 10%. rank 10 of 10 → Top 100%.
+      entry.percentile = totalMembers > 0
+        ? Math.max(1, Math.round((rank / totalMembers) * 100))
         : 100;
     }
 

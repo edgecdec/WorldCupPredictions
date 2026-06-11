@@ -473,6 +473,9 @@ function GameCard({ game, countryCodeMap, bracketSlots, numSims, currentUserKey,
           anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
           transformOrigin={{ vertical: 'top', horizontal: 'center' }}
           disableRestoreFocus
+          disableAutoFocus
+          disableEnforceFocus
+          disableScrollLock
           sx={{ pointerEvents: 'none' }}
         >
           <Box sx={{ p: 1, minWidth: 220, pointerEvents: 'auto' }}>

@@ -83,6 +83,9 @@ function ExpPtsCell({
           anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
           transformOrigin={{ vertical: 'top', horizontal: 'center' }}
           disableRestoreFocus
+          disableAutoFocus
+          disableEnforceFocus
+          disableScrollLock
           sx={{ pointerEvents: 'none' }}
           slotProps={{ paper: { sx: { p: 1.5 } } }}
         >

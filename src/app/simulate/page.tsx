@@ -651,6 +651,26 @@ export default function SimulatePage() {
     return m;
   }, []);
 
+  // teamToGroup map for ImpactPanel to derive matchIds.
+  const teamToGroupMap = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const [g, teams] of Object.entries(GROUPS)) {
+      for (const t of teams) m[t] = g;
+    }
+    return m;
+  }, []);
+
+  // Current user's bracket key + expected total score (for impact panels).
+  const currentUserBracketKey = useMemo(() => {
+    if (!user || !players) return undefined;
+    const found = players.find((p) => p.key.startsWith(`${user.username}|`));
+    return found?.key;
+  }, [user, players]);
+  const currentUserExpectedScore = useMemo(() => {
+    if (!currentUserBracketKey || !results?.playerScores) return undefined;
+    return results.playerScores.find((ps) => ps.key === currentUserBracketKey)?.avgScore;
+  }, [currentUserBracketKey, results]);
+
 
   if (authLoading) return null;
   if (!user) {
@@ -698,6 +718,10 @@ export default function SimulatePage() {
           onDateChange={setScoreDate}
           bracketSlots={results?.bracketSlots}
           numSims={effectiveNumSims}
+          currentUserKey={currentUserBracketKey}
+          userExpectedScore={currentUserExpectedScore}
+          conditionalScores={results?.conditionalScores}
+          teamToGroup={teamToGroupMap}
         />
       </Box>
 

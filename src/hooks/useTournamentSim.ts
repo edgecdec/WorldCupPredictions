@@ -67,6 +67,14 @@ export interface PlayerScoreResult {
   winPct: number;
   /** Score → fraction of sims producing exactly that score. Sparse map. */
   scoreDistribution: Record<number, number>;
+  /** Expected points per group ('A'..'L'). */
+  avgGroupScores: Record<string, number>;
+  /** Expected points per knockout round ('R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'). */
+  avgRoundScores: Record<string, number>;
+  /** Per-group full score distribution (group → score → fraction). */
+  groupScoreDistributions: Record<string, Record<number, number>>;
+  /** Per-round full score distribution (round → score → fraction). */
+  roundScoreDistributions: Record<string, Record<number, number>>;
 }
 
 export interface TournamentSimResults {
@@ -75,6 +83,11 @@ export interface TournamentSimResults {
   championProbs: Array<{ team: string; pct: number }>;
   advanceProbs: Array<{ team: string; pct: number }>;
   playerScores?: PlayerScoreResult[];
+  /** matchId → outcome → userKey → expected total score given that outcome.
+   *  matchId examples: 'group:A:Mexico-South Africa', 'ko:R32-1', 'ko:FINAL'.
+   *  group outcomes: 'W' | 'D' | 'L' | exact like '1-0'.
+   *  ko outcomes: winning team name. */
+  conditionalScores?: Record<string, Record<string, Record<string, number>>>;
 }
 
 export interface PlayerEntry {

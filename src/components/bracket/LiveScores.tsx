@@ -259,9 +259,85 @@ interface GameCardProps {
   countryCodeMap: Record<string, string>;
   bracketSlots?: BracketSlotResult[];
   numSims?: number;
+  /** Current user's bracket key ('username|bracket_name') for impact panel. */
+  currentUserKey?: string;
+  /** Current user's pre-match expected total score (subtract to get delta). */
+  userExpectedScore?: number;
+  /** matchId → outcome → userKey → expected total. From the forecast worker. */
+  conditionalScores?: Record<string, Record<string, Record<string, number>>>;
+  /** Current group stage for this match if known (e.g. 'A'..'L'). Used to
+   *  build the conditional matchId 'group:A:Mexico-South Africa'. */
+  groupName?: string;
 }
 
-function GameCard({ game, countryCodeMap, bracketSlots, numSims }: GameCardProps) {
+/** Try to derive the conditional matchId for this game. */
+function deriveConditionalMatchId(game: LiveGame, groupName: string | undefined): string | null {
+  if (!groupName) return null;
+  // Group stage: 'group:<groupName>:<home>-<away>'. The order follows the bracket
+  // layout so we just use whatever order the worker stored.
+  return `group:${groupName}:${game.home.name}-${game.away.name}`;
+}
+
+/**
+ * Per-outcome impact panel — shows how each W/D/L would affect the user's
+ * expected total score, computed from the forecast's conditionalScores.
+ */
+function ImpactPanel({
+  game, currentUserKey, userExpectedScore, conditionalScores, groupName,
+}: {
+  game: LiveGame;
+  currentUserKey?: string;
+  userExpectedScore?: number;
+  conditionalScores?: Record<string, Record<string, Record<string, number>>>;
+  groupName?: string;
+}) {
+  if (!currentUserKey || userExpectedScore == null || !conditionalScores) return null;
+  const matchId = deriveConditionalMatchId(game, groupName);
+  if (!matchId) return null;
+  const byOutcome = conditionalScores[matchId];
+  if (!byOutcome) return null;
+
+  const expW = byOutcome.W?.[currentUserKey];
+  const expD = byOutcome.D?.[currentUserKey];
+  const expL = byOutcome.L?.[currentUserKey];
+
+  const fmt = (val?: number) => {
+    if (val == null) return '—';
+    const delta = val - userExpectedScore;
+    const sign = delta >= 0 ? '+' : '';
+    return `${sign}${delta.toFixed(1)}`;
+  };
+  const color = (val?: number) => {
+    if (val == null) return 'text.secondary';
+    const d = val - userExpectedScore;
+    if (Math.abs(d) < 0.05) return 'text.secondary';
+    return d > 0 ? 'success.main' : 'error.main';
+  };
+
+  return (
+    <Box sx={{ mt: 0.5, pt: 0.5, borderTop: 1, borderColor: 'divider' }}>
+      <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', fontSize: '0.6rem', textTransform: 'uppercase', fontWeight: 700 }}>
+        Impact on your Exp Pts
+      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', mt: 0.25 }}>
+        <Box sx={{ flex: 1, textAlign: 'center' }}>
+          <Typography variant="caption" sx={{ display: 'block', fontSize: '0.6rem', color: 'text.secondary' }}>{game.home.name.slice(0, 4).toUpperCase()}</Typography>
+          <Typography variant="caption" sx={{ fontSize: '0.7rem', fontWeight: 700, color: color(expW) }}>{fmt(expW)}</Typography>
+        </Box>
+        <Box sx={{ flex: 1, textAlign: 'center' }}>
+          <Typography variant="caption" sx={{ display: 'block', fontSize: '0.6rem', color: 'text.secondary' }}>Draw</Typography>
+          <Typography variant="caption" sx={{ fontSize: '0.7rem', fontWeight: 700, color: color(expD) }}>{fmt(expD)}</Typography>
+        </Box>
+        <Box sx={{ flex: 1, textAlign: 'center' }}>
+          <Typography variant="caption" sx={{ display: 'block', fontSize: '0.6rem', color: 'text.secondary' }}>{game.away.name.slice(0, 4).toUpperCase()}</Typography>
+          <Typography variant="caption" sx={{ fontSize: '0.7rem', fontWeight: 700, color: color(expL) }}>{fmt(expL)}</Typography>
+        </Box>
+      </Box>
+    </Box>
+  );
+}
+
+function GameCard({ game, countryCodeMap, bracketSlots, numSims, currentUserKey, userExpectedScore, conditionalScores, groupName }: GameCardProps) {
   const isLive = game.state === STATE_IN;
   const isFinal = game.state === STATE_POST;
   const stage = game.stage ?? 'group';
@@ -368,6 +444,13 @@ function GameCard({ game, countryCodeMap, bracketSlots, numSims }: GameCardProps
               </Typography>
             </Box>
           )}
+          <ImpactPanel
+            game={game}
+            currentUserKey={currentUserKey}
+            userExpectedScore={userExpectedScore}
+            conditionalScores={conditionalScores}
+            groupName={groupName}
+          />
         </CardContent>
       </CardActionArea>
       {isLive && (
@@ -413,9 +496,17 @@ interface LiveScoresProps {
    *  cards. Optional: TBD cards still render their placeholder name without it. */
   bracketSlots?: BracketSlotResult[];
   numSims?: number;
+  /** Current user's bracket key. Triggers per-card impact panel. */
+  currentUserKey?: string;
+  /** Current user's pre-match expected total score. */
+  userExpectedScore?: number;
+  /** matchId → outcome → userKey → expected total. */
+  conditionalScores?: Record<string, Record<string, Record<string, number>>>;
+  /** Map from team name to group name (for deriving conditional matchIds). */
+  teamToGroup?: Record<string, string>;
 }
 
-export default function LiveScores({ games, loading, countryCodeMap = {}, date, onDateChange, bracketSlots, numSims }: LiveScoresProps) {
+export default function LiveScores({ games, loading, countryCodeMap = {}, date, onDateChange, bracketSlots, numSims, currentUserKey, userExpectedScore, conditionalScores, teamToGroup }: LiveScoresProps) {
   const live = games.filter((g) => g.state === STATE_IN);
   const recent = games.filter((g) => g.state === STATE_POST);
   const upcoming = games.filter((g) => g.state !== STATE_IN && g.state !== STATE_POST);
@@ -470,15 +561,22 @@ export default function LiveScores({ games, loading, countryCodeMap = {}, date, 
             gap: 1,
           }}
         >
-          {sorted.map((game) => (
-            <GameCard
-              key={game.id}
-              game={game}
-              countryCodeMap={countryCodeMap}
-              bracketSlots={bracketSlots}
-              numSims={numSims}
-            />
-          ))}
+          {sorted.map((game) => {
+            const groupName = teamToGroup?.[game.home.name];
+            return (
+              <GameCard
+                key={game.id}
+                game={game}
+                countryCodeMap={countryCodeMap}
+                bracketSlots={bracketSlots}
+                numSims={numSims}
+                currentUserKey={currentUserKey}
+                userExpectedScore={userExpectedScore}
+                conditionalScores={conditionalScores}
+                groupName={groupName}
+              />
+            );
+          })}
         </Box>
       )}
     </Box>

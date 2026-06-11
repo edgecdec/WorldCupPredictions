@@ -1,5 +1,5 @@
 'use client';
-import { Suspense, useEffect, useState, useCallback } from 'react';
+import { Suspense, useEffect, useState, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   Container, Typography, Box, CircularProgress, FormControl, InputLabel,
@@ -15,12 +15,15 @@ import WarningIcon from '@mui/icons-material/Warning';
 import CancelIcon from '@mui/icons-material/Cancel';
 import { useAuth } from '@/hooks/useAuth';
 import { useSelectedGroup } from '@/hooks/useSelectedGroup';
+import { useTournamentSim } from '@/hooks/useTournamentSim';
+import type { PlayerEntry } from '@/hooks/useTournamentSim';
 import Link from 'next/link';
 import UserLink from '@/components/common/UserLink';
 import BracketLink from '@/components/common/BracketLink';
 import AuthForm from '@/components/auth/AuthForm';
 import ScoringBreakdownDialog from '@/components/common/ScoringBreakdownDialog';
 import GroupChat from '@/components/common/GroupChat';
+import BucketScoreTable from '@/components/common/BucketScoreTable';
 import type {
   LeaderboardEntry, ScoringSettings, BracketData, TournamentResults, UserPrediction,
 } from '@/types';
@@ -30,20 +33,6 @@ interface GroupOption {
   id: string;
   name: string;
 }
-
-type SortKey = 'rank' | 'username' | 'bracket_name' | 'groupStageScore' | 'knockoutScore' | 'totalScore' | 'bonusPoints' | 'maxPossible' | 'tiebreaker';
-
-const SCORE_COLUMNS: { key: SortKey; label: string; align: 'left' | 'right' }[] = [
-  { key: 'rank', label: '#', align: 'left' },
-  { key: 'username', label: 'User', align: 'left' },
-  { key: 'bracket_name', label: 'Bracket', align: 'left' },
-  { key: 'groupStageScore', label: 'Group', align: 'right' },
-  { key: 'knockoutScore', label: 'Knockout', align: 'right' },
-  { key: 'totalScore', label: 'Total', align: 'right' },
-  { key: 'bonusPoints', label: 'Bonus', align: 'right' },
-  { key: 'maxPossible', label: 'Max', align: 'right' },
-  { key: 'tiebreaker', label: 'Tiebreaker', align: 'right' },
-];
 
 const TOTAL_GROUPS = 12;
 const TOTAL_THIRD_PLACE = 8;
@@ -70,8 +59,6 @@ function LeaderboardContent() {
   const [results, setResults] = useState<TournamentResults | null>(null);
   const [bracketData, setBracketData] = useState<BracketData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [sortKey, setSortKey] = useState<SortKey>('totalScore');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [breakdownEntry, setBreakdownEntry] = useState<LeaderboardEntry | null>(null);
 
   const loadGroups = useCallback(async () => {
@@ -112,29 +99,71 @@ function LeaderboardContent() {
     if (user && selectedGroup) loadLeaderboard(selectedGroup);
   }, [user, selectedGroup, loadLeaderboard]);
 
-  const handleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortKey(key);
-      setSortDir(key === 'username' || key === 'bracket_name' || key === 'rank' ? 'asc' : 'desc');
-    }
-  };
+  // Build PlayerEntry[] from leaderboard entries to feed the forecast worker.
+  // Worker runs locally and computes per-user expected total/group/round scores.
+  const playerEntries: PlayerEntry[] | undefined = useMemo(() => {
+    if (!leaderboard.length || !leaderboard[0].prediction) return undefined;
+    return leaderboard
+      .filter((e) => e.prediction)
+      .map((e) => ({
+        key: `${e.username}|${e.bracket_name}`,
+        group_predictions: e.prediction!.group_predictions,
+        third_place_picks: e.prediction!.third_place_picks,
+        knockout_picks: e.prediction!.knockout_picks,
+      }));
+  }, [leaderboard]);
 
-  const rankedLeaderboard = leaderboard.map((entry, i) => ({ ...entry, rank: i + 1 }));
+  // Build actualResults shape from the loaded `results` data so the worker
+  // locks in already-completed matches.
+  const actualResults = useMemo(() => {
+    if (!results) return undefined;
+    const r = results as TournamentResults & { groupMatches?: Record<string, Array<{ teamA: string; teamB: string; scoreA: number; scoreB: number }>> };
+    return {
+      groupMatches: r.groupMatches,
+      finalGroupStandings: r.groupStage
+        ? Object.fromEntries(r.groupStage.groupResults.map((gr) => [gr.groupName, gr.order]))
+        : undefined,
+      finalAdvancing3rd: r.groupStage?.advancingThirdPlace,
+      knockoutWinners: r.knockout,
+    };
+  }, [results]);
 
-  const sorted = [...rankedLeaderboard].sort((a, b) => {
-    const dir = sortDir === 'asc' ? 1 : -1;
-    const valA = a[sortKey];
-    const valB = b[sortKey];
-    if (valA == null && valB == null) return 0;
-    if (valA == null) return 1;
-    if (valB == null) return -1;
-    if (typeof valA === 'string' && typeof valB === 'string') {
-      return valA.localeCompare(valB) * dir;
-    }
-    return ((valA as number) - (valB as number)) * dir;
-  });
+  const { results: simResults, running: simRunning, progress: simProgress, numSims: simNumSims, simsCompleted: simSimsCompleted } = useTournamentSim(playerEntries, scoringSettings ?? undefined, actualResults);
+
+  // Map worker output to userKey-indexed lookups for BucketScoreTable.
+  const expectedScoresByKey = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const ps of simResults?.playerScores ?? []) m[ps.key] = ps.avgScore;
+    return m;
+  }, [simResults]);
+  const expectedGroupScoresByKey = useMemo(() => {
+    const m: Record<string, Record<string, number>> = {};
+    for (const ps of simResults?.playerScores ?? []) m[ps.key] = ps.avgGroupScores;
+    return m;
+  }, [simResults]);
+  const expectedRoundScoresByKey = useMemo(() => {
+    const m: Record<string, Record<string, number>> = {};
+    for (const ps of simResults?.playerScores ?? []) m[ps.key] = ps.avgRoundScores;
+    return m;
+  }, [simResults]);
+  const groupDistributionsByKey = useMemo(() => {
+    const m: Record<string, Record<string, Record<number, number>>> = {};
+    for (const ps of simResults?.playerScores ?? []) m[ps.key] = ps.groupScoreDistributions;
+    return m;
+  }, [simResults]);
+  const roundDistributionsByKey = useMemo(() => {
+    const m: Record<string, Record<string, Record<number, number>>> = {};
+    for (const ps of simResults?.playerScores ?? []) m[ps.key] = ps.roundScoreDistributions;
+    return m;
+  }, [simResults]);
+  const scoreDistributionsByKey = useMemo(() => {
+    const m: Record<string, Record<number, number>> = {};
+    for (const ps of simResults?.playerScores ?? []) m[ps.key] = ps.scoreDistribution;
+    return m;
+  }, [simResults]);
+
+  // Pre-tournament completion table uses simple desc-by-completion order.
+  const sorted = leaderboard.map((entry, i) => ({ ...entry, rank: i + 1 }));
 
   const buildPrediction = (entry: LeaderboardEntry): UserPrediction | null => {
     if (!entry.prediction) return null;
@@ -205,14 +234,26 @@ function LeaderboardContent() {
       ) : isPreTournament ? (
         <CompletionTable entries={sorted} currentUsername={user.username} />
       ) : (
-        <ScoreTable
-          entries={sorted}
-          currentUsername={user.username}
-          sortKey={sortKey}
-          sortDir={sortDir}
-          onSort={handleSort}
-          onBreakdown={setBreakdownEntry}
-        />
+        <>
+          {simRunning && (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontStyle: 'italic' }}>
+              {simSimsCompleted > 0
+                ? `Refining expected scores… (${simProgress.toLocaleString()} of ${simNumSims.toLocaleString()} sims)`
+                : `Computing expected scores…`}
+            </Typography>
+          )}
+          <BucketScoreTable
+            entries={leaderboard}
+            currentUsername={user.username}
+            expectedScoresByKey={expectedScoresByKey}
+            expectedGroupScoresByKey={expectedGroupScoresByKey}
+            expectedRoundScoresByKey={expectedRoundScoresByKey}
+            groupDistributionsByKey={groupDistributionsByKey}
+            roundDistributionsByKey={roundDistributionsByKey}
+            scoreDistributionsByKey={scoreDistributionsByKey}
+            onRowClick={setBreakdownEntry}
+          />
+        </>
       )}
 
       {selectedGroup && (
@@ -328,106 +369,3 @@ function CompletionTable({ entries, currentUsername }: { entries: RankedEntry[];
   );
 }
 
-interface ScoreTableProps {
-  entries: RankedEntry[];
-  currentUsername: string;
-  sortKey: SortKey;
-  sortDir: 'asc' | 'desc';
-  onSort: (key: SortKey) => void;
-  onBreakdown: (entry: LeaderboardEntry) => void;
-}
-
-function ScoreTable({ entries, currentUsername, sortKey, sortDir, onSort, onBreakdown }: ScoreTableProps) {
-  return (
-    <TableContainer component={Paper}>
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            {SCORE_COLUMNS.map((col) => (
-              <TableCell key={col.key} align={col.align} sx={{ fontWeight: 'bold' }}>
-                <TableSortLabel
-                  active={sortKey === col.key}
-                  direction={sortKey === col.key ? sortDir : 'asc'}
-                  onClick={() => onSort(col.key)}
-                >
-                  {col.label}
-                </TableSortLabel>
-              </TableCell>
-            ))}
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {entries.map((entry) => {
-            const isCurrentUser = entry.username === currentUsername;
-            return (
-              <TableRow
-                key={`${entry.username}-${entry.bracket_name}`}
-                sx={isCurrentUser ? { bgcolor: 'action.hover' } : undefined}
-              >
-                <TableCell>
-                  <Box>
-                    {entry.rank}
-                    <Typography variant="caption" display="block" sx={{ color: 'text.secondary', fontSize: '0.65rem' }}>
-                      Top {entry.percentile ?? 0}%
-                    </Typography>
-                  </Box>
-                </TableCell>
-                <TableCell>
-                  <UserLink username={entry.username} isCurrentUser={isCurrentUser} />
-                  {entry.eliminated && (
-                    <Tooltip title="Eliminated — max possible score is below the leader"><span style={{ marginLeft: 4 }}>☠️</span></Tooltip>
-                  )}
-                  {entry.championEliminated && !entry.eliminated && (
-                    <Tooltip title="Bracket Busted — predicted champion has been knocked out"><span style={{ marginLeft: 4 }}>💀</span></Tooltip>
-                  )}
-                  {(entry.perfectGroups ?? 0) > 0 && (
-                    <Tooltip title={`${entry.perfectGroups} perfect group${entry.perfectGroups === 1 ? '' : 's'} — all 4 positions exactly correct`}><span style={{ marginLeft: 4 }}>🎯{entry.perfectGroups}</span></Tooltip>
-                  )}
-                  {(entry.hotStreak ?? 0) >= 3 && (
-                    <Tooltip title={`${entry.hotStreak} consecutive correct knockout picks in a row`}><span style={{ marginLeft: 4 }}>🔥{entry.hotStreak}</span></Tooltip>
-                  )}
-                  {(entry.contrarianPicks ?? 0) > 0 && (
-                    <Tooltip title={`${entry.contrarianPicks} contrarian pick${entry.contrarianPicks === 1 ? '' : 's'} that hit — predicted by less than 10% of the group`}><span style={{ marginLeft: 4 }}>😱{entry.contrarianPicks}</span></Tooltip>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <BracketLink username={entry.username} bracketName={entry.bracket_name} />
-                </TableCell>
-                <TableCell
-                  align="right"
-                  sx={{ cursor: 'pointer', '&:hover': { color: 'primary.main' } }}
-                  onClick={() => onBreakdown(entry)}
-                >
-                  {entry.groupStageScore}
-                </TableCell>
-                <TableCell
-                  align="right"
-                  sx={{ cursor: 'pointer', '&:hover': { color: 'primary.main' } }}
-                  onClick={() => onBreakdown(entry)}
-                >
-                  {entry.knockoutScore}
-                </TableCell>
-                <TableCell
-                  align="right"
-                  sx={{ cursor: 'pointer', fontWeight: 'bold', '&:hover': { color: 'primary.main' } }}
-                  onClick={() => onBreakdown(entry)}
-                >
-                  {entry.totalScore}
-                </TableCell>
-                <Tooltip title="Upset bonus points from bold picks">
-                  <TableCell align="right" sx={{ color: 'text.secondary' }}>
-                    {entry.bonusPoints ?? 0}
-                  </TableCell>
-                </Tooltip>
-                <TableCell align="right" sx={{ color: 'text.secondary' }}>
-                  {entry.maxPossible ?? '—'}
-                </TableCell>
-                <TableCell align="right">{entry.tiebreaker ?? '—'}</TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </TableContainer>
-  );
-}

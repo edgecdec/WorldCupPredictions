@@ -93,6 +93,40 @@ export async function GET(req: NextRequest) {
   const knockoutResults: KnockoutResults | undefined = resultsData.knockout;
   const knockoutMatchups: KnockoutMatchup[] | undefined = resultsData.knockoutBracket;
 
+  // Determine which groups are fully complete (6 matches each).
+  // resultsData may have a `groupMatches` field tracked by the ESPN sync.
+  const resultsWithMatches = resultsData as TournamentResults & {
+    groupMatches?: Record<string, Array<{ teamA: string; teamB: string }>>;
+  };
+  const groupsLocked: Record<string, boolean> = {};
+  if (groupStageResults) {
+    // If groupStage finalized standings exist, all groups are locked.
+    for (const gr of groupStageResults.groupResults) groupsLocked[gr.groupName] = true;
+  } else if (resultsWithMatches.groupMatches) {
+    for (const [g, matches] of Object.entries(resultsWithMatches.groupMatches)) {
+      groupsLocked[g] = matches.length >= 6;
+    }
+  }
+
+  // Determine which knockout rounds are fully complete.
+  // R32 has 16 matches, R16 has 8, QF has 4, SF has 2, 3RD has 1, FINAL has 1.
+  const ROUND_MATCH_COUNTS: Record<string, number> = {
+    R32: 16, R16: 8, QF: 4, SF: 2, '3RD': 1, FINAL: 1,
+  };
+  const roundsLocked: Record<string, boolean> = {};
+  if (knockoutResults) {
+    for (const [roundLabel, expectedCount] of Object.entries(ROUND_MATCH_COUNTS)) {
+      let actualCount = 0;
+      for (const matchId of Object.keys(knockoutResults)) {
+        // Match IDs: 'R32-1', 'R16-3', 'QF-2', 'SF-1', '3RD', 'FINAL'
+        if (matchId === roundLabel || matchId.startsWith(roundLabel + '-')) actualCount++;
+      }
+      roundsLocked[roundLabel] = actualCount >= expectedCount;
+    }
+  } else {
+    for (const r of Object.keys(ROUND_MATCH_COUNTS)) roundsLocked[r] = false;
+  }
+
   const predictions = db
     .prepare(
       `SELECT p.id, p.user_id, p.bracket_name, p.group_predictions,
@@ -161,6 +195,22 @@ export async function GET(req: NextRequest) {
       ? result.knockoutDetail.perRound.reduce((sum, r) => sum + r.upsetBonusPoints, 0)
       : 0;
 
+    // Build per-group locked scores. A group is locked when its 6 matches are
+    // all complete; only then is the group's score truly final.
+    const groupScoresLocked: Record<string, number> = {};
+    for (const gd of result.groupStageDetail.perGroup) {
+      if (groupsLocked[gd.groupName]) groupScoresLocked[gd.groupName] = gd.total;
+    }
+
+    // Build per-round locked scores.
+    const roundScoresLocked: Record<string, number> = {};
+    if (result.knockoutDetail) {
+      for (const rd of result.knockoutDetail.perRound) {
+        // rd.round is the label string ('R32', 'R16', etc.) per scoring.ts:195.
+        if (roundsLocked[rd.round]) roundScoresLocked[rd.round] = rd.total;
+      }
+    }
+
     const entry: LeaderboardEntry = {
       username: p.username,
       bracket_name: p.bracket_name,
@@ -171,6 +221,10 @@ export async function GET(req: NextRequest) {
       maxPossible: maxResult.maxTotal,
       championEliminated: maxResult.championEliminated,
       bonusPoints: groupUpsetBonus + knockoutUpsetBonus,
+      groupScoresLocked,
+      roundScoresLocked,
+      groupsLocked,
+      roundsLocked,
       prediction: {
         id: p.id,
         user_id: p.user_id,

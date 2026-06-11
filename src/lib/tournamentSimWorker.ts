@@ -161,6 +161,14 @@ interface PlayerScoreResult {
   /** Score → fraction of sims that produced this exact score. Sums to 1.
    *  Sparse: only buckets with non-zero probability are present. */
   scoreDistribution: Record<number, number>;
+  /** Expected points per group ('A'..'L') across all sims. */
+  avgGroupScores: Record<string, number>;
+  /** Expected points per knockout round ('R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'). */
+  avgRoundScores: Record<string, number>;
+  /** Per-group full score distribution: groupName → score → fraction. */
+  groupScoreDistributions: Record<string, Record<number, number>>;
+  /** Per-round full score distribution: roundLabel → score → fraction. */
+  roundScoreDistributions: Record<string, Record<number, number>>;
 }
 
 interface SimResponse {
@@ -174,6 +182,8 @@ interface SimResponse {
     championProbs: Array<{ team: string; pct: number }>;
     advanceProbs: Array<{ team: string; pct: number }>;
     playerScores?: PlayerScoreResult[];
+    /** matchId → outcome → userKey → expected total score given that outcome. */
+    conditionalScores?: Record<string, Record<string, Record<string, number>>>;
   };
 }
 
@@ -560,6 +570,9 @@ interface TeamStats { pts: number; gf: number; ga: number; gd: number }
 interface GroupStageResult {
   order: Record<string, string[]>;
   tables: Record<string, Record<string, TeamStats>>;
+  /** Per-group matches with scorelines for this sim — used by the conditional
+   *  expected-score accumulator. matches[groupName][i] = { teamA, teamB, scoreA, scoreB }. */
+  matches: Record<string, Array<{ teamA: string; teamB: string; scoreA: number; scoreB: number }>>;
 }
 
 /** Build a lookup of (teamA, teamB) -> actual score for fast match lookup. */
@@ -587,11 +600,13 @@ function simulateGroupStage(
 ): GroupStageResult {
   const order: Record<string, string[]> = {};
   const tables: Record<string, Record<string, TeamStats>> = {};
+  const matches: Record<string, Array<{ teamA: string; teamB: string; scoreA: number; scoreB: number }>> = {};
   for (const [name, teams] of Object.entries(groups)) {
     const table: Record<string, TeamStats> = {};
     for (const t of teams) table[t] = { pts: 0, gf: 0, ga: 0, gd: 0 };
     const actualLookup = buildActualLookup(actualGroupMatches?.[name]);
     const inProgressLookup = buildInProgressLookup(inProgressGroupMatches?.[name]);
+    matches[name] = [];
 
     // In group stage, hosts play all 3 of their matches at home — find the host (if any) in this group
     const hostTeam = teams.find((t) => ratings[t]?.homeField);
@@ -619,6 +634,7 @@ function simulateGroupStage(
         if (ga > gb) table[teams[i]].pts += 3;
         else if (ga === gb) { table[teams[i]].pts += 1; table[teams[j]].pts += 1; }
         else table[teams[j]].pts += 3;
+        matches[name].push({ teamA: teams[i], teamB: teams[j], scoreA: ga, scoreB: gb });
       }
     }
     for (const t of teams) table[t].gd = table[t].gf - table[t].ga;
@@ -627,7 +643,7 @@ function simulateGroupStage(
       table[b].pts - table[a].pts || table[b].gd - table[a].gd || table[b].gf - table[a].gf
     );
   }
-  return { order, tables };
+  return { order, tables, matches };
 }
 
 /**
@@ -813,6 +829,11 @@ function simulateKnockout(
 
 // --- Player Scoring ---
 
+/**
+ * Score the group stage and return per-group breakdown plus total.
+ * The per-group map is keyed by group name (A, B, ..., L) and includes the
+ * group's full point contribution (advance + exact + upset + bonuses).
+ */
 function scoreGroupStageEntry(
   predictions: Array<{ groupName: string; order: string[] }>,
   thirdPlacePicks: string[],
@@ -820,11 +841,12 @@ function scoreGroupStageEntry(
   advancing3rd: string[],
   teamSeeds: Record<string, number>,
   settings: ScoringSettings['groupStage'],
-): number {
+): { total: number; perGroup: Record<string, number> } {
   let total = 0;
+  const perGroup: Record<string, number> = {};
   for (const [groupName, actualOrder] of Object.entries(actualResults)) {
     const pred = predictions.find(p => p.groupName === groupName);
-    if (!pred) continue;
+    if (!pred) { perGroup[groupName] = 0; continue; }
 
     let advCorrectPts = 0, exactPts = 0, upsetPts = 0;
     let allAdvCorrect = true, allPosCorrect = true;
@@ -852,11 +874,13 @@ function scoreGroupStageEntry(
       upsetPts += bonus * settings.upsetBonusPerPlace;
     }
 
-    total += advCorrectPts + exactPts + upsetPts
+    const groupTotal = advCorrectPts + exactPts + upsetPts
       + (allAdvCorrect ? settings.advancementCorrectBonus : 0)
       + (allPosCorrect ? settings.perfectOrderBonus : 0);
+    perGroup[groupName] = groupTotal;
+    total += groupTotal;
   }
-  return total;
+  return { total, perGroup };
 }
 
 interface KoMatchResult {
@@ -865,27 +889,40 @@ interface KoMatchResult {
   round: number;
 }
 
+/**
+ * Score the knockout stage and return per-round breakdown plus total.
+ * Round labels: 'R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'.
+ */
+const KO_ROUND_LABELS = ['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'] as const;
+
 function scoreKnockoutEntry(
   picks: Record<string, string>,
   matchResults: Record<string, KoMatchResult>,
   teamRankings: Record<string, number>,
   settings: ScoringSettings['knockout'],
-): number {
+): { total: number; perRound: Record<string, number> } {
   let total = 0;
+  const perRound: Record<string, number> = {};
+  for (const label of KO_ROUND_LABELS) perRound[label] = 0;
+
   for (const [matchId, result] of Object.entries(matchResults)) {
     if (!picks[matchId] || picks[matchId] !== result.winner) continue;
 
-    total += settings.pointsPerRound[result.round] ?? 0;
+    let pts = settings.pointsPerRound[result.round] ?? 0;
 
     const winnerRank = teamRankings[result.winner] ?? 50;
     const loserRank = teamRankings[result.loser] ?? 50;
     const rankDiff = winnerRank - loserRank;
     if (rankDiff > 0) {
       const mult = settings.upsetMultiplierPerRound[result.round] ?? 0;
-      total += Math.floor(rankDiff / settings.upsetModulus) * mult;
+      pts += Math.floor(rankDiff / settings.upsetModulus) * mult;
     }
+
+    const label = KO_ROUND_LABELS[result.round] ?? 'R32';
+    perRound[label] += pts;
+    total += pts;
   }
-  return total;
+  return { total, perRound };
 }
 
 // eslint-disable-next-line no-restricted-globals
@@ -909,18 +946,51 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
     groupPos[g] = teams.map(() => [0, 0, 0, 0]);
   }
 
-  // Player scoring accumulators
+  // Player scoring accumulators. groupScoreSums and roundScoreSums accumulate
+  // per-bucket point totals across all sims so the leaderboard can show each
+  // user's expected points per group / per round. groupScoreDist / roundScoreDist
+  // track the full distribution of bucket scores so hover histograms work.
   const playerTotals: Record<string, {
     score: number;
     rank: number;
     wins: number;
     scoreCounts: Record<number, number>;
+    groupScoreSums: Record<string, number>;
+    roundScoreSums: Record<string, number>;
+    /** Group → score-value → count. Same shape as scoreCounts but per group. */
+    groupScoreDist: Record<string, Record<number, number>>;
+    /** Round → score-value → count. */
+    roundScoreDist: Record<string, Record<number, number>>;
   }> = {};
   const hasPlayers = entries && entries.length > 0 && scoring && teamSeeds;
   if (hasPlayers) {
     for (const ent of entries!) {
-      playerTotals[ent.key] = { score: 0, rank: 0, wins: 0, scoreCounts: {} };
+      playerTotals[ent.key] = {
+        score: 0, rank: 0, wins: 0, scoreCounts: {},
+        groupScoreSums: {}, roundScoreSums: {},
+        groupScoreDist: {}, roundScoreDist: {},
+      };
     }
+  }
+
+  /**
+   * Conditional expected scores: matchId → outcome → userKey → { totalScore, count }.
+   *   matchId examples: 'group:A:Mexico-South Africa', 'ko:R32-1', 'ko:FINAL'
+   *   outcome for group: 'W' (teamA wins) | 'D' | 'L' (teamB wins)
+   *   outcome for ko: team name (the winner)
+   * After all sims complete, divide totalScore/count to get expected total
+   * given that match outcome.
+   */
+  const conditionalScores: Record<string, Record<string, Record<string, { total: number; count: number }>>> = {};
+  function bucketCond(matchId: string, outcome: string, userKey: string, score: number) {
+    let m = conditionalScores[matchId];
+    if (!m) { m = {}; conditionalScores[matchId] = m; }
+    let o = m[outcome];
+    if (!o) { o = {}; m[outcome] = o; }
+    let u = o[userKey];
+    if (!u) { u = { total: 0, count: 0 }; o[userKey] = u; }
+    u.total += score;
+    u.count += 1;
   }
 
   const PROGRESS_INTERVAL = Math.max(1, Math.floor(numSims / 20));
@@ -967,17 +1037,60 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
         for (const [score, count] of Object.entries(t.scoreCounts)) {
           dist[Number(score)] = Math.round((count / simsSoFar) * 100000) / 100000;
         }
+        const avgGroupScores: Record<string, number> = {};
+        for (const [g, sum] of Object.entries(t.groupScoreSums)) {
+          avgGroupScores[g] = Math.round((sum / simsSoFar) * 10) / 10;
+        }
+        const avgRoundScores: Record<string, number> = {};
+        for (const [r, sum] of Object.entries(t.roundScoreSums)) {
+          avgRoundScores[r] = Math.round((sum / simsSoFar) * 10) / 10;
+        }
+        // Per-bucket distributions: convert counts → fractions.
+        const groupScoreDistributions: Record<string, Record<number, number>> = {};
+        for (const [g, byScore] of Object.entries(t.groupScoreDist)) {
+          const out: Record<number, number> = {};
+          for (const [s, c] of Object.entries(byScore)) {
+            out[Number(s)] = Math.round((c / simsSoFar) * 100000) / 100000;
+          }
+          groupScoreDistributions[g] = out;
+        }
+        const roundScoreDistributions: Record<string, Record<number, number>> = {};
+        for (const [r, byScore] of Object.entries(t.roundScoreDist)) {
+          const out: Record<number, number> = {};
+          for (const [s, c] of Object.entries(byScore)) {
+            out[Number(s)] = Math.round((c / simsSoFar) * 100000) / 100000;
+          }
+          roundScoreDistributions[r] = out;
+        }
         return {
           key: ent.key,
           avgScore: Math.round((t.score / simsSoFar) * 10) / 10,
           avgRank: Math.round((t.rank / simsSoFar) * 10) / 10,
           winPct: Math.round((t.wins / simsSoFar) * 1000) / 10,
           scoreDistribution: dist,
+          avgGroupScores,
+          avgRoundScores,
+          groupScoreDistributions,
+          roundScoreDistributions,
         };
       }).sort((a, b) => b.avgScore - a.avgScore);
     }
 
-    return { groupResults: groupResultsOut, bracketSlots, championProbs, advanceProbs, playerScores };
+    // Conditional expected scores — finalize by dividing total/count per cell.
+    const conditionalExpected: Record<string, Record<string, Record<string, number>>> = {};
+    for (const [matchId, byOutcome] of Object.entries(conditionalScores)) {
+      const m: Record<string, Record<string, number>> = {};
+      for (const [outcome, byUser] of Object.entries(byOutcome)) {
+        const u: Record<string, number> = {};
+        for (const [userKey, { total, count }] of Object.entries(byUser)) {
+          if (count > 0) u[userKey] = Math.round((total / count) * 10) / 10;
+        }
+        m[outcome] = u;
+      }
+      conditionalExpected[matchId] = m;
+    }
+
+    return { groupResults: groupResultsOut, bracketSlots, championProbs, advanceProbs, playerScores, conditionalScores: conditionalExpected };
   }
 
   // Sim-count checkpoints at which to emit partial results. Every 1000 sims
@@ -1009,6 +1122,7 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
 
     let groupOrder: Record<string, string[]>;
     let advancing3rd: string[];
+    let groupMatchesThisSim: Record<string, Array<{ teamA: string; teamB: string; scoreA: number; scoreB: number }>> = {};
     if (groupStageLocked) {
       groupOrder = finalGroupStandings!;
       advancing3rd = finalAdvancing3rd ?? [];
@@ -1016,6 +1130,7 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
       const gsResult = simulateGroupStage(groups, ratings, avgGA, actualGroupMatches, form, inProgressGroupMatches);
       groupOrder = gsResult.order;
       advancing3rd = getBest3rdPlace(groupOrder, gsResult.tables);
+      groupMatchesThisSim = gsResult.matches;
     }
 
     // Track group positions
@@ -1074,14 +1189,19 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
         }
       }
 
-      const scores: { key: string; score: number }[] = [];
+      const scores: { key: string; score: number; perGroup: Record<string, number>; perRound: Record<string, number> }[] = [];
       for (const ent of entries!) {
-        const gsScore = scoreGroupStageEntry(
+        const gs = scoreGroupStageEntry(
           ent.group_predictions, ent.third_place_picks,
           groupOrder, advancing3rd, teamSeeds!, scoring!.groupStage,
         );
-        const koScore = scoreKnockoutEntry(ent.knockout_picks, koMatchResults, teamRankings ?? {}, scoring!.knockout);
-        scores.push({ key: ent.key, score: gsScore + koScore });
+        const ko = scoreKnockoutEntry(ent.knockout_picks, koMatchResults, teamRankings ?? {}, scoring!.knockout);
+        scores.push({
+          key: ent.key,
+          score: gs.total + ko.total,
+          perGroup: gs.perGroup,
+          perRound: ko.perRound,
+        });
       }
       scores.sort((a, b) => b.score - a.score);
       for (let i = 0; i < scores.length; i++) {
@@ -1092,6 +1212,37 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
         if (i === 0) t.wins++;
         // Tally score histogram (integer buckets — group + knockout always integer).
         t.scoreCounts[s] = (t.scoreCounts[s] ?? 0) + 1;
+        // Accumulate per-bucket sums + full distributions.
+        for (const [g, pts] of Object.entries(scores[i].perGroup)) {
+          t.groupScoreSums[g] = (t.groupScoreSums[g] ?? 0) + pts;
+          if (!t.groupScoreDist[g]) t.groupScoreDist[g] = {};
+          t.groupScoreDist[g][pts] = (t.groupScoreDist[g][pts] ?? 0) + 1;
+        }
+        for (const [r, pts] of Object.entries(scores[i].perRound)) {
+          t.roundScoreSums[r] = (t.roundScoreSums[r] ?? 0) + pts;
+          if (!t.roundScoreDist[r]) t.roundScoreDist[r] = {};
+          t.roundScoreDist[r][pts] = (t.roundScoreDist[r][pts] ?? 0) + 1;
+        }
+      }
+
+      // Bucket this sim into conditionalScores for every match outcome.
+      // We do this once per sim (not per user-iteration) and loop over users inside.
+      for (const [groupName, gms] of Object.entries(groupMatchesThisSim)) {
+        for (const m of gms) {
+          const matchId = `group:${groupName}:${m.teamA}-${m.teamB}`;
+          const outcome = m.scoreA > m.scoreB ? 'W' : m.scoreA < m.scoreB ? 'L' : 'D';
+          const exact = `${m.scoreA}-${m.scoreB}`;
+          for (const sc of scores) {
+            bucketCond(matchId, outcome, sc.key, sc.score);
+            bucketCond(matchId, exact, sc.key, sc.score);
+          }
+        }
+      }
+      for (const [matchId, ko] of Object.entries(koMatchResults)) {
+        const id = `ko:${matchId}`;
+        for (const sc of scores) {
+          bucketCond(id, ko.winner, sc.key, sc.score);
+        }
       }
     }
   }

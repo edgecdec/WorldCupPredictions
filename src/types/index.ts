@@ -133,6 +133,21 @@ export interface LeaderboardEntry {
   perfectGroups?: number;
   hotStreak?: number;
   contrarianPicks?: number;
+  /** Forecast total expected score (from worker). Used as secondary sort when
+   *  totalScore is tied (which it will be early in the tournament). */
+  expectedScore?: number;
+  /** Locked actual points per group (only when group is fully complete). */
+  groupScoresLocked?: Record<string, number>;
+  /** Forecast expected points per group (always available once worker runs). */
+  groupScoresExpected?: Record<string, number>;
+  /** Locked actual points per knockout round (only when round complete). */
+  roundScoresLocked?: Record<string, number>;
+  /** Forecast expected points per knockout round (from worker). */
+  roundScoresExpected?: Record<string, number>;
+  /** Per-group lock state — true if that group's results are final. */
+  groupsLocked?: Record<string, boolean>;
+  /** Per-round lock state. */
+  roundsLocked?: Record<string, boolean>;
   completion?: {
     groupsFilled: number;
     thirdPlaceFilled: number;

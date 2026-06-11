@@ -280,7 +280,7 @@ function deriveConditionalMatchId(game: LiveGame, groupName: string | undefined)
  * expected total score, computed from the forecast's conditionalScores.
  */
 function ImpactPanel({
-  game, countryCodeMap, currentUserKey, userExpectedScore, conditionalScores, groupName,
+  game, countryCodeMap, currentUserKey, userExpectedScore, conditionalScores, groupName, odds,
 }: {
   game: LiveGame;
   countryCodeMap: Record<string, string>;
@@ -288,6 +288,9 @@ function ImpactPanel({
   userExpectedScore?: number;
   conditionalScores?: Record<string, Record<string, Record<string, number>>>;
   groupName?: string;
+  /** Pre-match (or live, partway through) match odds — gates each cell so we
+   *  hide deltas for outcomes too rare to estimate reliably (<3%). */
+  odds?: MatchOdds | null;
 }) {
   if (!currentUserKey || userExpectedScore == null || !conditionalScores) return null;
   const matchId = deriveConditionalMatchId(game, groupName);
@@ -299,14 +302,22 @@ function ImpactPanel({
   const expD = byOutcome.D?.[currentUserKey];
   const expL = byOutcome.L?.[currentUserKey];
 
-  const fmt = (val?: number) => {
+  // Hide deltas for outcomes <3% likely — fewer sims hit those buckets so the
+  // expected score is noisy and not meaningful to surface.
+  const MIN_OUTCOME_PROB = 0.03;
+  const showW = !odds || odds.winA >= MIN_OUTCOME_PROB;
+  const showD = !odds || odds.draw >= MIN_OUTCOME_PROB;
+  const showL = !odds || odds.winB >= MIN_OUTCOME_PROB;
+
+  const fmt = (val?: number, show = true) => {
+    if (!show) return '—';
     if (val == null) return '—';
     const delta = val - userExpectedScore;
     const sign = delta >= 0 ? '+' : '';
     return `${sign}${delta.toFixed(1)}`;
   };
-  const color = (val?: number) => {
-    if (val == null) return 'text.secondary';
+  const color = (val?: number, show = true) => {
+    if (!show || val == null) return 'text.secondary';
     const d = val - userExpectedScore;
     if (Math.abs(d) < 0.05) return 'text.secondary';
     return d > 0 ? 'success.main' : 'error.main';
@@ -326,18 +337,18 @@ function ImpactPanel({
             {homeCC && <TeamFlag countryCode={homeCC} size={12} />}
             <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'text.secondary', fontWeight: 700 }}>W</Typography>
           </Box>
-          <Typography variant="caption" sx={{ fontSize: '0.7rem', fontWeight: 700, color: color(expW) }}>{fmt(expW)}</Typography>
+          <Typography variant="caption" sx={{ fontSize: '0.7rem', fontWeight: 700, color: color(expW, showW) }}>{fmt(expW, showW)}</Typography>
         </Box>
         <Box sx={{ flex: 1, textAlign: 'center' }}>
           <Typography variant="caption" sx={{ display: 'block', fontSize: '0.6rem', color: 'text.secondary', fontWeight: 700, mb: 0.1 }}>Draw</Typography>
-          <Typography variant="caption" sx={{ fontSize: '0.7rem', fontWeight: 700, color: color(expD) }}>{fmt(expD)}</Typography>
+          <Typography variant="caption" sx={{ fontSize: '0.7rem', fontWeight: 700, color: color(expD, showD) }}>{fmt(expD, showD)}</Typography>
         </Box>
         <Box sx={{ flex: 1, textAlign: 'center' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.3, mb: 0.1 }}>
             {awayCC && <TeamFlag countryCode={awayCC} size={12} />}
             <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'text.secondary', fontWeight: 700 }}>W</Typography>
           </Box>
-          <Typography variant="caption" sx={{ fontSize: '0.7rem', fontWeight: 700, color: color(expL) }}>{fmt(expL)}</Typography>
+          <Typography variant="caption" sx={{ fontSize: '0.7rem', fontWeight: 700, color: color(expL, showL) }}>{fmt(expL, showL)}</Typography>
         </Box>
       </Box>
     </Box>
@@ -462,6 +473,7 @@ function GameCard({ game, countryCodeMap, bracketSlots, numSims, currentUserKey,
             userExpectedScore={userExpectedScore}
             conditionalScores={conditionalScores}
             groupName={groupName}
+            odds={odds}
           />
         </CardContent>
       </CardActionArea>
@@ -488,7 +500,10 @@ function GameCard({ game, countryCodeMap, bracketSlots, numSims, currentUserKey,
               const expForScoreline = matchId && currentUserKey
                 ? conditionalScores?.[matchId]?.[exactKey]?.[currentUserKey]
                 : undefined;
-              const showDelta = expForScoreline != null && userExpectedScore != null;
+              // Hide deltas for scorelines below 3% sample frequency — too few
+              // sims hit those buckets to estimate the conditional score reliably.
+              const scorelineProb = f.count / SAMPLES_FOR_HOVER;
+              const showDelta = expForScoreline != null && userExpectedScore != null && scorelineProb >= 0.03;
               const delta = showDelta ? (expForScoreline as number) - (userExpectedScore as number) : 0;
               const deltaSign = delta >= 0 ? '+' : '';
               const deltaColor = !showDelta ? 'text.secondary'

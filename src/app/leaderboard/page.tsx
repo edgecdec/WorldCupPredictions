@@ -15,8 +15,9 @@ import WarningIcon from '@mui/icons-material/Warning';
 import CancelIcon from '@mui/icons-material/Cancel';
 import { useAuth } from '@/hooks/useAuth';
 import { useSelectedGroup } from '@/hooks/useSelectedGroup';
-import { useTournamentSim } from '@/hooks/useTournamentSim';
+import { useTournamentSim, GROUPS } from '@/hooks/useTournamentSim';
 import type { PlayerEntry } from '@/hooks/useTournamentSim';
+import { useLiveScores } from '@/hooks/useLiveScores';
 import Link from 'next/link';
 import UserLink from '@/components/common/UserLink';
 import BracketLink from '@/components/common/BracketLink';
@@ -113,20 +114,55 @@ function LeaderboardContent() {
       }));
   }, [leaderboard]);
 
+  // Live ESPN scores — used to merge games that have just finished (state='post')
+  // into actualResults *before* the DB sync catches up. Without this, the worker
+  // keeps re-simulating a finished match's W/D/L, so its impact panel and
+  // expected scores don't reflect the known result.
+  const { games: liveGames } = useLiveScores(Boolean(user));
+
+  // Pre-compute team → group lookup once.
+  const teamToGroup = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const [g, teams] of Object.entries(GROUPS)) {
+      for (const t of teams) m[t] = g;
+    }
+    return m;
+  }, []);
+
   // Build actualResults shape from the loaded `results` data so the worker
-  // locks in already-completed matches.
+  // locks in already-completed matches. Merge in any ESPN-final games whose
+  // FT scores haven't been written to the DB yet.
   const actualResults = useMemo(() => {
     if (!results) return undefined;
     const r = results as TournamentResults & { groupMatches?: Record<string, Array<{ teamA: string; teamB: string; scoreA: number; scoreB: number }>> };
+    const groupMatches: Record<string, Array<{ teamA: string; teamB: string; scoreA: number; scoreB: number }>> = {};
+    for (const [g, arr] of Object.entries(r.groupMatches ?? {})) groupMatches[g] = [...arr];
+    // Merge ESPN-final group games not yet in groupMatches.
+    for (const game of liveGames) {
+      if (game.state !== 'post') continue;
+      if ((game.stage ?? 'group') !== 'group') continue;
+      const groupName = teamToGroup[game.home?.name];
+      if (!groupName || teamToGroup[game.away?.name] !== groupName) continue;
+      const exists = (groupMatches[groupName] ?? []).some(
+        (m) => (m.teamA === game.home.name && m.teamB === game.away.name) ||
+               (m.teamA === game.away.name && m.teamB === game.home.name),
+      );
+      if (exists) continue;
+      const sA = parseInt(game.home.score, 10) || 0;
+      const sB = parseInt(game.away.score, 10) || 0;
+      (groupMatches[groupName] ??= []).push({
+        teamA: game.home.name, teamB: game.away.name, scoreA: sA, scoreB: sB,
+      });
+    }
     return {
-      groupMatches: r.groupMatches,
+      groupMatches: Object.keys(groupMatches).length > 0 ? groupMatches : undefined,
       finalGroupStandings: r.groupStage
         ? Object.fromEntries(r.groupStage.groupResults.map((gr) => [gr.groupName, gr.order]))
         : undefined,
       finalAdvancing3rd: r.groupStage?.advancingThirdPlace,
       knockoutWinners: r.knockout,
     };
-  }, [results]);
+  }, [results, liveGames, teamToGroup]);
 
   const { results: simResults, running: simRunning, progress: simProgress, numSims: simNumSims, simsCompleted: simSimsCompleted } = useTournamentSim(playerEntries, scoringSettings ?? undefined, actualResults);
 

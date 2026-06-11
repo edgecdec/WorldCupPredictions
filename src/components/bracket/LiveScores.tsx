@@ -475,15 +475,20 @@ function GameCard({ game, countryCodeMap, bracketSlots, numSims, currentUserKey,
               </Typography>
             </Box>
           )}
-          <ImpactPanel
-            game={game}
-            countryCodeMap={countryCodeMap}
-            currentUserKey={currentUserKey}
-            userExpectedScore={userExpectedScore}
-            conditionalScores={conditionalScores}
-            groupName={groupName}
-            odds={odds}
-          />
+          {/* Once the match is final, the W/D/L distribution is no longer
+              meaningful — the actual result is known. Hide until the DB sync
+              picks up the FT score and the worker re-runs with it locked. */}
+          {!isFinal && (
+            <ImpactPanel
+              game={game}
+              countryCodeMap={countryCodeMap}
+              currentUserKey={currentUserKey}
+              userExpectedScore={userExpectedScore}
+              conditionalScores={conditionalScores}
+              groupName={groupName}
+              odds={odds}
+            />
+          )}
         </CardContent>
       </CardActionArea>
       {isLive && (

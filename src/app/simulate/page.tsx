@@ -537,8 +537,34 @@ export default function SimulatePage() {
           }
           ar.finalGroupStandings = standings;
           ar.finalAdvancing3rd = rd.groupStage.advancingThirdPlace ?? [];
-        } else if (rd?.groupMatches && Object.keys(rd.groupMatches).length > 0) {
-          ar.groupMatches = rd.groupMatches;
+        } else {
+          // Start from any DB-tracked group matches, then merge in ESPN-final
+          // games whose FT scores haven't been written to the DB yet so the
+          // worker treats just-finished games as locked instead of resimulating
+          // their W/D/L outcomes.
+          const groupMatches: Record<string, Array<{ teamA: string; teamB: string; scoreA: number; scoreB: number }>> = {};
+          for (const [g, arr] of Object.entries(rd?.groupMatches ?? {})) {
+            groupMatches[g] = [...(arr as Array<{ teamA: string; teamB: string; scoreA: number; scoreB: number }>)];
+          }
+          if (sRes?.ok && Array.isArray(sRes.games)) {
+            for (const game of sRes.games) {
+              if (game.state !== 'post') continue;
+              if ((game.stage ?? 'group') !== 'group') continue;
+              const groupName = teamToGroup[game.home?.name];
+              if (!groupName || teamToGroup[game.away?.name] !== groupName) continue;
+              const exists = (groupMatches[groupName] ?? []).some(
+                (m) => (m.teamA === game.home.name && m.teamB === game.away.name) ||
+                       (m.teamA === game.away.name && m.teamB === game.home.name),
+              );
+              if (exists) continue;
+              const sA = parseInt(game.home.score, 10) || 0;
+              const sB = parseInt(game.away.score, 10) || 0;
+              (groupMatches[groupName] ??= []).push({
+                teamA: game.home.name, teamB: game.away.name, scoreA: sA, scoreB: sB,
+              });
+            }
+          }
+          if (Object.keys(groupMatches).length > 0) ar.groupMatches = groupMatches;
         }
         if (rd?.knockout && Object.keys(rd.knockout).length > 0) {
           ar.knockoutWinners = rd.knockout;

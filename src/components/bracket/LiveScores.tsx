@@ -18,11 +18,20 @@ const ESPN_SCOREBOARD_URL = 'https://www.espn.com/soccer/scoreboard/_/league/fif
 const TOP_SCORELINES = 6;
 const SAMPLES_FOR_HOVER = 2000;
 
-/** Parse ESPN's clock string ("45'", "67:23", "HT", "FT") into minutes. */
+/** Parse ESPN's clock string into elapsed minutes.
+ *  Known ESPN formats:
+ *    "45'", "67'"          — regulation minute with trailing tick
+ *    "90'+6'", "45+2'"     — regulation + stoppage. The tick can appear after
+ *                            the regulation minute, after stoppage, or both.
+ *    "67:23"               — minute:second clock
+ *    "HT", "FT"            — half/full time
+ *  We strip apostrophes before matching so the various ESPN tick placements
+ *  all parse to the same number. */
 function parseMinutesPlayed(clock: string, period: number): number | null {
-  const c = (clock || '').trim();
-  if (!c) return null;
-  const m = c.match(/^(\d+)(?:\+(\d+))?'?$/);
+  const raw = (clock || '').trim();
+  if (!raw) return null;
+  const c = raw.replace(/'/g, '');
+  const m = c.match(/^(\d+)(?:\+(\d+))?$/);
   if (m) return parseInt(m[1], 10) + (m[2] ? parseInt(m[2], 10) : 0);
   const m2 = c.match(/^(\d+):(\d+)$/);
   if (m2) return parseInt(m2[1], 10);

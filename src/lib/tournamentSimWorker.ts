@@ -1227,14 +1227,22 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
 
       // Bucket this sim into conditionalScores for every match outcome.
       // We do this once per sim (not per user-iteration) and loop over users inside.
+      // Also bucket under the reversed team order with W/L flipped — the front-end
+      // doesn't know the canonical GROUPS-array order, so it may build the matchId
+      // with home/away from ESPN in either direction.
       for (const [groupName, gms] of Object.entries(groupMatchesThisSim)) {
         for (const m of gms) {
           const matchId = `group:${groupName}:${m.teamA}-${m.teamB}`;
+          const matchIdRev = `group:${groupName}:${m.teamB}-${m.teamA}`;
           const outcome = m.scoreA > m.scoreB ? 'W' : m.scoreA < m.scoreB ? 'L' : 'D';
+          const outcomeRev = outcome === 'W' ? 'L' : outcome === 'L' ? 'W' : 'D';
           const exact = `${m.scoreA}-${m.scoreB}`;
+          const exactRev = `${m.scoreB}-${m.scoreA}`;
           for (const sc of scores) {
             bucketCond(matchId, outcome, sc.key, sc.score);
             bucketCond(matchId, exact, sc.key, sc.score);
+            bucketCond(matchIdRev, outcomeRev, sc.key, sc.score);
+            bucketCond(matchIdRev, exactRev, sc.key, sc.score);
           }
         }
       }

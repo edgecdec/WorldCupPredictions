@@ -8,7 +8,7 @@ import AuthForm from "@/components/auth/AuthForm";
 import LiveScores from "@/components/bracket/LiveScores";
 import MiniBracket from "@/components/bracket/MiniBracket";
 import { useAuth } from "@/hooks/useAuth";
-import { useLiveScores } from "@/hooks/useLiveScores";
+import { useLiveScores, todayInPacific } from "@/hooks/useLiveScores";
 import type { Tournament, BracketData, TournamentResults, KnockoutMatchup } from "@/types";
 
 interface TournamentResponse {
@@ -30,11 +30,8 @@ export default function Home() {
     tournament?.lock_time_groups && new Date(tournament.lock_time_groups) <= new Date()
   );
   // Show ESPN games (upcoming + live + recent) any time the user is logged in.
-  // Day-by-day pagination — defaults to today, prev/next arrows in the header.
-  const [scoreDate, setScoreDate] = useState<Date>(() => {
-    const d = new Date();
-    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  });
+  // Day-by-day pagination, anchored to today in Pacific time.
+  const [scoreDate, setScoreDate] = useState<Date>(() => todayInPacific());
   const { games, loading: scoresLoading } = useLiveScores(Boolean(user), scoreDate);
 
   const countryCodeMap: Record<string, string> = {};

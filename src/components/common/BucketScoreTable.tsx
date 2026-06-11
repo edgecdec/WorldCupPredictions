@@ -15,6 +15,7 @@ const ROUND_LABELS = ['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'] as const;
 
 const COL_USER_WIDTH = 140;
 const COL_RANK_WIDTH = 36;
+const COL_PTS_WIDTH = 50;
 const COL_EXP_WIDTH = 70;
 const COL_BUCKET_WIDTH = 52;
 
@@ -39,7 +40,7 @@ export interface BucketScoreTableProps {
 }
 
 type Mode = 'groups' | 'knockout';
-type SortKey = 'rank' | 'expectedScore' | { type: 'group'; name: string } | { type: 'round'; name: string };
+type SortKey = 'rank' | 'totalScore' | 'expectedScore' | { type: 'group'; name: string } | { type: 'round'; name: string };
 
 function userKey(entry: LeaderboardEntry): string {
   return `${entry.username}|${entry.bracket_name}`;
@@ -62,7 +63,7 @@ function ExpPtsCell({
       onMouseEnter={hasHistogram ? (e) => setAnchor(e.currentTarget) : undefined}
       onMouseLeave={() => setAnchor(null)}
       sx={{
-        position: 'sticky', left: COL_RANK_WIDTH + COL_USER_WIDTH, zIndex: 1,
+        position: 'sticky', left: COL_RANK_WIDTH + COL_USER_WIDTH + COL_PTS_WIDTH, zIndex: 1,
         bgcolor: rowBg,
         minWidth: COL_EXP_WIDTH, maxWidth: COL_EXP_WIDTH,
         py: 0.5, px: 0.5,
@@ -204,20 +205,26 @@ export default function BucketScoreTable({
   }, [entries, expectedScoresByKey, expectedGroupScoresByKey, expectedRoundScoresByKey]);
 
   const sorted = useMemo(() => {
-    const dir = sortDir === 'asc' ? 1 : -1;
+    // signMul converts a "desc" comparison (b-a) into the requested direction:
+    // sortDir=desc → multiply by 1 (b-a stays desc).
+    // sortDir=asc  → multiply by -1 (becomes a-b, ascending).
+    const signMul = sortDir === 'desc' ? 1 : -1;
     return [...enriched].sort((a, b) => {
       // Primary: locked totalScore desc, then expectedScore desc.
       // Sort key overrides this.
-      if (sortKey === 'rank') {
-        // Rank is computed from locked totalScore desc, then expectedScore desc.
+      if (sortKey === 'rank' || sortKey === 'totalScore') {
+        // Rank/Pts column: locked points primary, expected as tiebreaker.
         const dt = b.entry.totalScore - a.entry.totalScore;
-        if (dt !== 0) return dt;
-        return b.expectedScore - a.expectedScore;
+        if (dt !== 0) return dt * signMul;
+        return (b.expectedScore - a.expectedScore) * signMul;
       }
       if (sortKey === 'expectedScore') {
+        // Locked totalScore is the primary tiebreaker — never inverted by sortDir
+        // because we want users with real points to anchor above expected ones.
+        // Within tied totalScore, expectedScore follows the sortDir direction.
         const dt = b.entry.totalScore - a.entry.totalScore;
-        if (dt !== 0) return dt * dir / Math.abs(dir);
-        return (b.expectedScore - a.expectedScore) * dir / Math.abs(dir);
+        if (dt !== 0) return dt;
+        return (b.expectedScore - a.expectedScore) * signMul;
       }
       if (typeof sortKey === 'object') {
         if (sortKey.type === 'group') {
@@ -225,13 +232,13 @@ export default function BucketScoreTable({
           const bLocked = b.entry.groupScoresLocked?.[sortKey.name];
           const aVal = aLocked != null ? aLocked : (a.groupExp[sortKey.name] ?? 0);
           const bVal = bLocked != null ? bLocked : (b.groupExp[sortKey.name] ?? 0);
-          return (bVal - aVal) * dir / Math.abs(dir);
+          return (bVal - aVal) * signMul;
         }
         const aLocked = a.entry.roundScoresLocked?.[sortKey.name];
         const bLocked = b.entry.roundScoresLocked?.[sortKey.name];
         const aVal = aLocked != null ? aLocked : (a.roundExp[sortKey.name] ?? 0);
         const bVal = bLocked != null ? bLocked : (b.roundExp[sortKey.name] ?? 0);
-        return (bVal - aVal) * dir / Math.abs(dir);
+        return (bVal - aVal) * signMul;
       }
       return 0;
     });
@@ -278,6 +285,23 @@ export default function BucketScoreTable({
           align="right"
           sx={{
             position: 'sticky', left: COL_RANK_WIDTH + COL_USER_WIDTH, zIndex: 3,
+            bgcolor: 'background.paper',
+            minWidth: COL_PTS_WIDTH, maxWidth: COL_PTS_WIDTH,
+            fontWeight: 700, py: 1, px: 0.5,
+          }}
+        >
+          <TableSortLabel
+            active={isSortActive('totalScore')}
+            direction={sortDir}
+            onClick={() => handleSort('totalScore')}
+          >
+            Pts
+          </TableSortLabel>
+        </TableCell>
+        <TableCell
+          align="right"
+          sx={{
+            position: 'sticky', left: COL_RANK_WIDTH + COL_USER_WIDTH + COL_PTS_WIDTH, zIndex: 3,
             bgcolor: 'background.paper',
             minWidth: COL_EXP_WIDTH, maxWidth: COL_EXP_WIDTH,
             fontWeight: 700, py: 1, px: 0.5,
@@ -392,6 +416,19 @@ export default function BucketScoreTable({
                         <BracketLink username={entry.username} bracketName={entry.bracket_name} />
                       </Box>
                     </Box>
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      position: 'sticky', left: COL_RANK_WIDTH + COL_USER_WIDTH, zIndex: 1,
+                      bgcolor: rowBg,
+                      minWidth: COL_PTS_WIDTH, maxWidth: COL_PTS_WIDTH,
+                      py: 0.5, px: 0.5,
+                      fontWeight: 700,
+                      fontSize: '0.85rem',
+                    }}
+                  >
+                    {entry.totalScore}
                   </TableCell>
                   <ExpPtsCell
                     rowBg={rowBg}

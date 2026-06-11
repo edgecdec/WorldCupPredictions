@@ -21,7 +21,7 @@ import AuthForm from '@/components/auth/AuthForm';
 import TeamFlag from '@/components/common/TeamFlag';
 import ForecastBracket from '@/components/bracket/ForecastBracket';
 import LiveScores from '@/components/bracket/LiveScores';
-import { useLiveScores } from '@/hooks/useLiveScores';
+import { useLiveScores, todayInPacific } from '@/hooks/useLiveScores';
 import { PELE_RATINGS } from '@/lib/peleRatings';
 import type { ScoringSettings, GroupPrediction } from '@/types';
 import { DEFAULT_SCORING } from '@/types';
@@ -634,12 +634,9 @@ export default function SimulatePage() {
   // numSims at the end (or to 1 to avoid division-by-zero before any sims).
   const effectiveNumSims = simsCompleted > 0 ? simsCompleted : numSims;
 
-  // Day-by-day scoreboard. Default to "today" (UTC). Each click of prev/next
-  // bumps by one day; the hook re-fetches ESPN for that date.
-  const [scoreDate, setScoreDate] = useState<Date>(() => {
-    const d = new Date();
-    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  });
+  // Day-by-day scoreboard, anchored to today in Pacific time so US users see
+  // their own "matchday" grouping. Each click of prev/next bumps by 24h.
+  const [scoreDate, setScoreDate] = useState<Date>(() => todayInPacific());
   const { games: liveGames, loading: liveLoading } = useLiveScores(Boolean(user), scoreDate);
 
   const countryCodeMap = useMemo(() => {

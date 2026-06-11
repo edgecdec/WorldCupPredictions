@@ -53,16 +53,13 @@ function getEspnUrl(gameId: string): string {
   return gameId ? `${ESPN_MATCH_URL}/${gameId}` : ESPN_SCOREBOARD_URL;
 }
 
-/** YYYYMMDD format used by ESPN's date param. */
-function toEspnDate(d: Date): string {
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(d.getUTCDate()).padStart(2, '0');
-  return `${y}${m}${day}`;
-}
-
+/** Friendly day heading using Pacific time so day-by-day pagination matches
+ *  the ESPN-side date the hook uses. */
 function formatDateHeading(d: Date): string {
-  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
+  return d.toLocaleDateString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric',
+    timeZone: 'America/Los_Angeles',
+  });
 }
 
 /** Format the kickoff time (local) — "3:00 PM" — for upcoming/scheduled games. */
@@ -401,14 +398,18 @@ function GameCard({ game, countryCodeMap, bracketSlots, numSims, currentUserKey,
       >
         <CardContent sx={{ py: 0.75, px: 1.25, '&:last-child': { pb: 0.75 } }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.25, gap: 0.5 }}>
-            <Chip
-              label={statusLabel(game)}
-              color={statusColor(game.state)}
-              size="small"
-              variant={isLive ? 'filled' : 'outlined'}
-              sx={{ height: 18, fontSize: '0.6rem' }}
-            />
-            {!isLive && !isFinal && (
+            {/* Live games show the running clock; finals show 'Final'; scheduled
+                games show only the kickoff time (the status chip would just
+                duplicate the date/time string). */}
+            {isLive || isFinal ? (
+              <Chip
+                label={statusLabel(game)}
+                color={statusColor(game.state)}
+                size="small"
+                variant={isLive ? 'filled' : 'outlined'}
+                sx={{ height: 18, fontSize: '0.6rem' }}
+              />
+            ) : (
               <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.65rem' }}>
                 {formatKickoff(game.date)}
               </Typography>
@@ -469,9 +470,13 @@ function GameCard({ game, countryCodeMap, bracketSlots, numSims, currentUserKey,
             </Typography>
             {scorelineFreqs?.map((f) => (
               <Box key={`${f.scoreA}-${f.scoreB}`} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.2, gap: 1 }}>
-                <Typography variant="caption" sx={{ fontSize: '0.72rem' }}>
-                  {f.scoreA}-{f.scoreB}
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4 }}>
+                  {countryCodeMap[game.home.name] && <TeamFlag countryCode={countryCodeMap[game.home.name]} size={14} />}
+                  <Typography variant="caption" sx={{ fontSize: '0.72rem', minWidth: 14, textAlign: 'center' }}>{f.scoreA}</Typography>
+                  <Typography variant="caption" sx={{ fontSize: '0.72rem', color: 'text.secondary' }}>—</Typography>
+                  <Typography variant="caption" sx={{ fontSize: '0.72rem', minWidth: 14, textAlign: 'center' }}>{f.scoreB}</Typography>
+                  {countryCodeMap[game.away.name] && <TeamFlag countryCode={countryCodeMap[game.away.name]} size={14} />}
+                </Box>
                 <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.72rem' }}>
                   {fmtPct(f.count / SAMPLES_FOR_HOVER)}
                 </Typography>

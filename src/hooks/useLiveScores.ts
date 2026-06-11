@@ -9,12 +9,32 @@ interface UseLiveScoresResult {
   loading: boolean;
 }
 
-/** Format Date as ESPN's YYYYMMDD param (UTC). */
+/**
+ * Format a Date as ESPN's YYYYMMDD param using the **Pacific time** day. Most
+ * users are US-based so a "matchday" should follow PT — e.g. a 9pm PT game
+ * (which is 4am UTC the next day) belongs to today's PT date, not tomorrow's
+ * UTC date. en-CA gives us ISO-style YYYY-MM-DD which we strip dashes from.
+ */
 function toEspnDate(d: Date): string {
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(d.getUTCDate()).padStart(2, '0');
-  return `${y}${m}${day}`;
+  const ymd = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(d);
+  return ymd.replace(/-/g, '');
+}
+
+/**
+ * Anchor for "today" in Pacific time, as a Date pointing at noon UTC on the
+ * PT calendar day. Noon UTC is a DST-safe anchor — it resolves to the same PT
+ * date regardless of whether PT is currently UTC-7 (PDT, summer) or UTC-8
+ * (PST, winter). Day-by-day pickers add/subtract 24h from this anchor.
+ */
+export function todayInPacific(): Date {
+  const ymd = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date());
+  return new Date(`${ymd}T12:00:00Z`);
 }
 
 /**

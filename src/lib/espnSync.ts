@@ -122,13 +122,50 @@ export async function fetchLiveScores(bracketData: BracketData): Promise<LiveGam
   return events.map((e) => parseEvent(e, bracketData));
 }
 
-/** Fetch ESPN fixtures for a specific date (YYYYMMDD format). */
+/** Format a Date as YYYYMMDD in the PT calendar. */
+function ptYmd(d: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(d).replace(/-/g, '');
+}
+
+/** Convert YYYYMMDD to a Date at noon UTC on that calendar day. */
+function ymdToNoonUtc(ymd: string): Date {
+  const y = ymd.slice(0, 4), mo = ymd.slice(4, 6), da = ymd.slice(6, 8);
+  return new Date(`${y}-${mo}-${da}T12:00:00Z`);
+}
+
+/**
+ * Fetch ESPN fixtures for a specific **Pacific** calendar day (YYYYMMDD).
+ *
+ * ESPN buckets games by Eastern date. A 9pm PT kickoff is already 12am ET on
+ * the next ET calendar day, so asking ESPN for the PT date alone misses these
+ * "midnight ET" games — they leak onto the following day in the UI. Fix: pull
+ * the PT day's ET bucket AND the next ET bucket, then filter to events whose
+ * actual kickoff falls on the requested PT day.
+ */
 export async function fetchScoresByDate(bracketData: BracketData, date: string): Promise<LiveGame[]> {
-  const res = await fetch(`${SCOREBOARD_URL}?dates=${encodeURIComponent(date)}`, { next: { revalidate: 60 } });
-  if (!res.ok) return [];
-  const data = await res.json();
-  const events: any[] = data.events ?? [];
-  return events.map((e) => parseEvent(e, bracketData));
+  const next = new Date(ymdToNoonUtc(date).getTime() + 24 * 60 * 60 * 1000);
+  const nextYmd = ptYmd(next);
+  const [r1, r2] = await Promise.all([
+    fetch(`${SCOREBOARD_URL}?dates=${encodeURIComponent(date)}`, { next: { revalidate: 60 } }),
+    fetch(`${SCOREBOARD_URL}?dates=${encodeURIComponent(nextYmd)}`, { next: { revalidate: 60 } }),
+  ]);
+  const events: any[] = [];
+  if (r1.ok) events.push(...((await r1.json()).events ?? []));
+  if (r2.ok) events.push(...((await r2.json()).events ?? []));
+  // Dedupe by ESPN event id (the two queries may overlap), then keep only
+  // events whose kickoff actually falls on the requested PT day.
+  const seen = new Set<string>();
+  const filtered = events.filter((e) => {
+    if (!e?.id || seen.has(e.id)) return false;
+    seen.add(e.id);
+    const iso = e.date as string | undefined;
+    if (!iso) return false;
+    return ptYmd(new Date(iso)) === date;
+  });
+  return filtered.map((e) => parseEvent(e, bracketData));
 }
 
 function parseStat(stats: any[], name: string): number {

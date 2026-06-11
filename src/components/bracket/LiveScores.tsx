@@ -280,9 +280,10 @@ function deriveConditionalMatchId(game: LiveGame, groupName: string | undefined)
  * expected total score, computed from the forecast's conditionalScores.
  */
 function ImpactPanel({
-  game, currentUserKey, userExpectedScore, conditionalScores, groupName,
+  game, countryCodeMap, currentUserKey, userExpectedScore, conditionalScores, groupName,
 }: {
   game: LiveGame;
+  countryCodeMap: Record<string, string>;
   currentUserKey?: string;
   userExpectedScore?: number;
   conditionalScores?: Record<string, Record<string, Record<string, number>>>;
@@ -311,6 +312,9 @@ function ImpactPanel({
     return d > 0 ? 'success.main' : 'error.main';
   };
 
+  const homeCC = countryCodeMap[game.home.name];
+  const awayCC = countryCodeMap[game.away.name];
+
   return (
     <Box sx={{ mt: 0.5, pt: 0.5, borderTop: 1, borderColor: 'divider' }}>
       <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', fontSize: '0.6rem', textTransform: 'uppercase', fontWeight: 700 }}>
@@ -318,15 +322,21 @@ function ImpactPanel({
       </Typography>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', mt: 0.25 }}>
         <Box sx={{ flex: 1, textAlign: 'center' }}>
-          <Typography variant="caption" sx={{ display: 'block', fontSize: '0.6rem', color: 'text.secondary' }}>{game.home.name.slice(0, 4).toUpperCase()}</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.3, mb: 0.1 }}>
+            {homeCC && <TeamFlag countryCode={homeCC} size={12} />}
+            <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'text.secondary', fontWeight: 700 }}>W</Typography>
+          </Box>
           <Typography variant="caption" sx={{ fontSize: '0.7rem', fontWeight: 700, color: color(expW) }}>{fmt(expW)}</Typography>
         </Box>
         <Box sx={{ flex: 1, textAlign: 'center' }}>
-          <Typography variant="caption" sx={{ display: 'block', fontSize: '0.6rem', color: 'text.secondary' }}>Draw</Typography>
+          <Typography variant="caption" sx={{ display: 'block', fontSize: '0.6rem', color: 'text.secondary', fontWeight: 700, mb: 0.1 }}>Draw</Typography>
           <Typography variant="caption" sx={{ fontSize: '0.7rem', fontWeight: 700, color: color(expD) }}>{fmt(expD)}</Typography>
         </Box>
         <Box sx={{ flex: 1, textAlign: 'center' }}>
-          <Typography variant="caption" sx={{ display: 'block', fontSize: '0.6rem', color: 'text.secondary' }}>{game.away.name.slice(0, 4).toUpperCase()}</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.3, mb: 0.1 }}>
+            {awayCC && <TeamFlag countryCode={awayCC} size={12} />}
+            <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'text.secondary', fontWeight: 700 }}>W</Typography>
+          </Box>
           <Typography variant="caption" sx={{ fontSize: '0.7rem', fontWeight: 700, color: color(expL) }}>{fmt(expL)}</Typography>
         </Box>
       </Box>
@@ -447,6 +457,7 @@ function GameCard({ game, countryCodeMap, bracketSlots, numSims, currentUserKey,
           )}
           <ImpactPanel
             game={game}
+            countryCodeMap={countryCodeMap}
             currentUserKey={currentUserKey}
             userExpectedScore={userExpectedScore}
             conditionalScores={conditionalScores}
@@ -464,24 +475,44 @@ function GameCard({ game, countryCodeMap, bracketSlots, numSims, currentUserKey,
           disableRestoreFocus
           sx={{ pointerEvents: 'none' }}
         >
-          <Box sx={{ p: 1, minWidth: 180, pointerEvents: 'auto' }}>
+          <Box sx={{ p: 1, minWidth: 220, pointerEvents: 'auto' }}>
             <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, color: 'text.secondary', mb: 0.5, textTransform: 'uppercase', fontSize: '0.6rem' }}>
               Most likely final scores
             </Typography>
-            {scorelineFreqs?.map((f) => (
-              <Box key={`${f.scoreA}-${f.scoreB}`} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.2, gap: 1 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4 }}>
-                  {countryCodeMap[game.home.name] && <TeamFlag countryCode={countryCodeMap[game.home.name]} size={14} />}
-                  <Typography variant="caption" sx={{ fontSize: '0.72rem', minWidth: 14, textAlign: 'center' }}>{f.scoreA}</Typography>
-                  <Typography variant="caption" sx={{ fontSize: '0.72rem', color: 'text.secondary' }}>—</Typography>
-                  <Typography variant="caption" sx={{ fontSize: '0.72rem', minWidth: 14, textAlign: 'center' }}>{f.scoreB}</Typography>
-                  {countryCodeMap[game.away.name] && <TeamFlag countryCode={countryCodeMap[game.away.name]} size={14} />}
+            {scorelineFreqs?.map((f) => {
+              const exactKey = `${f.scoreA}-${f.scoreB}`;
+              const matchId = deriveConditionalMatchId(game, groupName);
+              const expForScoreline = matchId && currentUserKey
+                ? conditionalScores?.[matchId]?.[exactKey]?.[currentUserKey]
+                : undefined;
+              const showDelta = expForScoreline != null && userExpectedScore != null;
+              const delta = showDelta ? (expForScoreline as number) - (userExpectedScore as number) : 0;
+              const deltaSign = delta >= 0 ? '+' : '';
+              const deltaColor = !showDelta ? 'text.secondary'
+                : Math.abs(delta) < 0.05 ? 'text.secondary'
+                : delta > 0 ? 'success.main' : 'error.main';
+              return (
+                <Box key={exactKey} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.2, gap: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4 }}>
+                    {countryCodeMap[game.home.name] && <TeamFlag countryCode={countryCodeMap[game.home.name]} size={14} />}
+                    <Typography variant="caption" sx={{ fontSize: '0.72rem', minWidth: 14, textAlign: 'center' }}>{f.scoreA}</Typography>
+                    <Typography variant="caption" sx={{ fontSize: '0.72rem', color: 'text.secondary' }}>—</Typography>
+                    <Typography variant="caption" sx={{ fontSize: '0.72rem', minWidth: 14, textAlign: 'center' }}>{f.scoreB}</Typography>
+                    {countryCodeMap[game.away.name] && <TeamFlag countryCode={countryCodeMap[game.away.name]} size={14} />}
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                    {showDelta && (
+                      <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.7rem', color: deltaColor, minWidth: 36, textAlign: 'right' }}>
+                        {deltaSign}{delta.toFixed(1)}
+                      </Typography>
+                    )}
+                    <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.72rem', color: 'text.secondary', minWidth: 32, textAlign: 'right' }}>
+                      {fmtPct(f.count / SAMPLES_FOR_HOVER)}
+                    </Typography>
+                  </Box>
                 </Box>
-                <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.72rem' }}>
-                  {fmtPct(f.count / SAMPLES_FOR_HOVER)}
-                </Typography>
-              </Box>
-            ))}
+              );
+            })}
           </Box>
         </Popover>
       )}

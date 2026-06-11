@@ -292,6 +292,16 @@ export async function fetchCompletedMatches(
       knockoutRound = '3RD';
     } else if (headline.includes('final')) {
       knockoutRound = 'FINAL';
+    } else {
+      // Headline is empty or unrecognized (ESPN sometimes returns notes:[]
+      // and no type for early events). Fall back to bracket-data lookup:
+      // if both teams sit in the same group, this is a group match.
+      const groupOfA = bracketData.groups?.find((g) => g.teams.some((t) => t.name === teamA.name))?.name;
+      const groupOfB = bracketData.groups?.find((g) => g.teams.some((t) => t.name === teamB.name))?.name;
+      if (groupOfA && groupOfA === groupOfB) {
+        isGroup = true;
+        groupName = groupOfA;
+      }
     }
 
     completed.push({

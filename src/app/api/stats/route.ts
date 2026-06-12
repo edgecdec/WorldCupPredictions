@@ -100,7 +100,21 @@ export async function GET(req: NextRequest) {
     )
     .all(groupId) as PredictionRow[];
 
-  if (predictions.length === 0) {
+  const parsed = predictions.map((p) => ({
+    username: p.username,
+    bracket_name: p.bracket_name,
+    groupPredictions: JSON.parse(p.group_predictions) as GroupPrediction[],
+    thirdPlacePicks: JSON.parse(p.third_place_picks) as string[],
+    knockoutPicks: JSON.parse(p.knockout_picks) as Record<string, string>,
+  })).filter((p) => {
+    // Drop empty predictions (users who joined after group-stage lock with no
+    // picks). They aren't real entries until they fill at least one slot.
+    if (p.groupPredictions.some((g) => g.order.some((t) => t))) return true;
+    if (Object.keys(p.knockoutPicks).length > 0) return true;
+    return false;
+  });
+
+  if (parsed.length === 0) {
     return NextResponse.json({
       popularChampions: [],
       contrarianPicks: [],
@@ -108,14 +122,6 @@ export async function GET(req: NextRequest) {
       chalkScores: [],
     });
   }
-
-  const parsed = predictions.map((p) => ({
-    username: p.username,
-    bracket_name: p.bracket_name,
-    groupPredictions: JSON.parse(p.group_predictions) as GroupPrediction[],
-    thirdPlacePicks: JSON.parse(p.third_place_picks) as string[],
-    knockoutPicks: JSON.parse(p.knockout_picks) as Record<string, string>,
-  }));
 
   // Most popular champion
   const championCounts = new Map<string, number>();

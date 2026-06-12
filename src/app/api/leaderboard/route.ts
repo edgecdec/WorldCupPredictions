@@ -138,7 +138,23 @@ export async function GET(req: NextRequest) {
     )
     .all(groupId) as PredictionRow[];
 
-  const leaderboard: LeaderboardEntry[] = predictions.map((p) => {
+  // Filter out predictions with no picks at all (e.g. users who joined after
+  // the group-stage lock). They contribute nothing meaningful to the leaderboard
+  // and their 0-point rows skew the stats. Once knockouts open and they make
+  // picks, knockout_picks becomes non-empty and they reappear.
+  const hasAnyPicks = (gpStr: string, koStr: string) => {
+    try {
+      const groups = JSON.parse(gpStr) as GroupPrediction[];
+      if (groups.some((g) => g.order.some((t) => t))) return true;
+    } catch { /* fall through */ }
+    try {
+      if (Object.keys(JSON.parse(koStr) as Record<string, string>).length > 0) return true;
+    } catch { /* fall through */ }
+    return false;
+  };
+  const filteredPredictions = predictions.filter((p) => hasAnyPicks(p.group_predictions, p.knockout_picks));
+
+  const leaderboard: LeaderboardEntry[] = filteredPredictions.map((p) => {
     const groupPredictions = JSON.parse(p.group_predictions) as GroupPrediction[];
     const thirdPlacePicks = JSON.parse(p.third_place_picks) as string[];
     const knockoutPicks = JSON.parse(p.knockout_picks) as Record<string, string>;

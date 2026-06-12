@@ -82,13 +82,19 @@ export async function GET(req: NextRequest) {
       )
       .all(groupId, tournament.id) as GroupPredictionRow[];
 
-    return NextResponse.json({
-      ok: true,
-      predictions: rows.map((r) => ({
-        ...parsePredictionRow(r),
-        username: r.username,
-      })),
-    });
+    // Drop empty predictions (late-joiners with no picks). They'd skew
+    // pick-distribution stats on /whopicked. They reappear once they make
+    // at least one pick.
+    const parsed = rows
+      .map((r) => ({ ...parsePredictionRow(r), username: r.username }))
+      .filter((p) => {
+        const groups = p.group_predictions as GroupPrediction[];
+        if (groups.some((g) => g.order.some((t: string) => t))) return true;
+        if (Object.keys(p.knockout_picks as Record<string, string>).length > 0) return true;
+        return false;
+      });
+
+    return NextResponse.json({ ok: true, predictions: parsed });
   }
 
   // Return current user's prediction

@@ -152,8 +152,10 @@ export function useTournamentSim(
 
     setRunning(true);
     setProgress(0);
-    setResults(null);
-    setSimsCompleted(0);
+    // Don't blank prior results — keep the previous expected scores visible
+    // until the new run produces its first partial. Blanking causes every row
+    // to fall back to its locked total (often 0) and the sort collapses
+    // everyone to the bottom for a beat, jolting the leaderboard.
 
     const worker = new Worker(
       new URL('../lib/tournamentSimWorker.ts', import.meta.url),
@@ -198,7 +200,16 @@ export function useTournamentSim(
     });
   }, [players, scoringSettings, actualResults]);
 
+  // Track the last (players, scoring, actualResults) we kicked off a run with,
+  // so we can avoid relaunching the worker when liveScores polls return the
+  // same data on a 30s tick. Deep-equality via JSON.stringify is fine here —
+  // inputs are small plain-data objects (a few hundred KB max).
+  const lastInputRef = useRef<string>('');
+
   useEffect(() => {
+    const inputKey = JSON.stringify({ players, scoringSettings, actualResults });
+    if (inputKey === lastInputRef.current) return;
+    lastInputRef.current = inputKey;
     run();
     return () => {
       if (workerRef.current) {
@@ -206,7 +217,7 @@ export function useTournamentSim(
         workerRef.current = null;
       }
     };
-  }, [run]);
+  }, [run, players, scoringSettings, actualResults]);
 
   return { results, progress, running, numSims: NUM_SIMS, simsCompleted, rerun: run };
 }

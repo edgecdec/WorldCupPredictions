@@ -1,19 +1,39 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Box, Typography, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, Paper, CircularProgress, Chip,
+  TableHead, TableRow, Paper, CircularProgress, Chip, Tooltip,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import SwapVertIcon from '@mui/icons-material/SwapVert';
 import CloseIcon from '@mui/icons-material/Close';
+import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import type { GroupTable } from '@/lib/espnSync';
+import type { BracketData, LiveGame } from '@/types';
 import TeamFlag from '@/components/common/TeamFlag';
+import { computeLiveStandings } from '@/lib/liveStandings';
 
 interface GroupStandingsProps {
   groupOrders: Record<string, string[]>;
   countryCodeMap?: Record<string, string>;
 }
+
+interface TournamentResp {
+  ok: boolean;
+  tournament?: {
+    bracket_data: BracketData;
+    results_data: {
+      groupMatches?: Record<string, Array<{ teamA: string; teamB: string; scoreA: number; scoreB: number }>>;
+    } | null;
+  } | null;
+}
+
+interface ScoresResp {
+  ok: boolean;
+  games?: LiveGame[];
+}
+
+const POLL_MS = 30_000;
 
 type MatchStatus = 'exact' | 'half' | 'wrong';
 
@@ -26,7 +46,6 @@ function getMatchStatus(
   const predIdx = predictedOrder.indexOf(teamName);
   if (predIdx === -1) return 'wrong';
   if (predIdx === livePos) return 'exact';
-  // Same half: both top-2 or both bottom-2
   const liveHalf = livePos < 2 ? 'top' : 'bottom';
   const predHalf = predIdx < 2 ? 'top' : 'bottom';
   return liveHalf === predHalf ? 'half' : 'wrong';
@@ -39,23 +58,89 @@ function StatusIcon({ status }: { status: MatchStatus }) {
 }
 
 export default function GroupStandings({ groupOrders, countryCodeMap = {} }: GroupStandingsProps) {
-  const [tables, setTables] = useState<GroupTable[]>([]);
+  const [bracketData, setBracketData] = useState<BracketData | null>(null);
+  const [completed, setCompleted] = useState<Record<string, Array<{ teamA: string; teamB: string; scoreA: number; scoreB: number }>>>({});
+  const [liveGames, setLiveGames] = useState<LiveGame[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch('/api/scores?type=standings');
-        if (!res.ok) return;
-        const data = await res.json();
-        setTables(data.standings ?? []);
-      } catch { /* noop */ }
-      finally { setLoading(false); }
+  // Pre-compute team → group lookup once we have bracket data — used to
+  // bucket in-progress games under their group.
+  const teamToGroup = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const g of bracketData?.groups ?? []) {
+      for (const t of g.teams) m[t.name] = g.name;
     }
-    load();
+    return m;
+  }, [bracketData]);
+
+  // Load tournament (one-shot — bracket + completed matches) and live scores
+  // (poll). Standings are then computed from these two sources, which keeps
+  // ordering consistent with the rest of the app and includes in-progress
+  // goals that ESPN's /standings doesn't surface live.
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/tournaments').then((r) => r.json() as Promise<TournamentResp>).then((d) => {
+      if (cancelled) return;
+      if (d.tournament) {
+        setBracketData(d.tournament.bracket_data);
+        setCompleted(d.tournament.results_data?.groupMatches ?? {});
+      }
+    }).catch(() => { /* noop */ });
+    return () => { cancelled = true; };
   }, []);
 
-  if (loading) {
+  useEffect(() => {
+    let cancelled = false;
+    const loadScores = async () => {
+      try {
+        const res = await fetch('/api/scores');
+        if (!res.ok) return;
+        const d = (await res.json()) as ScoresResp;
+        if (!cancelled) setLiveGames(d.games ?? []);
+      } catch { /* noop */ }
+      finally { if (!cancelled) setLoading(false); }
+    };
+    loadScores();
+    const t = setInterval(loadScores, POLL_MS);
+    return () => { cancelled = true; clearInterval(t); };
+  }, []);
+
+  const tables = useMemo<GroupTable[]>(() => {
+    if (!bracketData) return [];
+    const inProgress: Record<string, Array<{ teamA: string; teamB: string; scoreA: number; scoreB: number }>> = {};
+    for (const g of liveGames) {
+      if (g.state !== 'in') continue;
+      if ((g.stage ?? 'group') !== 'group') continue;
+      const gn = teamToGroup[g.home?.name];
+      if (!gn || teamToGroup[g.away?.name] !== gn) continue;
+      // Avoid double-counting if the DB already has this match recorded
+      // (sync runs on a debounce so there can be brief overlap).
+      const completedForGroup = completed[gn] ?? [];
+      const dup = completedForGroup.some(
+        (m) => (m.teamA === g.home.name && m.teamB === g.away.name) ||
+               (m.teamA === g.away.name && m.teamB === g.home.name),
+      );
+      if (dup) continue;
+      const sA = parseInt(g.home.score, 10) || 0;
+      const sB = parseInt(g.away.score, 10) || 0;
+      (inProgress[gn] ??= []).push({ teamA: g.home.name, teamB: g.away.name, scoreA: sA, scoreB: sB });
+    }
+    return computeLiveStandings(bracketData, completed, inProgress);
+  }, [bracketData, completed, liveGames, teamToGroup]);
+
+  // Set of teams currently in a live match — used to flag rows.
+  const liveTeams = useMemo(() => {
+    const s = new Set<string>();
+    for (const g of liveGames) {
+      if (g.state !== 'in') continue;
+      if ((g.stage ?? 'group') !== 'group') continue;
+      if (g.home?.name) s.add(g.home.name);
+      if (g.away?.name) s.add(g.away.name);
+    }
+    return s;
+  }, [liveGames]);
+
+  if (loading || !bracketData) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
         <CircularProgress size={28} />
@@ -103,13 +188,19 @@ export default function GroupStandings({ groupOrders, countryCodeMap = {} }: Gro
                 <TableBody>
                   {gt.standings.map((s, i) => {
                     const status = getMatchStatus(s.team, i, predicted);
+                    const isLive = liveTeams.has(s.team);
                     return (
-                      <TableRow key={s.espnId}>
+                      <TableRow key={`${gt.groupName}-${s.team}`}>
                         <TableCell sx={{ px: 0.5 }}>{i + 1}</TableCell>
                         <TableCell sx={{ px: 0.5, whiteSpace: 'nowrap' }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                             {countryCodeMap[s.team] && <TeamFlag countryCode={countryCodeMap[s.team]} size={16} />}
                             {s.team}
+                            {isLive && (
+                              <Tooltip title="Currently playing — score includes in-progress goals">
+                                <FiberManualRecordIcon sx={{ color: 'success.main', fontSize: 10 }} />
+                              </Tooltip>
+                            )}
                             {predicted && (
                               <Chip
                                 label={predicted.indexOf(s.team) + 1 || '?'}

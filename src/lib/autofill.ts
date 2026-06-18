@@ -1,6 +1,7 @@
 import { BracketData, KnockoutMatchup } from '@/types';
 import { getTeamByName } from '@/lib/bracketData';
 import { PELE_RATINGS, AVG_GA } from '@/lib/peleRatings';
+import { orderGroupTeams, type GroupMatch, type TeamRecord } from '@/lib/groupOrder';
 
 type GroupOrders = Record<string, string[]>;
 
@@ -63,9 +64,12 @@ function simulateKnockoutMatch(teamA: string, teamB: string): string {
 
 interface TeamStats { pts: number; gf: number; ga: number; gd: number }
 
-/** Run a full round-robin for a 4-team group, return finishing order + stats. */
-function simulateGroupStandings(teams: string[]): { order: string[]; stats: Record<string, TeamStats> } {
+/** Run a full round-robin for a 4-team group, return finishing order + stats.
+ *  Order is computed via the canonical 2026 FIFA tiebreaker chain
+ *  (lib/groupOrder.orderGroupTeams). */
+function simulateGroupStandings(teams: string[], data?: BracketData): { order: string[]; stats: Record<string, TeamStats> } {
   const stats: Record<string, TeamStats> = {};
+  const matches: GroupMatch[] = [];
   for (const t of teams) stats[t] = { pts: 0, gf: 0, ga: 0, gd: 0 };
   for (let i = 0; i < teams.length; i++) {
     for (let j = i + 1; j < teams.length; j++) {
@@ -75,11 +79,20 @@ function simulateGroupStandings(teams: string[]): { order: string[]; stats: Reco
       if (ga > gb) stats[teams[i]].pts += 3;
       else if (ga === gb) { stats[teams[i]].pts += 1; stats[teams[j]].pts += 1; }
       else stats[teams[j]].pts += 3;
+      matches.push({ teamA: teams[i], teamB: teams[j], scoreA: ga, scoreB: gb });
     }
   }
   for (const t of teams) stats[t].gd = stats[t].gf - stats[t].ga;
-  const order = [...teams].sort((a, b) =>
-    stats[b].pts - stats[a].pts || stats[b].gd - stats[a].gd || stats[b].gf - stats[a].gf
+  const recordMap = new Map<string, TeamRecord>();
+  for (const t of teams) {
+    recordMap.set(t, { team: t, points: stats[t].pts, goalDifference: stats[t].gd, goalsFor: stats[t].gf });
+  }
+  const order = orderGroupTeams(
+    teams,
+    recordMap,
+    matches,
+    () => 0,
+    (t) => data ? rankOf(data, t) : 9999,
   );
   return { order, stats };
 }
@@ -112,7 +125,7 @@ export function smartGroups(data: BracketData): GroupOrders {
   for (const g of data.groups) {
     // Run a single PELE-based group simulation (round-robin with Poisson goals)
     const teams = g.teams.map((t) => t.name);
-    const { order, stats } = simulateGroupStandings(teams);
+    const { order, stats } = simulateGroupStandings(teams, data);
     orders[g.name] = order;
     allStats[g.name] = stats;
   }

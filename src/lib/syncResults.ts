@@ -2,7 +2,8 @@ import { getDb } from '@/lib/db';
 import { parseBracketData } from '@/lib/bracketData';
 import { fetchCompletedMatches, fetchGroupStandings, type CompletedMatch } from '@/lib/espnSync';
 import { generateKnockoutBracket, getFeederMatchupIds } from '@/lib/knockoutBracket';
-import { determineBestThirdPlace, isGroupStageComplete } from '@/lib/bestThirdPlace';
+import { isGroupStageComplete } from '@/lib/bestThirdPlace';
+import { computeLiveStandings } from '@/lib/liveStandings';
 import type { TournamentResults, GroupStageResults } from '@/types';
 
 interface SyncResult {
@@ -126,23 +127,49 @@ export async function syncEspnResults(): Promise<SyncResult> {
       }
     }
 
-    // Check if group stage is now complete and finalize standings
+    // Check if group stage is now complete and finalize standings.
+    // We use ESPN's /standings only as a completeness check (every team
+    // played their 3 games) — the actual ordering is computed from the
+    // groupMatches we've persisted, applying the 2026 FIFA tiebreaker
+    // chain (H2H first → overall → Fair Play → FIFA ranking). This
+    // matches the Live Standings page and the worker.
     let groupStageCompleted = false;
     if (!existing.groupStage) {
-      // Try ESPN standings to check completion (more reliable than match counts)
       try {
         const standings = await fetchGroupStandings(bracketData);
         if (standings.length === 12 && isGroupStageComplete(standings)) {
-          const groupResults = standings.map((gt) => ({
-            groupName: gt.groupName,
-            order: gt.standings.map((s) => s.team) as [string, string, string, string],
-          }));
-          const advancingThirdPlace = determineBestThirdPlace(standings);
-          const gsResults: GroupStageResults = { groupResults, advancingThirdPlace };
-          const knockoutBracket = generateKnockoutBracket(gsResults, bracketData);
-          existing.groupStage = gsResults;
-          existing.knockoutBracket = knockoutBracket;
-          groupStageCompleted = true;
+          const tables = computeLiveStandings(bracketData, existing.groupMatches ?? {}, {});
+          if (tables.length === 12 && tables.every((t) => t.standings.length === 4)) {
+            const groupResults = tables.map((gt) => ({
+              groupName: gt.groupName,
+              order: gt.standings.map((s) => s.team) as [string, string, string, string],
+            }));
+            // Best 3rd place across groups: pts → overall GD → overall GF →
+            // FP → FIFA rank → alpha. No H2H since these teams haven't met.
+            const teamRank = (team: string) => {
+              for (const g of bracketData.groups) {
+                const t = g.teams.find((x) => x.name === team);
+                if (t) return t.fifaRanking ?? 9999;
+              }
+              return 9999;
+            };
+            const thirds = tables
+              .map((t) => t.standings[2])
+              .sort((a, b) =>
+                (b.points - a.points)
+                || (b.goalDifference - a.goalDifference)
+                || (b.goalsFor - a.goalsFor)
+                || (b.fairPlay - a.fairPlay)
+                || (teamRank(a.team) - teamRank(b.team))
+                || a.team.localeCompare(b.team))
+              .slice(0, 8)
+              .map((s) => s.team);
+            const gsResults: GroupStageResults = { groupResults, advancingThirdPlace: thirds };
+            const knockoutBracket = generateKnockoutBracket(gsResults, bracketData);
+            existing.groupStage = gsResults;
+            existing.knockoutBracket = knockoutBracket;
+            groupStageCompleted = true;
+          }
         }
       } catch {
         // Standings unavailable — keep going with whatever we have

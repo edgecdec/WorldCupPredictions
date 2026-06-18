@@ -4,8 +4,9 @@ import { Box, Button, Typography, Grid, Paper, CircularProgress } from '@mui/mat
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import GroupPrediction from '@/components/bracket/GroupPrediction';
 import ThirdPlacePicker, { type ThirdPlaceTeamDetail } from '@/components/bracket/ThirdPlacePicker';
-import type { BracketData, GroupStageResults } from '@/types';
-import type { GroupTable } from '@/lib/espnSync';
+import type { BracketData, GroupStageResults, LiveGame } from '@/types';
+import { computeLiveStandings } from '@/lib/liveStandings';
+import { rankThirdPlaceCandidates } from '@/lib/groupOrder';
 
 const REQUIRED_THIRD_PLACE = 8;
 
@@ -108,9 +109,38 @@ export default function GroupSimulator({ bracketData, onChange, initialResults }
   const handleEspnFill = useCallback(async () => {
     setLoadingEspn(true);
     try {
-      const res = await fetch('/api/scores?type=standings');
-      const data = await res.json();
-      const tables: GroupTable[] = data.standings ?? [];
+      // Use the same data sources / tiebreaker chain as Live Standings:
+      // results_data.groupMatches for completed games + /api/scores for
+      // in-progress games. This keeps the autofill consistent with what
+      // /bracket's Live Standings tab shows and applies 2026 FIFA H2H-first
+      // tiebreakers, where ESPN's /standings did neither.
+      const [tRes, sRes] = await Promise.all([
+        fetch('/api/tournaments').then((r) => r.json()).catch(() => null),
+        fetch('/api/scores').then((r) => r.json()).catch(() => null),
+      ]);
+      const completed: Record<string, Array<{ teamA: string; teamB: string; scoreA: number; scoreB: number; cardEvents?: Array<{ teamId: number; athleteId: number; kind: 'yellow' | 'red' }> }>> =
+        tRes?.tournament?.results_data?.groupMatches ?? {};
+      const liveGames: LiveGame[] = sRes?.games ?? [];
+
+      // Build team → group lookup for bucketing in-progress games.
+      const teamToGroup: Record<string, string> = {};
+      for (const g of bracketData.groups) for (const t of g.teams) teamToGroup[t.name] = g.name;
+
+      const inProgress: Record<string, Array<{ teamA: string; teamB: string; scoreA: number; scoreB: number }>> = {};
+      for (const g of liveGames) {
+        if (g.state !== 'in') continue;
+        if ((g.stage ?? 'group') !== 'group') continue;
+        const gn = teamToGroup[g.home?.name];
+        if (!gn || teamToGroup[g.away?.name] !== gn) continue;
+        const dup = (completed[gn] ?? []).some((m) =>
+          (m.teamA === g.home.name && m.teamB === g.away.name) ||
+          (m.teamA === g.away.name && m.teamB === g.home.name));
+        if (dup) continue;
+        const sA = parseInt(g.home.score, 10) || 0;
+        const sB = parseInt(g.away.score, 10) || 0;
+        (inProgress[gn] ??= []).push({ teamA: g.home.name, teamB: g.away.name, scoreA: sA, scoreB: sB });
+      }
+      const tables = computeLiveStandings(bracketData, completed, inProgress);
       if (!tables.length) return;
 
       const newOrders: Record<string, string[]> = { ...groupOrders };
@@ -121,20 +151,34 @@ export default function GroupSimulator({ bracketData, onChange, initialResults }
       }
       setGroupOrders(newOrders);
 
-      // Auto-pick best 8 third-place teams by points/GD
-      const thirds = tables
-        .filter((t) => t.standings.length >= 3)
-        .map((t) => ({ team: t.standings[2].team, pts: t.standings[2].points, gd: t.standings[2].goalDifference, gf: t.standings[2].goalsFor }))
-        .sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf)
-        .slice(0, REQUIRED_THIRD_PLACE)
-        .map((t) => t.team);
+      // Auto-pick the best 8 third-place teams via the canonical cross-group
+      // sorter (no H2H — these teams haven't played each other).
+      const fifaRank = (team: string) => {
+        for (const g of bracketData.groups) {
+          const t = g.teams.find((x) => x.name === team);
+          if (t) return t.fifaRanking ?? 9999;
+        }
+        return 9999;
+      };
+      const thirds = rankThirdPlaceCandidates(
+        tables
+          .filter((t) => t.standings.length >= 3)
+          .map((t) => {
+            const s = t.standings[2];
+            return {
+              team: s.team, points: s.points, goalDifference: s.goalDifference,
+              goalsFor: s.goalsFor, fairPlay: s.fairPlay,
+            };
+          }),
+        fifaRank,
+      ).slice(0, REQUIRED_THIRD_PLACE).map((c) => c.team);
 
       setThirdPlacePicks(thirds);
       emitResults(newOrders, thirds);
     } finally {
       setLoadingEspn(false);
     }
-  }, [groupOrders, emitResults]);
+  }, [bracketData, groupOrders, emitResults]);
 
   return (
     <Box>

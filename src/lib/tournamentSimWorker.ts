@@ -6,9 +6,11 @@
 // produce championship probabilities, advance probabilities, bracket-slot
 // probabilities, and (optionally) per-player expected scores.
 //
-// SELF-CONTAINED: This file cannot import from anywhere else because Web
-// Workers don't support TypeScript path aliases. All data (ratings, lookup
-// tables, etc.) is passed in via the request message.
+// Imports the shared 2026 FIFA group-stage tiebreaker chain from
+// lib/groupOrder so every surface in the app (Live Standings, autofill,
+// what-if simulator, sync/finalization, this worker) produces the same
+// finishing order from the same match data. All other data (ratings, lookup
+// tables, etc.) is still passed in via the request message.
 //
 // METHODOLOGY (loosely based on Nate Silver's PELE model, Silver Bulletin):
 //
@@ -52,6 +54,13 @@
 // round of the knockout, who wins the cup, and how each player's bracket
 // scores against the simulated outcomes.
 // =============================================================================
+
+import {
+  orderGroupTeams,
+  rankThirdPlaceCandidates,
+  type GroupMatch,
+  type TeamRecord,
+} from '@/lib/groupOrder';
 
 interface TeamRating {
   name: string;
@@ -597,6 +606,7 @@ function simulateGroupStage(
     teamB: string;
     sampledScores: Array<[number, number]>;
   }>>,
+  teamRankings?: Record<string, number>,
 ): GroupStageResult {
   const order: Record<string, string[]> = {};
   const tables: Record<string, Record<string, TeamStats>> = {};
@@ -639,8 +649,22 @@ function simulateGroupStage(
     }
     for (const t of teams) table[t].gd = table[t].gf - table[t].ga;
     tables[name] = table;
-    order[name] = [...teams].sort((a, b) =>
-      table[b].pts - table[a].pts || table[b].gd - table[a].gd || table[b].gf - table[a].gf
+    // Build a TeamRecord map and delegate to the shared canonical sorter.
+    // Fair Play is `() => 0` in pure sims (we don't model card rates), so
+    // step 7 of the chain is effectively a no-op and ties fall through to
+    // the FIFA ranking step.
+    const recordMap = new Map<string, TeamRecord>();
+    for (const t of teams) {
+      const s = table[t];
+      recordMap.set(t, { team: t, points: s.pts, goalDifference: s.gd, goalsFor: s.gf });
+    }
+    const groupMatchesShared: GroupMatch[] = matches[name];
+    order[name] = orderGroupTeams(
+      teams,
+      recordMap,
+      groupMatchesShared,
+      () => 0,
+      (t) => teamRankings?.[t] ?? 9999,
     );
   }
   return { order, tables, matches };
@@ -670,19 +694,23 @@ function buildInProgressLookup(
 function getBest3rdPlace(
   groupOrder: Record<string, string[]>,
   tables: Record<string, Record<string, TeamStats>>,
+  teamRankings?: Record<string, number>,
 ): string[] {
-  // Get all 12 third-place teams with their group stage stats
-  const thirds: Array<{ team: string; pts: number; gd: number; gf: number }> = [];
+  // Across-groups ranking can't use head-to-head (these teams haven't met).
+  // Delegate to the canonical cross-group sorter.
+  const candidates = [];
   for (const [g, order] of Object.entries(groupOrder)) {
     const team = order[2];
     const stats = tables[g]?.[team];
     if (stats) {
-      thirds.push({ team, pts: stats.pts, gd: stats.gd, gf: stats.gf });
+      candidates.push({
+        team, points: stats.pts, goalDifference: stats.gd, goalsFor: stats.gf, fairPlay: 0,
+      });
     }
   }
-  // FIFA tiebreakers: points > goal difference > goals scored
-  thirds.sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
-  return thirds.slice(0, 8).map(t => t.team);
+  return rankThirdPlaceCandidates(candidates, (t) => teamRankings?.[t] ?? 9999)
+    .slice(0, 8)
+    .map((c) => c.team);
 }
 
 function simulateKnockout(
@@ -1127,9 +1155,9 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
       groupOrder = finalGroupStandings!;
       advancing3rd = finalAdvancing3rd ?? [];
     } else {
-      const gsResult = simulateGroupStage(groups, ratings, avgGA, actualGroupMatches, form, inProgressGroupMatches);
+      const gsResult = simulateGroupStage(groups, ratings, avgGA, actualGroupMatches, form, inProgressGroupMatches, teamRankings);
       groupOrder = gsResult.order;
-      advancing3rd = getBest3rdPlace(groupOrder, gsResult.tables);
+      advancing3rd = getBest3rdPlace(groupOrder, gsResult.tables, teamRankings);
       groupMatchesThisSim = gsResult.matches;
     }
 

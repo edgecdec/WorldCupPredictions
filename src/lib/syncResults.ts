@@ -18,7 +18,8 @@ interface SyncResult {
 const DEBOUNCE_SECONDS = 60;
 
 interface ResultsWithMeta extends TournamentResults {
-  /** Per-group completed match scores: { groupName: [{teamA, teamB, scoreA, scoreB}, ...] } */
+  /** Per-group completed match scores. cardEvents (yellow/red bookings) are
+   *  attached so the live-standings tiebreaker can compute Fair Play points. */
   groupMatches?: Record<string, Array<{
     teamA: string;
     teamB: string;
@@ -26,6 +27,7 @@ interface ResultsWithMeta extends TournamentResults {
     scoreB: number;
     espnId: string;
     date: string;
+    cardEvents?: Array<{ teamId: number; athleteId: number; kind: 'yellow' | 'red' }>;
   }>>;
 }
 
@@ -81,10 +83,26 @@ export async function syncEspnResults(): Promise<SyncResult> {
       for (const m of matches) seenGroupMatches.add(groupMatchKey(gn, m.teamA, m.teamB));
     }
 
+    // Build a quick lookup so we can backfill cardEvents on already-recorded
+    // matches (matches synced before the FP feature shipped won't have them).
+    const recordedMatchByKey = new Map<string, { cardEvents?: Array<{ teamId: number; athleteId: number; kind: 'yellow' | 'red' }> }>();
+    for (const [gn, matches] of Object.entries(existing.groupMatches)) {
+      for (const mm of matches) recordedMatchByKey.set(groupMatchKey(gn, mm.teamA, mm.teamB), mm);
+    }
+    let cardEventsBackfilled = 0;
+
     for (const m of completed) {
       if (m.isGroup && m.groupName) {
         const k = groupMatchKey(m.groupName, m.teamA, m.teamB);
-        if (seenGroupMatches.has(k)) continue;
+        if (seenGroupMatches.has(k)) {
+          // Already recorded — backfill cardEvents if we didn't have them yet.
+          const recorded = recordedMatchByKey.get(k);
+          if (recorded && !recorded.cardEvents && m.cardEvents) {
+            recorded.cardEvents = m.cardEvents;
+            cardEventsBackfilled++;
+          }
+          continue;
+        }
         seenGroupMatches.add(k);
         existing.groupMatches[m.groupName] ??= [];
         existing.groupMatches[m.groupName].push({
@@ -94,6 +112,7 @@ export async function syncEspnResults(): Promise<SyncResult> {
           scoreB: m.scoreB,
           espnId: m.espnId,
           date: m.date,
+          cardEvents: m.cardEvents,
         });
         groupMatchesAdded++;
       } else if (m.knockoutRound && m.winner) {
@@ -130,7 +149,7 @@ export async function syncEspnResults(): Promise<SyncResult> {
       }
     }
 
-    const updated = groupMatchesAdded + knockoutWinnersAdded + (groupStageCompleted ? 1 : 0);
+    const updated = groupMatchesAdded + knockoutWinnersAdded + (groupStageCompleted ? 1 : 0) + cardEventsBackfilled;
     if (updated > 0) {
       db.prepare(
         "UPDATE tournaments SET results_data = ?, results_updated_at = datetime('now') WHERE id = ?",

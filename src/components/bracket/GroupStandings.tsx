@@ -8,14 +8,21 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import SwapVertIcon from '@mui/icons-material/SwapVert';
 import CloseIcon from '@mui/icons-material/Close';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
-import type { GroupTable } from '@/lib/espnSync';
 import type { BracketData, LiveGame } from '@/types';
 import TeamFlag from '@/components/common/TeamFlag';
-import { computeLiveStandings } from '@/lib/liveStandings';
+import { computeLiveStandings, type GroupTableWithFp } from '@/lib/liveStandings';
 
 interface GroupStandingsProps {
   groupOrders: Record<string, string[]>;
   countryCodeMap?: Record<string, string>;
+}
+
+interface CompletedGroupMatch {
+  teamA: string;
+  teamB: string;
+  scoreA: number;
+  scoreB: number;
+  cardEvents?: Array<{ teamId: number; athleteId: number; kind: 'yellow' | 'red' }>;
 }
 
 interface TournamentResp {
@@ -23,7 +30,7 @@ interface TournamentResp {
   tournament?: {
     bracket_data: BracketData;
     results_data: {
-      groupMatches?: Record<string, Array<{ teamA: string; teamB: string; scoreA: number; scoreB: number }>>;
+      groupMatches?: Record<string, CompletedGroupMatch[]>;
     } | null;
   } | null;
 }
@@ -59,7 +66,7 @@ function StatusIcon({ status }: { status: MatchStatus }) {
 
 export default function GroupStandings({ groupOrders, countryCodeMap = {} }: GroupStandingsProps) {
   const [bracketData, setBracketData] = useState<BracketData | null>(null);
-  const [completed, setCompleted] = useState<Record<string, Array<{ teamA: string; teamB: string; scoreA: number; scoreB: number }>>>({});
+  const [completed, setCompleted] = useState<Record<string, CompletedGroupMatch[]>>({});
   const [liveGames, setLiveGames] = useState<LiveGame[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -105,9 +112,9 @@ export default function GroupStandings({ groupOrders, countryCodeMap = {} }: Gro
     return () => { cancelled = true; clearInterval(t); };
   }, []);
 
-  const tables = useMemo<GroupTable[]>(() => {
+  const tables = useMemo<GroupTableWithFp[]>(() => {
     if (!bracketData) return [];
-    const inProgress: Record<string, Array<{ teamA: string; teamB: string; scoreA: number; scoreB: number }>> = {};
+    const inProgress: Record<string, CompletedGroupMatch[]> = {};
     for (const g of liveGames) {
       if (g.state !== 'in') continue;
       if ((g.stage ?? 'group') !== 'group') continue;
@@ -157,6 +164,8 @@ export default function GroupStandings({ groupOrders, countryCodeMap = {} }: Gro
   }
 
   return (
+    <Box>
+      <TiebreakerLegend />
     <Box
       sx={{
         display: 'grid',
@@ -182,6 +191,11 @@ export default function GroupStandings({ groupOrders, countryCodeMap = {} }: Gro
                     <TableCell align="center" sx={{ px: 0.5 }}>D</TableCell>
                     <TableCell align="center" sx={{ px: 0.5 }}>L</TableCell>
                     <TableCell align="center" sx={{ px: 0.5 }}>GD</TableCell>
+                    <TableCell align="center" sx={{ px: 0.5 }}>
+                      <Tooltip title="Fair Play points (yellow=-1, 2nd yellow=-3, direct red=-4, yellow+red=-5). Less negative is better.">
+                        <span>FP</span>
+                      </Tooltip>
+                    </TableCell>
                     <TableCell align="center" sx={{ px: 0.5, width: 36 }}>Pick</TableCell>
                   </TableRow>
                 </TableHead>
@@ -216,6 +230,9 @@ export default function GroupStandings({ groupOrders, countryCodeMap = {} }: Gro
                         <TableCell align="center" sx={{ px: 0.5 }}>{s.draws}</TableCell>
                         <TableCell align="center" sx={{ px: 0.5 }}>{s.losses}</TableCell>
                         <TableCell align="center" sx={{ px: 0.5 }}>{s.goalDifference > 0 ? `+${s.goalDifference}` : s.goalDifference}</TableCell>
+                        <TableCell align="center" sx={{ px: 0.5, color: s.fairPlay < 0 ? 'warning.main' : 'text.secondary' }}>
+                          {s.fairPlay === 0 ? '0' : s.fairPlay}
+                        </TableCell>
                         <TableCell align="center" sx={{ px: 0.5 }}><StatusIcon status={status} /></TableCell>
                       </TableRow>
                     );
@@ -227,5 +244,35 @@ export default function GroupStandings({ groupOrders, countryCodeMap = {} }: Gro
         );
       })}
     </Box>
+    </Box>
+  );
+}
+
+/** Tiebreaker chain shown at the top of the Live Standings page so users
+ *  understand why teams are ordered the way they are. Mirrors FIFA's 2026
+ *  Article 13 chain — keep this in sync with computeLiveStandings. */
+function TiebreakerLegend() {
+  const items = [
+    'Most points',
+    'Head-to-head: most points (among tied teams only)',
+    'Head-to-head: best goal difference',
+    'Head-to-head: most goals scored',
+    'Overall goal difference',
+    'Overall goals scored',
+    'Fair Play points (yellow=-1, 2nd yellow=-3, red=-4, yellow+red=-5)',
+    'FIFA / Coca-Cola Men\'s Ranking',
+  ];
+  return (
+    <Paper variant="outlined" sx={{ p: 1.5, mb: 2 }}>
+      <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 0.5 }}>
+        2026 FIFA Tiebreakers
+      </Typography>
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+        Applied in order — the first criterion that separates two teams wins.
+      </Typography>
+      <Box component="ol" sx={{ m: 0, pl: 2.5, '& li': { fontSize: '0.8rem', lineHeight: 1.5 } }}>
+        {items.map((it, i) => <li key={i}>{it}</li>)}
+      </Box>
+    </Paper>
   );
 }

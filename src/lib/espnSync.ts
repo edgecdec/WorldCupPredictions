@@ -6,6 +6,20 @@ const SCOREBOARD_URL =
 const STANDINGS_URL =
   'https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standings';
 
+/** Per-player card event in a completed match. Used for Fair Play scoring.
+ *  `kind` collapses ESPN's verbose flags into the only thing we care about
+ *  for the FIFA Fair Play tally: yellow card vs red card. A second yellow
+ *  in the same match is recorded as two separate `yellow` entries; the
+ *  scoring step (computeFairPlayPoints) handles the "take the worst" rule
+ *  per player per match. */
+export interface CardEvent {
+  /** ESPN team id — we only need this to bucket per-team. */
+  teamId: number;
+  /** ESPN athlete id — used to detect 2-yellow-same-match per player. */
+  athleteId: number;
+  kind: 'yellow' | 'red';
+}
+
 /** A completed (post-state) match from ESPN, mapped to our team names. */
 export interface CompletedMatch {
   espnId: string;
@@ -19,6 +33,8 @@ export interface CompletedMatch {
   groupName?: string;
   /** Match round in knockouts: 'R32', 'R16', 'QF', 'SF', '3RD', 'FINAL' */
   knockoutRound?: string;
+  /** Booking events captured from ESPN's competition.details list. */
+  cardEvents?: CardEvent[];
 }
 
 export interface GroupStanding {
@@ -304,6 +320,23 @@ export async function fetchCompletedMatches(
       }
     }
 
+    // Extract card events for Fair Play scoring. ESPN keeps a flat list of
+    // every detail (goals, cards, subs) on competition.details — we filter
+    // on the yellowCard/redCard flags. A second yellow same match shows up
+    // as two separate yellowCard entries for the same athlete; the scoring
+    // step downstream collapses those into the proper deduction.
+    const cardEvents: CardEvent[] = [];
+    for (const detail of (competition?.details ?? [])) {
+      if (!detail) continue;
+      const isYellow = detail.yellowCard === true;
+      const isRed = detail.redCard === true;
+      if (!isYellow && !isRed) continue;
+      const teamId = parseInt(detail.team?.id ?? '0', 10);
+      const athleteId = parseInt(detail.athletesInvolved?.[0]?.id ?? '0', 10);
+      if (!teamId || !athleteId) continue;
+      cardEvents.push({ teamId, athleteId, kind: isRed ? 'red' : 'yellow' });
+    }
+
     completed.push({
       espnId: String(event.id ?? ''),
       date: event.date ?? competition?.date ?? '',
@@ -315,6 +348,7 @@ export async function fetchCompletedMatches(
       isGroup,
       groupName,
       knockoutRound,
+      cardEvents: cardEvents.length > 0 ? cardEvents : undefined,
     });
   }
 

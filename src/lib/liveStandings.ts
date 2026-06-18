@@ -1,16 +1,32 @@
 import type { BracketData } from '@/types';
 import type { GroupTable, GroupStanding } from '@/lib/espnSync';
 
+interface CardEvent {
+  teamId: number;
+  athleteId: number;
+  kind: 'yellow' | 'red';
+}
+
 interface CompletedMatch {
   teamA: string;
   teamB: string;
   scoreA: number;
   scoreB: number;
+  cardEvents?: CardEvent[];
 }
 
 interface MatchInput extends CompletedMatch {
   /** Whether this match is in-progress (used to flag the row visually). */
   inProgress?: boolean;
+}
+
+export interface StandingWithFp extends GroupStanding {
+  /** Fair Play points (always ≤ 0). Less negative is better. */
+  fairPlay: number;
+}
+
+export interface GroupTableWithFp extends GroupTable {
+  standings: StandingWithFp[];
 }
 
 /**
@@ -23,33 +39,42 @@ interface MatchInput extends CompletedMatch {
  *   4. Head-to-head goals scored among tied teams
  *   5. Overall (group-wide) goal difference
  *   6. Overall (group-wide) goals scored
- *   7. Fair Play / Team Conduct Score (not modelled — see note)
+ *   7. Fair Play / Team Conduct Score (less-negative wins)
  *   8. FIFA/Coca-Cola Men's World Ranking
- *   9. (Final fallback we use for determinism — alphabetical)
+ *   9. Alphabetical fallback (deterministic)
  *
- * Important: H2H is applied to the **mini-table among the full set of tied
- * teams**, not pairwise. If 3 teams tie on points, we score them only on
- * matches between those 3, and if a subset of them is still tied after H2H
- * GD/GF, we recompute the mini-table on just that subset before falling
- * through to overall criteria.
+ * H2H is applied as a mini-table among the **full set of tied teams**, not
+ * pairwise. If 3 teams tie on points, we score them on matches between just
+ * those 3, then re-bucket on H2H pts → re-table within each new bucket on
+ * H2H GD → H2H GF.
  *
- * Fair Play (yellow=−1, 2nd yellow=−3, direct red=−4, yellow+red same
- * match=−5; one deduction per player per match, take the worst) is left for
- * a follow-up — we'd need to ingest card events from ESPN's match feed and
- * sum per-team. Until then we skip step 7 and break ties by FIFA ranking.
+ * Fair Play formula: each player gets at most one deduction per match (the
+ * worst applicable):
+ *   yellow only:                      -1
+ *   2nd yellow same match (=2nd yc):  -3
+ *   direct red:                       -4
+ *   yellow + direct red same match:   -5
+ * Team total = sum across all players in all matches. Higher (less negative)
+ * is better.
  */
 export function computeLiveStandings(
   bracketData: BracketData,
   completedByGroup: Record<string, CompletedMatch[]>,
   inProgressByGroup: Record<string, CompletedMatch[]>,
-): GroupTable[] {
+): GroupTableWithFp[] {
   return bracketData.groups.map((group) => {
     const matches: MatchInput[] = [
       ...(completedByGroup[group.name] ?? []),
       ...(inProgressByGroup[group.name] ?? []).map((m) => ({ ...m, inProgress: true })),
     ];
 
-    const stats = new Map<string, GroupStanding>();
+    // espnId → team name lookup for attributing cards to teams.
+    const teamByEspnId = new Map<number, string>();
+    for (const t of group.teams) {
+      if (t.espnId) teamByEspnId.set(t.espnId, t.name);
+    }
+
+    const stats = new Map<string, StandingWithFp>();
     const fifaRanking = new Map<string, number>();
     for (const t of group.teams) {
       stats.set(t.name, {
@@ -57,6 +82,7 @@ export function computeLiveStandings(
         espnId: t.espnId ?? 0,
         points: 0, wins: 0, draws: 0, losses: 0,
         goalDifference: 0, goalsFor: 0, gamesPlayed: 0,
+        fairPlay: 0,
       });
       // Lower fifaRanking = better team. Default to a large number if missing
       // so unranked teams sort last on the final fallback.
@@ -75,6 +101,13 @@ export function computeLiveStandings(
     for (const m of matches) {
       apply(m.teamA, m.scoreA, m.scoreB);
       apply(m.teamB, m.scoreB, m.scoreA);
+
+      // Fair Play points: collapse per-(match, player) bookings to one
+      // deduction (the worst), then add to the team's running total.
+      for (const [team, deduction] of fairPlayDeductionsForMatch(m, teamByEspnId)) {
+        const s = stats.get(team);
+        if (s) s.fairPlay += deduction;
+      }
     }
 
     const ordered = orderTeams([...stats.values()], matches, fifaRanking);
@@ -83,19 +116,48 @@ export function computeLiveStandings(
 }
 
 /**
+ * For one match, return [teamName, deduction] pairs — one entry per player
+ * who got carded. `deduction` is always negative.
+ */
+function fairPlayDeductionsForMatch(
+  match: CompletedMatch,
+  teamByEspnId: Map<number, string>,
+): Array<[string, number]> {
+  if (!match.cardEvents?.length) return [];
+  // Aggregate per athlete in this match: counts of yellow + red.
+  const perAthlete = new Map<number, { teamId: number; yellows: number; reds: number }>();
+  for (const ev of match.cardEvents) {
+    const acc = perAthlete.get(ev.athleteId) ?? { teamId: ev.teamId, yellows: 0, reds: 0 };
+    if (ev.kind === 'yellow') acc.yellows++;
+    else acc.reds++;
+    perAthlete.set(ev.athleteId, acc);
+  }
+  const out: Array<[string, number]> = [];
+  for (const { teamId, yellows, reds } of perAthlete.values()) {
+    const team = teamByEspnId.get(teamId);
+    if (!team) continue;
+    let deduction = 0;
+    if (reds > 0 && yellows > 0) deduction = -5;        // yellow + direct red same match
+    else if (reds > 0) deduction = -4;                  // direct red only
+    else if (yellows >= 2) deduction = -3;              // 2nd yellow (= sending off via 2 yc)
+    else if (yellows === 1) deduction = -1;             // single yellow
+    if (deduction !== 0) out.push([team, deduction]);
+  }
+  return out;
+}
+
+/**
  * Group teams by points, then resolve each tied bucket with the mini-table
- * H2H tiebreaker chain. Uses recursion: within a tied bucket we re-bucket
- * by H2H points (computed against just the bucket members), then by H2H GD,
- * then H2H GF. If any sub-bucket still has ≥2 teams after H2H criteria, we
- * fall through to overall GD/GF, then FIFA ranking, then alphabetical.
+ * H2H tiebreaker chain. After H2H exhausts, fall through to overall GD/GF,
+ * Fair Play, FIFA ranking, then alphabetical.
  */
 function orderTeams(
-  teams: GroupStanding[],
+  teams: StandingWithFp[],
   matches: MatchInput[],
   fifaRanking: Map<string, number>,
-): GroupStanding[] {
+): StandingWithFp[] {
   const buckets = bucketBy(teams, (t) => t.points);
-  const out: GroupStanding[] = [];
+  const out: StandingWithFp[] = [];
   for (const bucket of buckets) {
     if (bucket.length === 1) { out.push(bucket[0]); continue; }
     out.push(...resolveTiedBucket(bucket, matches, fifaRanking));
@@ -104,17 +166,15 @@ function orderTeams(
 }
 
 function resolveTiedBucket(
-  bucket: GroupStanding[],
+  bucket: StandingWithFp[],
   matches: MatchInput[],
   fifaRanking: Map<string, number>,
-): GroupStanding[] {
-  // H2H points among the bucket → split into sub-buckets in descending order.
+): StandingWithFp[] {
   const subTable = miniTable(bucket.map((t) => t.team), matches);
   const byH2hPts = bucketBy(bucket, (t) => subTable.get(t.team)?.points ?? 0);
-  const out: GroupStanding[] = [];
+  const out: StandingWithFp[] = [];
   for (const sub of byH2hPts) {
     if (sub.length === 1) { out.push(sub[0]); continue; }
-    // H2H GD, then H2H GF, computed on the sub-bucket only.
     const subSub = miniTable(sub.map((t) => t.team), matches);
     const byH2hGd = bucketBy(sub, (t) => subSub.get(t.team)?.gd ?? 0);
     for (const ssg of byH2hGd) {
@@ -123,10 +183,11 @@ function resolveTiedBucket(
       const byH2hGf = bucketBy(ssg, (t) => subSubSub.get(t.team)?.gf ?? 0);
       for (const sssg of byH2hGf) {
         if (sssg.length === 1) { out.push(sssg[0]); continue; }
-        // H2H exhausted → overall criteria, then FIFA ranking, then alpha.
+        // H2H exhausted → overall GD → overall GF → Fair Play → FIFA rank → alpha.
         sssg.sort((a, b) =>
           (b.goalDifference - a.goalDifference)
           || (b.goalsFor - a.goalsFor)
+          || (b.fairPlay - a.fairPlay)
           || ((fifaRanking.get(a.team) ?? 9999) - (fifaRanking.get(b.team) ?? 9999))
           || a.team.localeCompare(b.team));
         out.push(...sssg);
@@ -165,7 +226,6 @@ function miniTable(
 /**
  * Sort `items` by `key` descending, then split into runs of equal key — i.e.
  * an array of buckets, where every bucket holds items sharing the same key.
- * Stable across calls because we sort once with a deterministic comparator.
  */
 function bucketBy<T>(items: T[], key: (t: T) => number): T[][] {
   const sorted = [...items].sort((a, b) => key(b) - key(a));

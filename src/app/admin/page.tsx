@@ -16,6 +16,7 @@ import { WORLD_CUP_2026_DATA } from "@/lib/bracketData";
 import GroupResultsEditor from "@/components/admin/GroupResultsEditor";
 import KnockoutResultsEditor from "@/components/admin/KnockoutResultsEditor";
 import GroupManagement from "@/components/admin/GroupManagement";
+import PasswordReset from "@/components/admin/PasswordReset";
 import type { Tournament, BracketData, GroupStageResults, KnockoutMatchup, KnockoutResults } from "@/types";
 
 const SEED_TOURNAMENT_NAME = "FIFA World Cup";
@@ -306,6 +307,8 @@ export default function AdminPage() {
       )}
 
       <GroupManagement />
+
+      <PasswordReset />
 
       {tournament && !tournament.bracket_data?.groups && (
         <Card sx={{ mb: 4 }}>

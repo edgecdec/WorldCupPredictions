@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { getAuthUser } from "@/lib/auth";
+import { getAuthUser, hashPassword } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { parseBracketData } from "@/lib/bracketData";
 import { generateKnockoutBracket } from "@/lib/knockoutBracket";
 import { GroupStageResults, KnockoutResults, TournamentResults } from "@/types";
+
+const MIN_PASSWORD_LENGTH = 4;
 
 export async function POST(request: Request) {
   const user = getAuthUser(request);
@@ -24,6 +26,10 @@ export async function POST(request: Request) {
 
   if (body.action === "search_users") {
     return searchUsers(body);
+  }
+
+  if (body.action === "reset_password") {
+    return resetPassword(body, user.userId);
   }
 
   const { name, year, lock_time_groups, lock_time_knockout, bracket_data } = body;
@@ -333,5 +339,51 @@ function addUserToGroup(body: { group_id: string; username: string }) {
     prediction.id
   );
 
+  return NextResponse.json({ ok: true });
+}
+
+/**
+ * Reset a non-admin user's password. Refuses to reset:
+ *   - admin accounts (is_admin = 1) — prevents one admin from locking out another
+ *   - the requesting admin's own password — they'd just be changing their own,
+ *     which should go through normal account flows
+ */
+function resetPassword(body: { username: string; new_password: string }, requesterId: string) {
+  const username = body.username?.trim();
+  const newPassword = body.new_password;
+  if (!username) {
+    return NextResponse.json({ ok: false, error: "username required" }, { status: 400 });
+  }
+  if (!newPassword || typeof newPassword !== "string" || newPassword.length < MIN_PASSWORD_LENGTH) {
+    return NextResponse.json(
+      { ok: false, error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` },
+      { status: 400 },
+    );
+  }
+
+  const db = getDb();
+  const target = db
+    .prepare("SELECT id, is_admin FROM users WHERE username = ?")
+    .get(username) as { id: string; is_admin: number } | undefined;
+  if (!target) {
+    return NextResponse.json({ ok: false, error: `User '${username}' not found` }, { status: 404 });
+  }
+  if (target.id === requesterId) {
+    return NextResponse.json(
+      { ok: false, error: "Cannot reset your own password from here" },
+      { status: 400 },
+    );
+  }
+  if (target.is_admin === 1) {
+    return NextResponse.json(
+      { ok: false, error: "Cannot reset another admin's password" },
+      { status: 403 },
+    );
+  }
+
+  db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(
+    hashPassword(newPassword),
+    target.id,
+  );
   return NextResponse.json({ ok: true });
 }

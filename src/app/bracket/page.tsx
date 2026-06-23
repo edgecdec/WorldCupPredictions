@@ -10,8 +10,13 @@ import Link from 'next/link';
 import GroupPrediction from '@/components/bracket/GroupPrediction';
 import ThirdPlacePicker, { type ThirdPlaceTeamDetail } from '@/components/bracket/ThirdPlacePicker';
 import GroupStandings from '@/components/bracket/GroupStandings';
+import KnockoutPreview from '@/components/bracket/KnockoutPreview';
 import CountdownTimer from '@/components/common/CountdownTimer';
 import { useAuth } from '@/hooks/useAuth';
+import { useGroupOnlySim } from '@/hooks/useGroupOnlySim';
+import { useLiveScores } from '@/hooks/useLiveScores';
+import { GROUPS, type ActualResults, type InProgressGroupMatch } from '@/hooks/useTournamentSim';
+import { sampleLiveScores } from '@/lib/matchOdds';
 import type { Tournament, BracketData, TournamentResults, GroupPrediction as GroupPredictionType } from '@/types';
 import PrintExportButtons from '@/components/common/PrintExportButtons';
 import AutofillButtons, { AutofillStrategy } from '@/components/common/AutofillButtons';
@@ -320,11 +325,14 @@ export default function BracketPage() {
         <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ mb: 2 }}>
           <Tab label="My Predictions" />
           <Tab label="Live Standings" />
+          {user?.is_admin && <Tab label="Knockout Bracket" />}
         </Tabs>
       )}
 
       {activeTab === 1 && tournamentStarted ? (
         <GroupStandings groupOrders={groupOrders} countryCodeMap={countryCodeMap} />
+      ) : activeTab === 2 && tournamentStarted && user?.is_admin ? (
+        <KnockoutBracketTab countryCodeMap={countryCodeMap} tournament={tournament} />
       ) : (
         <>
           <TextField
@@ -464,4 +472,102 @@ export default function BracketPage() {
       <OnboardingGuide open={showOnboarding} onClose={() => setShowOnboarding(false)} />
     </Box>
   );
+}
+
+/**
+ * Admin preview of the R32 knockout bracket. Runs the worker's groupOnly
+ * Monte Carlo locally (incorporating completed + in-progress group games)
+ * and renders each R32 slot with the most-likely team and chip strip of
+ * remaining possibilities.
+ *
+ * Self-contained so the main BracketPage doesn't need to re-derive
+ * actualResults / sim wiring when the tab isn't active.
+ */
+function KnockoutBracketTab({
+  countryCodeMap, tournament,
+}: {
+  countryCodeMap: Record<string, string>;
+  tournament: Tournament | null;
+}) {
+  // Live scores for in-progress group games — same pattern leaderboard uses.
+  const { games: liveGames } = useLiveScores(true);
+
+  // Team → group lookup for bucketing live games.
+  const teamToGroup = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const [g, teams] of Object.entries(GROUPS)) for (const t of teams) m[t] = g;
+    return m;
+  }, []);
+
+  const actualResults = useMemo<ActualResults | undefined>(() => {
+    if (!tournament) return undefined;
+    const rd = tournament.results_data as TournamentResults & {
+      groupMatches?: Record<string, Array<{ teamA: string; teamB: string; scoreA: number; scoreB: number }>>;
+    } | null;
+    const groupMatches: Record<string, Array<{ teamA: string; teamB: string; scoreA: number; scoreB: number }>> = {};
+    for (const [g, arr] of Object.entries(rd?.groupMatches ?? {})) groupMatches[g] = [...arr];
+    // Merge ESPN state='post' games we haven't synced yet.
+    for (const game of liveGames) {
+      if (game.state !== 'post') continue;
+      if ((game.stage ?? 'group') !== 'group') continue;
+      const gn = teamToGroup[game.home?.name];
+      if (!gn || teamToGroup[game.away?.name] !== gn) continue;
+      const dup = (groupMatches[gn] ?? []).some((m) =>
+        (m.teamA === game.home.name && m.teamB === game.away.name) ||
+        (m.teamA === game.away.name && m.teamB === game.home.name));
+      if (dup) continue;
+      const sA = parseInt(game.home.score, 10) || 0;
+      const sB = parseInt(game.away.score, 10) || 0;
+      (groupMatches[gn] ??= []).push({ teamA: game.home.name, teamB: game.away.name, scoreA: sA, scoreB: sB });
+    }
+    // In-progress games: pre-sample final scorelines so the worker preserves
+    // joint distributions across iterations.
+    const inProgressGroupMatches: Record<string, InProgressGroupMatch[]> = {};
+    for (const game of liveGames) {
+      if (game.state !== 'in') continue;
+      if ((game.stage ?? 'group') !== 'group') continue;
+      const gn = teamToGroup[game.home?.name];
+      if (!gn || teamToGroup[game.away?.name] !== gn) continue;
+      const parsed = parseMinutes(game.clock, game.period);
+      if (parsed === null) continue;
+      const sA = parseInt(game.home.score, 10) || 0;
+      const sB = parseInt(game.away.score, 10) || 0;
+      const samples = sampleLiveScores(game.home.name, game.away.name, sA, sB, parsed, 1000, { stage: 'group' });
+      if (!samples) continue;
+      (inProgressGroupMatches[gn] ??= []).push({
+        teamA: game.home.name, teamB: game.away.name, sampledScores: samples,
+      });
+    }
+    return {
+      groupMatches: Object.keys(groupMatches).length > 0 ? groupMatches : undefined,
+      inProgressGroupMatches: Object.keys(inProgressGroupMatches).length > 0 ? inProgressGroupMatches : undefined,
+      finalGroupStandings: (rd as TournamentResults | null)?.groupStage
+        ? Object.fromEntries((rd as TournamentResults).groupStage!.groupResults.map((gr) => [gr.groupName, gr.order]))
+        : undefined,
+      finalAdvancing3rd: (rd as TournamentResults | null)?.groupStage?.advancingThirdPlace,
+    };
+  }, [tournament, liveGames, teamToGroup]);
+
+  const { results, running, simsCompleted } = useGroupOnlySim(actualResults);
+
+  return (
+    <KnockoutPreview
+      r32SlotDistributions={results?.r32SlotDistributions ?? {}}
+      countryCodeMap={countryCodeMap}
+      loading={running && !results}
+      simsCompleted={simsCompleted}
+    />
+  );
+}
+
+/** Local clock parser, lifted from LiveScores. ESPN sometimes wraps the
+ *  stoppage minute with an apostrophe ("90'+6'") — strip them all. */
+function parseMinutes(clock: string, period: number): number | null {
+  const c = (clock || '').trim().replace(/'/g, '');
+  if (!c) return period === 1 ? 1 : period === 2 ? 46 : null;
+  const m = c.match(/^(\d+)(?:\+(\d+))?$/);
+  if (m) return parseInt(m[1], 10) + (m[2] ? parseInt(m[2], 10) : 0);
+  if (/^ht$/i.test(c)) return 45;
+  if (/^ft$/i.test(c)) return 90;
+  return null;
 }

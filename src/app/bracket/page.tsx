@@ -621,13 +621,19 @@ function KnockoutBracketTab({
     setPicks((prev) => {
       const next = { ...prev };
       if (next[matchId] === side) {
-        // Click again to clear (cascade downstream too — anything that depended
-        // on this match's winner is no longer well-defined).
+        // Click the picked side again to unpick this match. Downstream picks
+        // stay — they reference slot positions ('R16-2 = A') which remain
+        // meaningful even when the feeder is unpicked. The slot just shows
+        // TBD until the user re-picks. No information is lost.
         delete next[matchId];
-        cascadeClearPicks(matchId, next);
       } else {
+        // Setting or switching a pick does NOT clear downstream picks.
+        // Picks are slot-bound: 'R16-2 = A' means "I'm backing the A side of
+        // R16-2", regardless of which team currently fills that side. If the
+        // user switches R32-3 from A to B, R16-2's A side now displays the
+        // R32-3-B leader — but the downstream pick is still a valid slot
+        // pick. Clearing would be destructive and surprise the user.
         next[matchId] = side;
-        cascadeClearPicks(matchId, next);
       }
       return next;
     });
@@ -696,43 +702,6 @@ function KnockoutBracketTab({
       />
     </Box>
   );
-}
-
-/** Clear downstream picks whose feeder chain depends on `changedMatchId`.
- *  Mutates `picks` in place (caller already has a fresh copy).
- *  We walk the bracket forward — anything whose feeder is the changed match
- *  is invalidated, recursively. */
-function cascadeClearPicks(changedMatchId: string, picks: Record<string, 'A' | 'B'>) {
-  const dependents = matchesFedBy(changedMatchId);
-  for (const dep of dependents) {
-    if (picks[dep]) {
-      delete picks[dep];
-      cascadeClearPicks(dep, picks);
-    }
-  }
-}
-
-/** Forward feeder map: which matches consume this match's winner? */
-function matchesFedBy(matchId: string): string[] {
-  // Inverse of getFeederIds — built once and queried.
-  const out: string[] = [];
-  for (let i = 1; i <= 8; i++) {
-    const f = getFeederIds(`R16-${i}`);
-    if (f && f.includes(matchId)) out.push(`R16-${i}`);
-  }
-  for (let i = 1; i <= 4; i++) {
-    const f = getFeederIds(`QF-${i}`);
-    if (f && f.includes(matchId)) out.push(`QF-${i}`);
-  }
-  for (const sf of ['SF-1', 'SF-2']) {
-    const f = getFeederIds(sf);
-    if (f && f.includes(matchId)) out.push(sf);
-  }
-  for (const top of ['FINAL', '3RD']) {
-    const f = getFeederIds(top);
-    if (f && f.includes(matchId)) out.push(top);
-  }
-  return out;
 }
 
 /** FIFA feeder graph for the upstream rounds. Indices are 0-based; matchId

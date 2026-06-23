@@ -10,7 +10,8 @@ import Link from 'next/link';
 import GroupPrediction from '@/components/bracket/GroupPrediction';
 import ThirdPlacePicker, { type ThirdPlaceTeamDetail } from '@/components/bracket/ThirdPlacePicker';
 import GroupStandings from '@/components/bracket/GroupStandings';
-import KnockoutPreview from '@/components/bracket/KnockoutPreview';
+import ForecastBracket from '@/components/bracket/ForecastBracket';
+import type { BracketSlotResult } from '@/hooks/useTournamentSim';
 import CountdownTimer from '@/components/common/CountdownTimer';
 import { useAuth } from '@/hooks/useAuth';
 import { useGroupOnlySim } from '@/hooks/useGroupOnlySim';
@@ -548,16 +549,108 @@ function KnockoutBracketTab({
     };
   }, [tournament, liveGames, teamToGroup]);
 
-  const { results, running, simsCompleted } = useGroupOnlySim(actualResults);
+  const { results, running, simsCompleted, numSims } = useGroupOnlySim(actualResults);
+
+  // Adapt the worker's r32SlotDistributions (fractions) into the
+  // BracketSlotResult[] shape ForecastBracket expects (raw counts + numSims
+  // denominator). Also derive every upstream slot (R32-N-W, R16, QF, SF,
+  // 3RD, FINAL) by walking the FIFA feeder graph and unioning the candidate
+  // teams from both feeder slots — for the preview this answers "who could
+  // possibly be here", which is the right thing to show until users start
+  // picking. Once the picker is wired, R16+ will be replaced by whatever
+  // feeder slot the user chose.
+  const bracketSlots = useMemo<BracketSlotResult[]>(() => {
+    const dists = results?.r32SlotDistributions;
+    if (!dists) return [];
+    const denominator = simsCompleted || numSims;
+    // We work in fractional space (0..1) for the rollup, then convert to
+    // counts at the end so ForecastBracket can divide by numSims for %.
+    const slot: Record<string, Record<string, number>> = {};
+    for (const [id, d] of Object.entries(dists)) slot[id] = { ...d };
+    // R32 winners = union of the two sides (either side could win/advance).
+    for (let i = 1; i <= 16; i++) {
+      slot[`R32-${i}-W`] = unionDist(slot[`R32-${i}-A`], slot[`R32-${i}-B`]);
+    }
+    // R16 / QF / SF / 3RD / FINAL: walk the FIFA feeder map. Each slot side
+    // inherits its feeder's winner-distribution, and -W is the union of A/B.
+    const buildLayer = (matchIds: string[]) => {
+      for (const id of matchIds) {
+        const f = getFeederIds(id);
+        if (!f) continue;
+        slot[`${id}-A`] = { ...(slot[`${f[0]}-W`] ?? {}) };
+        slot[`${id}-B`] = { ...(slot[`${f[1]}-W`] ?? {}) };
+        slot[`${id}-W`] = unionDist(slot[`${id}-A`], slot[`${id}-B`]);
+      }
+    };
+    buildLayer(Array.from({ length: 8 }, (_, i) => `R16-${i + 1}`));
+    buildLayer(Array.from({ length: 4 }, (_, i) => `QF-${i + 1}`));
+    buildLayer(['SF-1', 'SF-2']);
+    buildLayer(['FINAL', '3RD']);
+    // Build BracketSlotResult[] in count-form.
+    const out: BracketSlotResult[] = [];
+    for (const [slotId, dist] of Object.entries(slot)) {
+      const teams = Object.entries(dist)
+        .map(([team, pct]) => ({ team, count: Math.round(pct * denominator) }))
+        .filter((t) => t.count > 0)
+        .sort((a, b) => b.count - a.count);
+      out.push({ slotId, round: slotId.split('-')[0], teams });
+    }
+    return out;
+  }, [results, simsCompleted, numSims]);
 
   return (
-    <KnockoutPreview
-      r32SlotDistributions={results?.r32SlotDistributions ?? {}}
-      countryCodeMap={countryCodeMap}
-      loading={running && !results}
-      simsCompleted={simsCompleted}
-    />
+    <Box>
+      {running && !results && (
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="caption" color="text.secondary">
+            Simulating remaining group games…
+          </Typography>
+        </Box>
+      )}
+      <ForecastBracket
+        bracketSlots={bracketSlots}
+        numSims={simsCompleted || numSims}
+        countryCodeMap={countryCodeMap}
+      />
+    </Box>
   );
+}
+
+/** Union two slot probability distributions. A team can show up in either
+ *  feeder slot of a future match; its chance of being in the future slot is
+ *  the sum (capped at 1.0 to absorb float fuzz). */
+function unionDist(a?: Record<string, number>, b?: Record<string, number>): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [t, p] of Object.entries(a ?? {})) out[t] = p;
+  for (const [t, p] of Object.entries(b ?? {})) out[t] = (out[t] ?? 0) + p;
+  for (const t of Object.keys(out)) if (out[t] > 1) out[t] = 1;
+  return out;
+}
+
+/** FIFA feeder graph for the upstream rounds. Indices are 0-based; matchId
+ *  format is the same as throughout the app. */
+function getFeederIds(matchId: string): [string, string] | null {
+  // R16: per FIFA's official bracket (non-sequential).
+  if (matchId.startsWith('R16-')) {
+    const i = parseInt(matchId.slice(4), 10) - 1;
+    const FEEDS: Array<[number, number]> = [[1, 4], [0, 2], [3, 5], [6, 7], [10, 11], [8, 9], [13, 15], [12, 14]];
+    const [a, b] = FEEDS[i];
+    return [`R32-${a + 1}`, `R32-${b + 1}`];
+  }
+  if (matchId.startsWith('QF-')) {
+    const i = parseInt(matchId.slice(3), 10) - 1;
+    const FEEDS: Array<[number, number]> = [[0, 1], [4, 5], [2, 3], [6, 7]];
+    const [a, b] = FEEDS[i];
+    return [`R16-${a + 1}`, `R16-${b + 1}`];
+  }
+  if (matchId.startsWith('SF-')) {
+    const i = parseInt(matchId.slice(3), 10) - 1;
+    const FEEDS: Array<[number, number]> = [[0, 1], [2, 3]];
+    const [a, b] = FEEDS[i];
+    return [`QF-${a + 1}`, `QF-${b + 1}`];
+  }
+  if (matchId === 'FINAL' || matchId === '3RD') return ['SF-1', 'SF-2'];
+  return null;
 }
 
 /** Local clock parser, lifted from LiveScores. ESPN sometimes wraps the

@@ -1061,9 +1061,14 @@ function runGroupOnly(
     return { r32SlotDistributions: dist };
   };
 
-  const PROGRESS_INTERVAL = 100;
-  const PARTIAL_STEP = 1000;
+  // GroupOnly is roughly 2x faster per iteration than the full sim, so a
+  // smaller partial step keeps the bracket updating at a similar wall-clock
+  // cadence to /simulate (~10 visible refreshes across the run).
+  const PROGRESS_INTERVAL = Math.max(1, Math.floor(numSims / 50));
+  const PARTIAL_STEP = Math.max(100, Math.floor(numSims / 20));
 
+  // Emit an initial partial at the first PARTIAL_STEP-sized chunk to get
+  // something on screen quickly rather than waiting through the warmup.
   for (let sim = 0; sim < numSims; sim++) {
     if (sim % PROGRESS_INTERVAL === 0) {
       localCtx.postMessage({ type: 'progress', progress: sim } as SimResponse);

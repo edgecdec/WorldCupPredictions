@@ -551,79 +551,187 @@ function KnockoutBracketTab({
 
   const { results, running, simsCompleted, numSims } = useGroupOnlySim(actualResults);
 
-  // Adapt the worker's r32SlotDistributions (fractions) into the
-  // BracketSlotResult[] shape ForecastBracket expects (raw counts + numSims
-  // denominator). Also derive every upstream slot (R32-N-W, R16, QF, SF,
-  // 3RD, FINAL) by walking the FIFA feeder graph and unioning the candidate
-  // teams from both feeder slots — for the preview this answers "who could
-  // possibly be here", which is the right thing to show until users start
-  // picking. Once the picker is wired, R16+ will be replaced by whatever
-  // feeder slot the user chose.
+  // Build R32-only BracketSlotResult[] from the worker's fractions. R16+
+  // slots stay empty (TBD) so ForecastBracket renders them as the user's
+  // pick targets, with pickContent supplying the lineage-resolved team name.
   const bracketSlots = useMemo<BracketSlotResult[]>(() => {
     const dists = results?.r32SlotDistributions;
     if (!dists) return [];
     const denominator = simsCompleted || numSims;
-    // We work in fractional space (0..1) for the rollup, then convert to
-    // counts at the end so ForecastBracket can divide by numSims for %.
-    const slot: Record<string, Record<string, number>> = {};
-    for (const [id, d] of Object.entries(dists)) slot[id] = { ...d };
-    // R32 winners = union of the two sides (either side could win/advance).
-    for (let i = 1; i <= 16; i++) {
-      slot[`R32-${i}-W`] = unionDist(slot[`R32-${i}-A`], slot[`R32-${i}-B`]);
-    }
-    // R16 / QF / SF / 3RD / FINAL: walk the FIFA feeder map. Each slot side
-    // inherits its feeder's winner-distribution, and -W is the union of A/B.
-    const buildLayer = (matchIds: string[]) => {
-      for (const id of matchIds) {
-        const f = getFeederIds(id);
-        if (!f) continue;
-        slot[`${id}-A`] = { ...(slot[`${f[0]}-W`] ?? {}) };
-        slot[`${id}-B`] = { ...(slot[`${f[1]}-W`] ?? {}) };
-        slot[`${id}-W`] = unionDist(slot[`${id}-A`], slot[`${id}-B`]);
-      }
-    };
-    buildLayer(Array.from({ length: 8 }, (_, i) => `R16-${i + 1}`));
-    buildLayer(Array.from({ length: 4 }, (_, i) => `QF-${i + 1}`));
-    buildLayer(['SF-1', 'SF-2']);
-    buildLayer(['FINAL', '3RD']);
-    // Build BracketSlotResult[] in count-form.
     const out: BracketSlotResult[] = [];
-    for (const [slotId, dist] of Object.entries(slot)) {
+    for (const [slotId, dist] of Object.entries(dists)) {
       const teams = Object.entries(dist)
         .map(([team, pct]) => ({ team, count: Math.round(pct * denominator) }))
         .filter((t) => t.count > 0)
         .sort((a, b) => b.count - a.count);
-      out.push({ slotId, round: slotId.split('-')[0], teams });
+      out.push({ slotId, round: 'R32', teams });
     }
     return out;
   }, [results, simsCompleted, numSims]);
 
+  // User's picks: matchId -> 'A' | 'B'.
+  const [picks, setPicks] = useState<Record<string, 'A' | 'B'>>({});
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
+
+  const r32LeadByMatch = useMemo(() => {
+    const m: Record<string, { A: string | null; B: string | null }> = {};
+    const dists = results?.r32SlotDistributions ?? {};
+    for (let i = 1; i <= 16; i++) {
+      const top = (slotId: string) => {
+        const d = dists[slotId];
+        if (!d) return null;
+        let best: string | null = null;
+        let bestP = -1;
+        for (const [t, p] of Object.entries(d)) if (p > bestP) { best = t; bestP = p; }
+        return best;
+      };
+      m[`R32-${i}`] = { A: top(`R32-${i}-A`), B: top(`R32-${i}-B`) };
+    }
+    return m;
+  }, [results]);
+
+  // Resolve "what team does this R16+ slot side currently show?" by walking
+  // the user's picks back to an R32 leader. Returns null if the chain isn't
+  // fully picked yet (renders TBD in the cell).
+  const pickContent = useCallback((slotId: string): string | null => {
+    // slotId like 'R16-3-A' / 'QF-1-B' / 'FINAL-A' / 'SF-2-B' / '3RD-A'.
+    const lastDash = slotId.lastIndexOf('-');
+    if (lastDash < 0) return null;
+    const matchId = slotId.slice(0, lastDash);
+    const side = slotId.slice(lastDash + 1) as 'A' | 'B';
+    const feeders = getFeederIds(matchId);
+    if (!feeders) return null;
+    const feederMatch = feeders[side === 'A' ? 0 : 1];
+    // If the feeder is an R32 match: result is whichever side of the R32 the
+    // user picked, then its leading team.
+    if (feederMatch.startsWith('R32-')) {
+      const r32Pick = picks[feederMatch];
+      if (!r32Pick) return null;
+      return r32LeadByMatch[feederMatch]?.[r32Pick] ?? null;
+    }
+    // Otherwise recurse: feederMatch is R16/QF/SF, and we need to know which
+    // side of THAT was picked to walk back further.
+    const upPick = picks[feederMatch];
+    if (!upPick) return null;
+    return pickContent(`${feederMatch}-${upPick}`);
+  }, [picks, r32LeadByMatch]);
+
+  const handlePick = useCallback((matchId: string, side: 'A' | 'B') => {
+    setPicks((prev) => {
+      const next = { ...prev };
+      if (next[matchId] === side) {
+        // Click again to clear (cascade downstream too — anything that depended
+        // on this match's winner is no longer well-defined).
+        delete next[matchId];
+        cascadeClearPicks(matchId, next);
+      } else {
+        next[matchId] = side;
+        cascadeClearPicks(matchId, next);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveMsg(null);
+    try {
+      // Convert in-memory picks (matchId → 'A'|'B') to the API's storage
+      // shape (matchId → winning team's slot token, e.g. 'R32-3-A').
+      // Once R32 teams resolve, a follow-up will swap these tokens for
+      // actual team names; for now they're slot tokens.
+      const knockoutPicks: Record<string, string> = {};
+      for (const [matchId, side] of Object.entries(picks)) {
+        knockoutPicks[matchId] = `${matchId}-${side}`;
+      }
+      const res = await fetch('/api/picks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save_knockout', knockout_picks: knockoutPicks }),
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) setSaveMsg({ kind: 'success', msg: 'Picks saved.' });
+      else setSaveMsg({ kind: 'error', msg: data.error ?? 'Failed to save picks.' });
+    } catch {
+      setSaveMsg({ kind: 'error', msg: 'Network error.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const r32PickedCount = Object.keys(picks).filter((k) => k.startsWith('R32-')).length;
+  const totalPicked = Object.keys(picks).length;
+  // 31 matches total (16 R32 + 8 R16 + 4 QF + 2 SF + FINAL + 3RD).
+  const TOTAL_MATCHES = 31;
+
   return (
     <Box>
-      {running && !results && (
-        <Box sx={{ mb: 2 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+        <Box>
           <Typography variant="caption" color="text.secondary">
-            Simulating remaining group games…
+            Click a side to pick it. Hover any cell for the full ranked possibility list.
+            {running && !results ? ' Simulating remaining group games…' : ''}
+          </Typography>
+          <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+            Picked: {totalPicked} / {TOTAL_MATCHES} ({r32PickedCount}/16 R32)
           </Typography>
         </Box>
-      )}
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          {saveMsg && (
+            <Typography variant="caption" sx={{ color: saveMsg.kind === 'success' ? 'success.main' : 'error.main' }}>
+              {saveMsg.msg}
+            </Typography>
+          )}
+          <Button variant="contained" size="small" onClick={handleSave} disabled={saving || totalPicked === 0}>
+            {saving ? 'Saving…' : 'Save Picks'}
+          </Button>
+        </Box>
+      </Box>
       <ForecastBracket
         bracketSlots={bracketSlots}
         numSims={simsCompleted || numSims}
         countryCodeMap={countryCodeMap}
+        pickMode={{ picks, onPick: handlePick, pickContent }}
       />
     </Box>
   );
 }
 
-/** Union two slot probability distributions. A team can show up in either
- *  feeder slot of a future match; its chance of being in the future slot is
- *  the sum (capped at 1.0 to absorb float fuzz). */
-function unionDist(a?: Record<string, number>, b?: Record<string, number>): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const [t, p] of Object.entries(a ?? {})) out[t] = p;
-  for (const [t, p] of Object.entries(b ?? {})) out[t] = (out[t] ?? 0) + p;
-  for (const t of Object.keys(out)) if (out[t] > 1) out[t] = 1;
+/** Clear downstream picks whose feeder chain depends on `changedMatchId`.
+ *  Mutates `picks` in place (caller already has a fresh copy).
+ *  We walk the bracket forward — anything whose feeder is the changed match
+ *  is invalidated, recursively. */
+function cascadeClearPicks(changedMatchId: string, picks: Record<string, 'A' | 'B'>) {
+  const dependents = matchesFedBy(changedMatchId);
+  for (const dep of dependents) {
+    if (picks[dep]) {
+      delete picks[dep];
+      cascadeClearPicks(dep, picks);
+    }
+  }
+}
+
+/** Forward feeder map: which matches consume this match's winner? */
+function matchesFedBy(matchId: string): string[] {
+  // Inverse of getFeederIds — built once and queried.
+  const out: string[] = [];
+  for (let i = 1; i <= 8; i++) {
+    const f = getFeederIds(`R16-${i}`);
+    if (f && f.includes(matchId)) out.push(`R16-${i}`);
+  }
+  for (let i = 1; i <= 4; i++) {
+    const f = getFeederIds(`QF-${i}`);
+    if (f && f.includes(matchId)) out.push(`QF-${i}`);
+  }
+  for (const sf of ['SF-1', 'SF-2']) {
+    const f = getFeederIds(sf);
+    if (f && f.includes(matchId)) out.push(sf);
+  }
+  for (const top of ['FINAL', '3RD']) {
+    const f = getFeederIds(top);
+    if (f && f.includes(matchId)) out.push(top);
+  }
   return out;
 }
 

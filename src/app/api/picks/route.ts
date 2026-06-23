@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuid } from "uuid";
 import { getDb, autoAssignPredictionToEveryone, EVERYONE_GROUP_ID } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
-import type { Tournament, GroupPrediction, TournamentResults } from "@/types";
+import type { Tournament, GroupPrediction } from "@/types";
 
 interface PredictionRow {
   id: string;
@@ -218,10 +218,11 @@ function saveKnockout(
     );
   }
 
-  const resultsData = tournament.results_data as TournamentResults;
-  if (!resultsData?.groupStage) {
-    return NextResponse.json({ error: "Group stage results not yet available" }, { status: 400 });
-  }
+  // No longer gated on groupStage being finalized — users can pick their
+  // knockout bracket slot-by-slot before R32 teams are known, and the picks
+  // store the slot tokens (e.g. 'R32-3-A' meaning "the team that lands in
+  // R32-3's A side"). The scoring layer resolves slots → teams at score
+  // time, so picks made today remain valid as teams flow in.
 
   const { knockout_picks, tiebreaker } = body;
   if (!knockout_picks || typeof knockout_picks !== "object") {

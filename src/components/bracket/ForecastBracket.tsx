@@ -1,9 +1,32 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { Box, Typography, Popover, Button, Tabs, Tab, useMediaQuery } from '@mui/material';
+import { Box, Typography, Popover, Button, Tabs, Tab, useMediaQuery, Tooltip } from '@mui/material';
 import type { BracketSlotResult } from '@/hooks/useTournamentSim';
 import TeamFlag from '@/components/common/TeamFlag';
 import { getFeederMatchupIds } from '@/lib/knockoutBracket';
+
+/**
+ * Optional pick-mode contract. When supplied, ForecastBracket turns into a
+ * pickable knockout bracket:
+ *   - Each side becomes clickable; onPick fires with (matchId, 'A' | 'B').
+ *   - The popover with the team list moves from click to hover (Tooltip).
+ *   - For sides with no forecast data (e.g. R16+ before group stage is done),
+ *     pickContent(slotId) is consulted to render whatever the user's current
+ *     picks resolve that side to (typically the leading team of the picked
+ *     feeder slot).
+ *   - ChampionBanner is hidden — the user picks the champion themselves.
+ */
+export interface PickModeProps {
+  /** Map of matchId ('R32-1', 'R16-3', 'FINAL', etc.) → 'A' | 'B' indicating
+   *  which side the user picked to advance. */
+  picks: Record<string, 'A' | 'B'>;
+  onPick: (matchId: string, side: 'A' | 'B') => void;
+  /** Fallback content for an empty slot, given the slotId ('R16-2-A' etc.).
+   *  Used to render the user's downstream pick into a slot that has no
+   *  worker forecast data. Returns either a team name to render with a flag,
+   *  or null/undefined to fall through to the TBD placeholder. */
+  pickContent?: (slotId: string) => string | null | undefined;
+}
 
 /**
  * Walk the FIFA feeder tree from a top-level matchup down to R32, returning
@@ -29,6 +52,9 @@ interface ForecastBracketProps {
   bracketSlots: BracketSlotResult[];
   numSims: number;
   countryCodeMap: Record<string, string>;
+  /** When supplied, ForecastBracket becomes a click-to-pick knockout bracket
+   *  instead of a hover-only forecast view. See PickModeProps above. */
+  pickMode?: PickModeProps;
 }
 
 const CONNECTOR_COLOR = 'divider';
@@ -61,83 +87,117 @@ function SlotPopoverContent({ slot, numSims, countryCodeMap }: { slot: BracketSl
   );
 }
 
-function TeamCell({ slot, numSims, countryCodeMap, position }: {
+function TeamCell({ slot, slotId, numSims, countryCodeMap, position, pickMode, matchId, side }: {
   slot: BracketSlotResult | undefined;
+  /** The slot's id, e.g. 'R32-3-A'. Needed for pickContent fallbacks. */
+  slotId: string;
   numSims: number;
   countryCodeMap: Record<string, string>;
   position: 'top' | 'bottom';
+  pickMode?: PickModeProps;
+  /** Parent match id ('R32-3', 'R16-1', 'FINAL', etc.) — used to wire onPick. */
+  matchId: string;
+  side: 'A' | 'B';
 }) {
-  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const inPickMode = Boolean(pickMode);
+  const isPicked = pickMode?.picks[matchId] === side;
+  const top = slot && slot.teams.length > 0 ? slot.teams[0] : null;
+  const pickFallback = !top && pickMode?.pickContent ? pickMode.pickContent(slotId) : null;
+  const displayTeam = top?.team ?? pickFallback ?? null;
+  const pct = top ? Math.round((top.count / numSims) * 100) : null;
+  const hasHoverList = Boolean(slot && slot.teams.length > 0);
 
-  if (!slot || slot.teams.length === 0) {
-    return (
-      <Box sx={{ px: 0.5, py: 0.2, minWidth: 120, minHeight: 20, borderTop: position === 'top' ? 1 : 0, borderBottom: 1, borderLeft: 1, borderRight: 1, borderColor: 'divider', display: 'flex', alignItems: 'center' }}>
+  // Visual styling: picked side gets a primary-color border; in pick mode the
+  // cell is always clickable (even with no forecast data, as long as it has
+  // pickFallback content). In forecast mode it's only clickable when there's
+  // a popover to open.
+  const handleClick = inPickMode && displayTeam
+    ? () => pickMode!.onPick(matchId, side)
+    : undefined;
+
+  const cell = (
+    <Box
+      onClick={handleClick}
+      sx={{
+        px: 0.5, py: 0.2, minWidth: 120, minHeight: 20,
+        cursor: handleClick ? 'pointer' : (hasHoverList ? 'help' : 'default'),
+        borderTop: position === 'top' ? (isPicked ? 2 : 1) : 0,
+        borderBottom: isPicked ? 2 : 1,
+        borderLeft: isPicked ? 2 : 1,
+        borderRight: isPicked ? 2 : 1,
+        borderColor: isPicked ? 'primary.main' : 'divider',
+        bgcolor: isPicked ? 'action.selected' : 'transparent',
+        display: 'flex', alignItems: 'center', gap: 0.4,
+        '&:hover': handleClick || hasHoverList ? { bgcolor: 'action.hover', borderColor: 'primary.main' } : {},
+      }}
+    >
+      {displayTeam ? (
+        <>
+          <TeamFlag countryCode={countryCodeMap[displayTeam] ?? ''} size={12} />
+          <Typography variant="caption" noWrap sx={{ flex: 1, fontSize: '0.65rem', fontWeight: 500, lineHeight: 1.2 }}>
+            {displayTeam}
+          </Typography>
+          {pct !== null && (
+            <Typography variant="caption" sx={{ fontSize: '0.55rem', color: 'text.secondary', fontWeight: 700 }}>
+              {pct}%
+            </Typography>
+          )}
+        </>
+      ) : (
         <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.6rem' }}>TBD</Typography>
-      </Box>
-    );
-  }
+      )}
+    </Box>
+  );
 
-  const top = slot.teams[0];
-  const pct = Math.round((top.count / numSims) * 100);
-
+  // Hover popover for the full ranked list. Only attach when we have data
+  // — empty cells (TBD) shouldn't show a popover. We use Tooltip with our
+  // own content so the popup follows hover, not click.
+  if (!hasHoverList) return cell;
   return (
-    <>
-      <Box
-        onClick={(e) => setAnchor(e.currentTarget)}
-        sx={{
-          px: 0.5, py: 0.2, minWidth: 120, minHeight: 20, cursor: 'pointer',
-          borderTop: position === 'top' ? 1 : 0, borderBottom: 1, borderLeft: 1, borderRight: 1,
-          borderColor: 'divider',
-          display: 'flex', alignItems: 'center', gap: 0.4,
-          '&:hover': { bgcolor: 'action.hover', borderColor: 'primary.main' },
-        }}
-      >
-        <TeamFlag countryCode={countryCodeMap[top.team] ?? ''} size={12} />
-        <Typography variant="caption" noWrap sx={{ flex: 1, fontSize: '0.65rem', fontWeight: 500, lineHeight: 1.2 }}>
-          {top.team}
-        </Typography>
-        <Typography variant="caption" sx={{ fontSize: '0.55rem', color: 'text.secondary', fontWeight: 700 }}>
-          {pct}%
-        </Typography>
-      </Box>
-      <Popover
-        open={Boolean(anchor)}
-        anchorEl={anchor}
-        onClose={() => setAnchor(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-      >
-        <SlotPopoverContent slot={slot} numSims={numSims} countryCodeMap={countryCodeMap} />
-      </Popover>
-    </>
+    <Tooltip
+      arrow
+      placement="right"
+      enterDelay={150}
+      leaveDelay={50}
+      slotProps={{
+        tooltip: { sx: { bgcolor: 'background.paper', color: 'text.primary', boxShadow: 3, p: 0, maxWidth: 'none' } },
+        arrow: { sx: { color: 'background.paper' } },
+      }}
+      title={<SlotPopoverContent slot={slot!} numSims={numSims} countryCodeMap={countryCodeMap} />}
+    >
+      {cell}
+    </Tooltip>
   );
 }
 
-function MatchupCell({ matchId, slotMap, numSims, countryCodeMap }: {
+function MatchupCell({ matchId, slotMap, numSims, countryCodeMap, pickMode }: {
   matchId: string;
   slotMap: Map<string, BracketSlotResult>;
   numSims: number;
   countryCodeMap: Record<string, string>;
+  pickMode?: PickModeProps;
 }) {
   return (
     <Box sx={{ my: 0.125 }}>
-      <TeamCell slot={slotMap.get(`${matchId}-A`)} numSims={numSims} countryCodeMap={countryCodeMap} position="top" />
-      <TeamCell slot={slotMap.get(`${matchId}-B`)} numSims={numSims} countryCodeMap={countryCodeMap} position="bottom" />
+      <TeamCell slot={slotMap.get(`${matchId}-A`)} slotId={`${matchId}-A`} matchId={matchId} side="A" numSims={numSims} countryCodeMap={countryCodeMap} position="top" pickMode={pickMode} />
+      <TeamCell slot={slotMap.get(`${matchId}-B`)} slotId={`${matchId}-B`} matchId={matchId} side="B" numSims={numSims} countryCodeMap={countryCodeMap} position="bottom" pickMode={pickMode} />
     </Box>
   );
 }
 
-function RoundColumn({ matchIds, slotMap, numSims, countryCodeMap, isFirstRound }: {
+function RoundColumn({ matchIds, slotMap, numSims, countryCodeMap, isFirstRound, pickMode }: {
   matchIds: string[];
   slotMap: Map<string, BracketSlotResult>;
   numSims: number;
   countryCodeMap: Record<string, string>;
   isFirstRound?: boolean;
+  pickMode?: PickModeProps;
 }) {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', minWidth: 130, flexShrink: 0, flex: 1 }}>
       {matchIds.map((id) => (
         <Box key={id} sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', py: isFirstRound ? 0.25 : 0, flex: 1 }}>
-          <MatchupCell matchId={id} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
+          <MatchupCell matchId={id} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} pickMode={pickMode} />
         </Box>
       ))}
     </Box>
@@ -271,22 +331,23 @@ const MOBILE_TAB_RIGHTS: string[][] = [
 ];
 
 function MobileMatchupPair({
-  rightId, leftIds, slotMap, numSims, countryCodeMap,
+  rightId, leftIds, slotMap, numSims, countryCodeMap, pickMode,
 }: {
   rightId: string;
   leftIds: [string, string];
   slotMap: Map<string, BracketSlotResult>;
   numSims: number;
   countryCodeMap: Record<string, string>;
+  pickMode?: PickModeProps;
 }) {
   return (
     <Box sx={{ display: 'flex', alignItems: 'stretch', mb: 1.5 }}>
       <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1, minWidth: 0, gap: 0.5 }}>
         <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
-          <MatchupCell matchId={leftIds[0]} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
+          <MatchupCell matchId={leftIds[0]} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} pickMode={pickMode} />
         </Box>
         <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
-          <MatchupCell matchId={leftIds[1]} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
+          <MatchupCell matchId={leftIds[1]} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} pickMode={pickMode} />
         </Box>
       </Box>
 
@@ -299,14 +360,14 @@ function MobileMatchupPair({
 
       <Box sx={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
         <Box sx={{ width: '100%', border: 1, borderColor: rightId === 'FINAL' ? 'warning.main' : 'divider', borderRadius: 1, overflow: 'hidden' }}>
-          <MatchupCell matchId={rightId} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
+          <MatchupCell matchId={rightId} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} pickMode={pickMode} />
         </Box>
       </Box>
     </Box>
   );
 }
 
-function MobileForecastBracket({ slotMap, numSims, countryCodeMap }: { slotMap: Map<string, BracketSlotResult>; numSims: number; countryCodeMap: Record<string, string> }) {
+function MobileForecastBracket({ slotMap, numSims, countryCodeMap, pickMode }: { slotMap: Map<string, BracketSlotResult>; numSims: number; countryCodeMap: Record<string, string>; pickMode?: PickModeProps }) {
   const [tab, setTab] = useState(0);
   const cfg = MOBILE_TAB_RIGHTS[tab];
   const labelLeft = ['Round of 32', 'Round of 16', 'Quarterfinals', 'Semifinals'][tab];
@@ -314,7 +375,7 @@ function MobileForecastBracket({ slotMap, numSims, countryCodeMap }: { slotMap: 
 
   return (
     <Box>
-      <ChampionBanner slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
+      {!pickMode && <ChampionBanner slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />}
       <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="fullWidth" sx={{ mb: 2 }}>
         {MOBILE_TAB_LABELS.map((label) => (
           <Tab key={label} label={label} sx={{ fontSize: '0.7rem', minHeight: 40, px: 0.5 }} />
@@ -343,6 +404,7 @@ function MobileForecastBracket({ slotMap, numSims, countryCodeMap }: { slotMap: 
               slotMap={slotMap}
               numSims={numSims}
               countryCodeMap={countryCodeMap}
+              pickMode={pickMode}
             />
           );
         })}
@@ -365,7 +427,7 @@ function MobileForecastBracket({ slotMap, numSims, countryCodeMap }: { slotMap: 
 }
 
 /** Medium-screen forecast: full bracket left-to-right, R32 → Final → 3rd. */
-function MediumForecastBracket({ slotMap, numSims, countryCodeMap }: { slotMap: Map<string, BracketSlotResult>; numSims: number; countryCodeMap: Record<string, string> }) {
+function MediumForecastBracket({ slotMap, numSims, countryCodeMap, pickMode }: { slotMap: Map<string, BracketSlotResult>; numSims: number; countryCodeMap: Record<string, string>; pickMode?: PickModeProps }) {
   // Same FIFA-correct ordering as the large layout, but flattened L→R.
   const left = walkFeederIds('SF-1', 3);
   const right = walkFeederIds('SF-2', 3);
@@ -376,7 +438,7 @@ function MediumForecastBracket({ slotMap, numSims, countryCodeMap }: { slotMap: 
 
   return (
     <Box>
-      <ChampionBanner slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
+      {!pickMode && <ChampionBanner slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />}
       <Box sx={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', pb: 2 }}>
         {/* Round labels row */}
         <Box sx={{ display: 'flex', alignItems: 'flex-end', minWidth: 'fit-content', mb: 0.5 }}>
@@ -397,24 +459,24 @@ function MediumForecastBracket({ slotMap, numSims, countryCodeMap }: { slotMap: 
 
         {/* Bracket flow */}
         <Box sx={{ display: 'flex', alignItems: 'stretch', minWidth: 'fit-content', height: 600 }}>
-          <RoundColumn matchIds={r32} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} isFirstRound />
+          <RoundColumn matchIds={r32} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} isFirstRound pickMode={pickMode} />
           <ConnectorColumn pairCount={r16.length} direction="left" />
-          <RoundColumn matchIds={r16} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
+          <RoundColumn matchIds={r16} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} pickMode={pickMode} />
           <ConnectorColumn pairCount={qf.length} direction="left" />
-          <RoundColumn matchIds={qf} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
+          <RoundColumn matchIds={qf} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} pickMode={pickMode} />
           <ConnectorColumn pairCount={sf.length} direction="left" />
-          <RoundColumn matchIds={sf} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
+          <RoundColumn matchIds={sf} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} pickMode={pickMode} />
           <ConnectorColumn pairCount={1} direction="left" />
           {/* Final + 3rd — render Final highlighted, 3rd as a separate column. */}
           <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minWidth: 130, flexShrink: 0 }}>
             <Box sx={{ border: 2, borderColor: 'warning.main', borderRadius: 1, p: 0.25, width: '100%' }}>
-              <MatchupCell matchId="FINAL" slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
+              <MatchupCell matchId="FINAL" slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} pickMode={pickMode} />
             </Box>
           </Box>
           <Box sx={{ width: 12, flexShrink: 0 }} />
           <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minWidth: 130, flexShrink: 0, opacity: 0.85 }}>
             <Box sx={{ width: '100%' }}>
-              <MatchupCell matchId="3RD" slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
+              <MatchupCell matchId="3RD" slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} pickMode={pickMode} />
             </Box>
           </Box>
         </Box>
@@ -423,7 +485,7 @@ function MediumForecastBracket({ slotMap, numSims, countryCodeMap }: { slotMap: 
   );
 }
 
-export default function ForecastBracket({ bracketSlots, numSims, countryCodeMap }: ForecastBracketProps) {
+export default function ForecastBracket({ bracketSlots, numSims, countryCodeMap, pickMode }: ForecastBracketProps) {
   // Three breakpoints: <768 = 2-round mobile tabs; 768-1799 = full horizontal
   // medium layout; >=1800 = traditional split-with-Final-in-center.
   const isMobile = useMediaQuery('(max-width:767px)');
@@ -436,10 +498,10 @@ export default function ForecastBracket({ bracketSlots, numSims, countryCodeMap 
   }, [bracketSlots]);
 
   if (isMobile) {
-    return <MobileForecastBracket slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />;
+    return <MobileForecastBracket slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} pickMode={pickMode} />;
   }
   if (isMedium) {
-    return <MediumForecastBracket slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />;
+    return <MediumForecastBracket slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} pickMode={pickMode} />;
   }
 
   // Walk the FIFA feeder tree from each SF down through R32 so each R32 pair
@@ -466,7 +528,7 @@ export default function ForecastBracket({ bracketSlots, numSims, countryCodeMap 
 
   return (
     <Box>
-      <ChampionBanner slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
+      {!pickMode && <ChampionBanner slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />}
       <Box sx={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', pb: 2 }}>
       {/* Round labels row */}
       <Box sx={{ display: 'flex', alignItems: 'flex-end', minWidth: 'fit-content', mb: 0.5 }}>
@@ -502,7 +564,7 @@ export default function ForecastBracket({ bracketSlots, numSims, countryCodeMap 
         {/* Left half */}
         {leftRounds.map((ids, i) => (
           <Box key={`left-${i}`} sx={{ display: 'contents' }}>
-            <RoundColumn matchIds={ids} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} isFirstRound={i === 0} />
+            <RoundColumn matchIds={ids} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} isFirstRound={i === 0} pickMode={pickMode} />
             {i < 3 && <ConnectorColumn pairCount={ids.length} direction="left" />}
           </Box>
         ))}
@@ -510,13 +572,13 @@ export default function ForecastBracket({ bracketSlots, numSims, countryCodeMap 
         {/* Center: Final + 3rd */}
         <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minWidth: 160, mx: 1, gap: 3 }}>
           <Box sx={{ border: 2, borderColor: 'warning.main', borderRadius: 1, p: 0.25 }}>
-            <MatchupCell matchId="FINAL" slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
+            <MatchupCell matchId="FINAL" slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} pickMode={pickMode} />
           </Box>
           <Box sx={{ opacity: 0.8 }}>
             <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', display: 'block', fontSize: '0.6rem', textAlign: 'center', mb: 0.25 }}>
               🥉 3rd Place
             </Typography>
-            <MatchupCell matchId="3RD" slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} />
+            <MatchupCell matchId="3RD" slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} pickMode={pickMode} />
           </Box>
         </Box>
 
@@ -524,7 +586,7 @@ export default function ForecastBracket({ bracketSlots, numSims, countryCodeMap 
         {rightRounds.map((ids, i) => (
           <Box key={`right-${i}`} sx={{ display: 'contents' }}>
             {i > 0 && <ConnectorColumn pairCount={ids.length} direction="right" />}
-            <RoundColumn matchIds={ids} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} isFirstRound={i === 3} />
+            <RoundColumn matchIds={ids} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} isFirstRound={i === 3} pickMode={pickMode} />
           </Box>
         ))}
       </Box>

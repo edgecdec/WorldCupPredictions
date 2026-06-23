@@ -104,6 +104,15 @@ interface ActualMatch {
 
 interface TournamentSimRequest {
   type: 'run';
+  /**
+   * 'full' (default): run group + knockout simulation, produce all the usual
+   *   results (championProbs, advanceProbs, bracketSlots, playerScores, etc).
+   * 'groupOnly': simulate only the group stage and compute the R32 slot team
+   *   distributions (which team is most likely to fill each R32 side). Knockout
+   *   matches are not simulated. Used by the knockout-picker UI to power
+   *   "click to see possibilities" before R32 teams are locked.
+   */
+  mode?: 'full' | 'groupOnly';
   ratings: Record<string, TeamRating>;
   avgGA: number;
   groups: Record<string, string[]>;
@@ -193,6 +202,11 @@ interface SimResponse {
     playerScores?: PlayerScoreResult[];
     /** matchId → outcome → userKey → expected total score given that outcome. */
     conditionalScores?: Record<string, Record<string, Record<string, number>>>;
+  };
+  /** Present only when the request was mode: 'groupOnly'. R32 slot teams keyed
+   *  by 'R32-{n}-A' / 'R32-{n}-B' → team → fraction-of-sims they filled that side. */
+  groupOnlyResults?: {
+    r32SlotDistributions: Record<string, Record<string, number>>;
   };
 }
 
@@ -713,6 +727,66 @@ function getBest3rdPlace(
     .map((c) => c.team);
 }
 
+/**
+ * Compute R32 slot team assignments (each R32 match's A and B sides) given a
+ * group-stage result and the 3rd-place advancement set. Pure: no knockout
+ * matches simulated, no PRNG, just the FIFA seeding rules.
+ *
+ * Returns map like { 'R32-1-A': '<team>', 'R32-1-B': '<team>', ... }. Used by
+ * the groupOnly mode of this worker, which feeds the knockout-picker UI.
+ */
+function computeR32SlotTeams(
+  groupResults: Record<string, string[]>,
+  advancing3rd: string[],
+  thirdPlaceLookup?: Record<string, string[]>,
+): Record<string, string> {
+  const winners: Record<string, string> = {};
+  const runnersUp: Record<string, string> = {};
+  for (const [g, order] of Object.entries(groupResults)) {
+    winners[g] = order[0];
+    runnersUp[g] = order[1];
+  }
+  // R32_STRUCTURE slot index -> third-place lookup table index.
+  const thirdPlaceSlotMap: Record<number, number> = { 1: 3, 4: 5, 6: 0, 7: 7, 8: 2, 9: 4, 12: 1, 14: 6 };
+  const advancingGroups: string[] = [];
+  const groupToThird: Record<string, string> = {};
+  for (const [g, order] of Object.entries(groupResults)) {
+    const third = order[2];
+    if (advancing3rd.includes(third)) {
+      advancingGroups.push(g);
+      groupToThird[g] = third;
+    }
+  }
+  let thirdAssignment: string[] | null = null;
+  if (thirdPlaceLookup) {
+    const key = [...advancingGroups].sort().join('');
+    thirdAssignment = thirdPlaceLookup[key] ?? null;
+  }
+  const resolveSource = (src: string, r32Idx: number): string => {
+    if (src.startsWith('1')) return winners[src[1]];
+    if (src.startsWith('2')) return runnersUp[src[1]];
+    if (src.startsWith('3:')) {
+      if (thirdAssignment) {
+        const lookupIdx = thirdPlaceSlotMap[r32Idx];
+        if (lookupIdx !== undefined) {
+          const assignedGroup = thirdAssignment[lookupIdx];
+          return groupToThird[assignedGroup] ?? advancing3rd[parseInt(src.slice(2))];
+        }
+      }
+      return advancing3rd[parseInt(src.slice(2))];
+    }
+    return '';
+  };
+  const slotTeams: Record<string, string> = {};
+  for (let i = 0; i < 16; i++) {
+    const matchId = `R32-${i + 1}`;
+    const [srcA, srcB] = R32_STRUCTURE[i];
+    slotTeams[`${matchId}-A`] = resolveSource(srcA, i);
+    slotTeams[`${matchId}-B`] = resolveSource(srcB, i);
+  }
+  return slotTeams;
+}
+
 function simulateKnockout(
   groupResults: Record<string, string[]>,
   advancing3rd: string[],
@@ -953,11 +1027,93 @@ function scoreKnockoutEntry(
   return { total, perRound };
 }
 
+/**
+ * Run the group-only simulation: many iterations of the group stage, computing
+ * R32 slot team assignments deterministically from each iteration's standings.
+ * Aggregates per-slot team counts and reports them as fractions. Emits
+ * progress + partials along the way, finishing with a 'done' carrying
+ * `groupOnlyResults.r32SlotDistributions`.
+ */
+function runGroupOnly(
+  ratings: Record<string, TeamRating>,
+  avgGA: number,
+  groups: Record<string, string[]>,
+  numSims: number,
+  thirdPlaceLookup?: Record<string, string[]>,
+  actualGroupMatches?: Record<string, ActualMatch[]>,
+  inProgressGroupMatches?: Record<string, Array<{ teamA: string; teamB: string; sampledScores: Array<[number, number]> }>>,
+  teamRankings?: Record<string, number>,
+  finalGroupStandings?: Record<string, string[]>,
+  finalAdvancing3rd?: string[],
+) {
+  // eslint-disable-next-line no-restricted-globals
+  const localCtx = self as unknown as Worker;
+  const slotCounts: Record<string, Record<string, number>> = {};
+  const groupStageLocked = finalGroupStandings && Object.keys(finalGroupStandings).length === Object.keys(groups).length;
+
+  const buildPartial = (sims: number) => {
+    const dist: Record<string, Record<string, number>> = {};
+    for (const [slot, counts] of Object.entries(slotCounts)) {
+      const m: Record<string, number> = {};
+      for (const [team, c] of Object.entries(counts)) m[team] = c / sims;
+      dist[slot] = m;
+    }
+    return { r32SlotDistributions: dist };
+  };
+
+  const PROGRESS_INTERVAL = 100;
+  const PARTIAL_STEP = 1000;
+
+  for (let sim = 0; sim < numSims; sim++) {
+    if (sim % PROGRESS_INTERVAL === 0) {
+      localCtx.postMessage({ type: 'progress', progress: sim } as SimResponse);
+    }
+    if (sim > 0 && sim % PARTIAL_STEP === 0) {
+      localCtx.postMessage({
+        type: 'partial', simsCompleted: sim, progress: sim,
+        groupOnlyResults: buildPartial(sim),
+      } as SimResponse);
+    }
+
+    let groupOrder: Record<string, string[]>;
+    let advancing3rd: string[];
+    if (groupStageLocked) {
+      groupOrder = finalGroupStandings!;
+      advancing3rd = finalAdvancing3rd ?? [];
+    } else {
+      // Form bumps reset per sim (independent universes), same as full mode.
+      const form: Record<string, number> = {};
+      const gs = simulateGroupStage(groups, ratings, avgGA, actualGroupMatches, form, inProgressGroupMatches, teamRankings);
+      groupOrder = gs.order;
+      advancing3rd = getBest3rdPlace(groupOrder, gs.tables, teamRankings);
+    }
+    const slotTeams = computeR32SlotTeams(groupOrder, advancing3rd, thirdPlaceLookup);
+    for (const [slot, team] of Object.entries(slotTeams)) {
+      if (!team) continue;
+      if (!slotCounts[slot]) slotCounts[slot] = {};
+      slotCounts[slot][team] = (slotCounts[slot][team] ?? 0) + 1;
+    }
+  }
+  localCtx.postMessage({
+    type: 'done', simsCompleted: numSims,
+    groupOnlyResults: buildPartial(numSims),
+  } as SimResponse);
+}
+
 // eslint-disable-next-line no-restricted-globals
 const ctx = self as unknown as Worker;
 
 ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
-  const { ratings, avgGA, groups, numSims, entries, scoring, teamSeeds, teamRankings, thirdPlaceLookup, actualGroupMatches, actualKnockoutResults, finalGroupStandings, finalAdvancing3rd, knockoutHosts, inProgressGroupMatches } = e.data;
+  const { mode, ratings, avgGA, groups, numSims, entries, scoring, teamSeeds, teamRankings, thirdPlaceLookup, actualGroupMatches, actualKnockoutResults, finalGroupStandings, finalAdvancing3rd, knockoutHosts, inProgressGroupMatches } = e.data;
+
+  // Fast path for the knockout-picker UI: simulate the group stage only,
+  // compute R32 slot team distributions, and return. No knockout matches
+  // simulated, no player scoring — runs in roughly half the time of the
+  // full sim and produces just what the picker needs.
+  if (mode === 'groupOnly') {
+    runGroupOnly(ratings, avgGA, groups, numSims, thirdPlaceLookup, actualGroupMatches, inProgressGroupMatches, teamRankings, finalGroupStandings, finalAdvancing3rd);
+    return;
+  }
 
   // Accumulators
   const groupPos: Record<string, number[][]> = {};

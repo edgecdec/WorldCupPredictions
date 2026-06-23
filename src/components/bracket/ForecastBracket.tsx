@@ -115,26 +115,47 @@ function TeamCell({ slot, slotId, numSims, countryCodeMap, position, pickMode, m
     ? () => pickMode!.onPick(matchId, side)
     : undefined;
 
+  // Cell appearance distinguishes three states for pick mode:
+  //   - picked: bold blue background + scale-up (mirrors /bracket MM-style)
+  //   - showing a downstream team (pickFallback): dimmed, italic — clearly
+  //     "this team would be here if you pick this side" not "this team is
+  //     locked in"
+  //   - has forecast data (R32) or unpicked R16+: standard rendering
   const cell = (
     <Box
       onClick={handleClick}
       sx={{
         px: 0.5, py: 0.2, minWidth: 120, minHeight: 20,
         cursor: handleClick ? 'pointer' : (hasHoverList ? 'help' : 'default'),
-        borderTop: position === 'top' ? (isPicked ? 2 : 1) : 0,
-        borderBottom: isPicked ? 2 : 1,
-        borderLeft: isPicked ? 2 : 1,
-        borderRight: isPicked ? 2 : 1,
-        borderColor: isPicked ? 'primary.main' : 'divider',
-        bgcolor: isPicked ? 'action.selected' : 'transparent',
+        borderTop: position === 'top' ? 1 : 0,
+        borderBottom: 1,
+        borderLeft: 1,
+        borderRight: 1,
+        borderColor: 'divider',
+        bgcolor: isPicked
+          ? (theme) => theme.palette.mode === 'dark' ? 'rgba(66, 165, 245, 0.35)' : 'rgba(66, 165, 245, 0.25)'
+          : 'transparent',
         display: 'flex', alignItems: 'center', gap: 0.4,
-        '&:hover': handleClick || hasHoverList ? { bgcolor: 'action.hover', borderColor: 'primary.main' } : {},
+        transform: isPicked ? 'scale(1.02)' : 'scale(1)',
+        transition: 'background-color 0.15s ease, transform 0.15s ease',
+        '&:hover': handleClick || hasHoverList ? { bgcolor: isPicked
+          ? (theme) => theme.palette.mode === 'dark' ? 'rgba(66, 165, 245, 0.45)' : 'rgba(66, 165, 245, 0.35)'
+          : 'action.hover' } : {},
       }}
     >
       {displayTeam ? (
         <>
           <TeamFlag countryCode={countryCodeMap[displayTeam] ?? ''} size={12} />
-          <Typography variant="caption" noWrap sx={{ flex: 1, fontSize: '0.65rem', fontWeight: 500, lineHeight: 1.2 }}>
+          <Typography
+            variant="caption"
+            noWrap
+            sx={{
+              flex: 1, fontSize: '0.65rem', lineHeight: 1.2,
+              fontWeight: isPicked ? 700 : 500,
+              fontStyle: pickFallback && !isPicked ? 'italic' : 'normal',
+              color: pickFallback && !isPicked ? 'text.secondary' : 'text.primary',
+            }}
+          >
             {displayTeam}
           </Typography>
           {pct !== null && (

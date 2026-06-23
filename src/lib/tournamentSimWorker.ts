@@ -1066,14 +1066,23 @@ function runGroupOnly(
   // cadence to /simulate (~10 visible refreshes across the run).
   const PROGRESS_INTERVAL = Math.max(1, Math.floor(numSims / 50));
   const PARTIAL_STEP = Math.max(100, Math.floor(numSims / 20));
+  // Fire an early partial after just a few hundred sims so the bracket
+  // gets something on screen quickly, rather than waiting for the first
+  // full PARTIAL_STEP slice.
+  const FIRST_PARTIAL_AT = 200;
+  let earlyPartialEmitted = false;
 
-  // Emit an initial partial at the first PARTIAL_STEP-sized chunk to get
-  // something on screen quickly rather than waiting through the warmup.
   for (let sim = 0; sim < numSims; sim++) {
     if (sim % PROGRESS_INTERVAL === 0) {
       localCtx.postMessage({ type: 'progress', progress: sim } as SimResponse);
     }
-    if (sim > 0 && sim % PARTIAL_STEP === 0) {
+    if (!earlyPartialEmitted && sim === FIRST_PARTIAL_AT) {
+      localCtx.postMessage({
+        type: 'partial', simsCompleted: sim, progress: sim,
+        groupOnlyResults: buildPartial(sim),
+      } as SimResponse);
+      earlyPartialEmitted = true;
+    } else if (sim > 0 && sim % PARTIAL_STEP === 0) {
       localCtx.postMessage({
         type: 'partial', simsCompleted: sim, progress: sim,
         groupOnlyResults: buildPartial(sim),

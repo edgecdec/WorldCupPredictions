@@ -70,14 +70,21 @@ export function useGroupOnlySim(actualResults?: ActualResults) {
     });
   }, [actualResults]);
 
-  // Same input-dedupe trick as useTournamentSim — actualResults changes
-  // reference on every live-scores poll, but we only want to rerun when the
-  // payload actually changed.
-  const lastInputRef = useRef<string>('');
+  // actualResults gets a new object reference on every useLiveScores poll
+  // (30s) even when the underlying payload didn't change. Re-running the
+  // worker on every poll wastes ~1s of CPU and — more importantly — kills
+  // the in-flight worker mid-run, which can leave the bracket empty if the
+  // poll fires before the worker emits its first partial.
+  //
+  // Dedupe by deep-equality (JSON.stringify) of the inputs that actually
+  // matter, NOT by `actualResults` reference. Trigger the effect on the
+  // stable key; the effect body then kicks off run() and the cleanup
+  // terminates the worker on unmount. This avoids the prior bug where the
+  // cleanup ran when actualResults's reference changed (terminating the
+  // worker) but the early-return then skipped registering a new cleanup,
+  // and skipped re-running run().
+  const inputKey = JSON.stringify({ actualResults });
   useEffect(() => {
-    const inputKey = JSON.stringify({ actualResults });
-    if (inputKey === lastInputRef.current) return;
-    lastInputRef.current = inputKey;
     run();
     return () => {
       if (workerRef.current) {
@@ -85,7 +92,8 @@ export function useGroupOnlySim(actualResults?: ActualResults) {
         workerRef.current = null;
       }
     };
-  }, [run, actualResults]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputKey]);
 
   return { results, progress, running, numSims: NUM_SIMS, simsCompleted, rerun: run };
 }

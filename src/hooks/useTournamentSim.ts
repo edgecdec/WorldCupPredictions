@@ -200,16 +200,18 @@ export function useTournamentSim(
     });
   }, [players, scoringSettings, actualResults]);
 
-  // Track the last (players, scoring, actualResults) we kicked off a run with,
-  // so we can avoid relaunching the worker when liveScores polls return the
-  // same data on a 30s tick. Deep-equality via JSON.stringify is fine here —
-  // inputs are small plain-data objects (a few hundred KB max).
-  const lastInputRef = useRef<string>('');
-
+  // Dedupe relaunches by deep-equality of the inputs that matter — players,
+  // scoring, actualResults each get fresh references on every live-scores
+  // poll (30s) but the underlying payload usually didn't change. Triggering
+  // on the stable inputKey instead of the raw refs avoids two bugs:
+  //   1. wasted CPU re-running a 10k-sim worker every 30s for no new info,
+  //   2. (the worse one) the cleanup of the previous effect would terminate
+  //      the running worker, then the early-return-on-dedupe pattern would
+  //      skip registering a new cleanup AND skip calling run() — leaving the
+  //      worker terminated with no replacement, so the bracket / leaderboard
+  //      could end up permanently empty if a poll fired mid-warmup.
+  const inputKey = JSON.stringify({ players, scoringSettings, actualResults });
   useEffect(() => {
-    const inputKey = JSON.stringify({ players, scoringSettings, actualResults });
-    if (inputKey === lastInputRef.current) return;
-    lastInputRef.current = inputKey;
     run();
     return () => {
       if (workerRef.current) {
@@ -217,7 +219,8 @@ export function useTournamentSim(
         workerRef.current = null;
       }
     };
-  }, [run, players, scoringSettings, actualResults]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputKey]);
 
   return { results, progress, running, numSims: NUM_SIMS, simsCompleted, rerun: run };
 }

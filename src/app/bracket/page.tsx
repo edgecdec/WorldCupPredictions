@@ -569,72 +569,56 @@ function KnockoutBracketTab({
     return out;
   }, [results, simsCompleted, numSims]);
 
-  // User's picks: matchId -> 'A' | 'B'.
-  const [picks, setPicks] = useState<Record<string, 'A' | 'B'>>({});
+  // User's picks: matchId -> slot token (e.g. 'R32-3-A' meaning "the A side
+  // of R32-3 advances this match"). At R32 the token is the slot id; at R16+
+  // it's whichever feeder slot token the user picked at the feeder match.
+  const [picks, setPicks] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
 
-  const r32LeadByMatch = useMemo(() => {
-    const m: Record<string, { A: string | null; B: string | null }> = {};
+  // Lead team name for any slot token (R32-N-A/B or, recursively, whatever
+  // R32 token a downstream pick resolves to). For non-R32 tokens we don't
+  // store a separate distribution — we just resolve the token to its R32
+  // origin and look up that distribution's leader.
+  const teamForSlot = useCallback((slotToken: string): string | null => {
+    // slotToken is always 'R32-N-A' or 'R32-N-B' since R16+ picks store the
+    // feeder match's R32 slot token. (See slotForSide below — non-R32 picks
+    // copy through the feeder's pick value.)
     const dists = results?.r32SlotDistributions ?? {};
-    for (let i = 1; i <= 16; i++) {
-      const top = (slotId: string) => {
-        const d = dists[slotId];
-        if (!d) return null;
-        let best: string | null = null;
-        let bestP = -1;
-        for (const [t, p] of Object.entries(d)) if (p > bestP) { best = t; bestP = p; }
-        return best;
-      };
-      m[`R32-${i}`] = { A: top(`R32-${i}-A`), B: top(`R32-${i}-B`) };
-    }
-    return m;
+    const d = dists[slotToken];
+    if (!d) return null;
+    let best: string | null = null;
+    let bestP = -1;
+    for (const [t, p] of Object.entries(d)) if (p > bestP) { best = t; bestP = p; }
+    return best;
   }, [results]);
 
-  // Resolve "what team does this R16+ slot side currently show?" by walking
-  // the user's picks back to an R32 leader. Returns null if the chain isn't
-  // fully picked yet (renders TBD in the cell).
-  const pickContent = useCallback((slotId: string): string | null => {
-    // slotId like 'R16-3-A' / 'QF-1-B' / 'FINAL-A' / 'SF-2-B' / '3RD-A'.
-    const lastDash = slotId.lastIndexOf('-');
-    if (lastDash < 0) return null;
-    const matchId = slotId.slice(0, lastDash);
-    const side = slotId.slice(lastDash + 1) as 'A' | 'B';
+  // What slot token is on a given side of a given match? At R32: the slot id
+  // ('R32-3-A'). At R16+: whichever slot token the user picked at the feeder
+  // match. If the feeder isn't picked yet → null (cell shows TBD).
+  const slotForSide = useCallback((matchId: string, side: 'A' | 'B'): string | null => {
+    if (matchId.startsWith('R32-')) return `${matchId}-${side}`;
     const feeders = getFeederIds(matchId);
     if (!feeders) return null;
     const feederMatch = feeders[side === 'A' ? 0 : 1];
-    // If the feeder is an R32 match: result is whichever side of the R32 the
-    // user picked, then its leading team.
-    if (feederMatch.startsWith('R32-')) {
-      const r32Pick = picks[feederMatch];
-      if (!r32Pick) return null;
-      return r32LeadByMatch[feederMatch]?.[r32Pick] ?? null;
-    }
-    // Otherwise recurse: feederMatch is R16/QF/SF, and we need to know which
-    // side of THAT was picked to walk back further.
-    const upPick = picks[feederMatch];
-    if (!upPick) return null;
-    return pickContent(`${feederMatch}-${upPick}`);
-  }, [picks, r32LeadByMatch]);
+    return picks[feederMatch] ?? null;
+  }, [picks]);
 
-  const handlePick = useCallback((matchId: string, side: 'A' | 'B') => {
+  const handlePick = useCallback((matchId: string, slotToken: string) => {
     setPicks((prev) => {
       const next = { ...prev };
-      if (next[matchId] === side) {
-        // Click the picked side again to unpick this match. Downstream picks
-        // stay — they reference slot positions ('R16-2 = A') which remain
-        // meaningful even when the feeder is unpicked. The slot just shows
-        // TBD until the user re-picks. No information is lost.
+      // Click the same side again to unpick. Downstream picks that referenced
+      // this match's winner become orphans — they should be cleared because
+      // their candidate set just changed.
+      if (next[matchId] === slotToken) {
         delete next[matchId];
       } else {
-        // Setting or switching a pick does NOT clear downstream picks.
-        // Picks are slot-bound: 'R16-2 = A' means "I'm backing the A side of
-        // R16-2", regardless of which team currently fills that side. If the
-        // user switches R32-3 from A to B, R16-2's A side now displays the
-        // R32-3-B leader — but the downstream pick is still a valid slot
-        // pick. Clearing would be destructive and surprise the user.
-        next[matchId] = side;
+        next[matchId] = slotToken;
       }
+      // Validate downstream: any descendant pick whose stored slot token is
+      // no longer a candidate (i.e. no longer in either feeder's pick) gets
+      // cleared, recursively.
+      validateDownstream(matchId, next);
       return next;
     });
   }, []);
@@ -643,18 +627,13 @@ function KnockoutBracketTab({
     setSaving(true);
     setSaveMsg(null);
     try {
-      // Convert in-memory picks (matchId → 'A'|'B') to the API's storage
-      // shape (matchId → winning team's slot token, e.g. 'R32-3-A').
-      // Once R32 teams resolve, a follow-up will swap these tokens for
-      // actual team names; for now they're slot tokens.
-      const knockoutPicks: Record<string, string> = {};
-      for (const [matchId, side] of Object.entries(picks)) {
-        knockoutPicks[matchId] = `${matchId}-${side}`;
-      }
+      // Picks are already in slot-token form (matchId → 'R32-N-A' etc),
+      // which is the API's storage shape. Save as-is; the scoring layer
+      // will resolve slot tokens to teams once group stage finalizes.
       const res = await fetch('/api/picks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'save_knockout', knockout_picks: knockoutPicks }),
+        body: JSON.stringify({ action: 'save_knockout', knockout_picks: picks }),
       });
       const data = await res.json();
       if (res.ok && data.ok) setSaveMsg({ kind: 'success', msg: 'Picks saved.' });
@@ -698,7 +677,7 @@ function KnockoutBracketTab({
         bracketSlots={bracketSlots}
         numSims={simsCompleted || numSims}
         countryCodeMap={countryCodeMap}
-        pickMode={{ picks, onPick: handlePick, pickContent }}
+        pickMode={{ picks, onPick: handlePick, slotForSide, teamForSlot }}
       />
     </Box>
   );
@@ -728,6 +707,58 @@ function getFeederIds(matchId: string): [string, string] | null {
   }
   if (matchId === 'FINAL' || matchId === '3RD') return ['SF-1', 'SF-2'];
   return null;
+}
+
+/** Which downstream matches consume this match's winner? (Inverse of getFeederIds.) */
+function dependentMatches(matchId: string): string[] {
+  const out: string[] = [];
+  for (let i = 1; i <= 8; i++) {
+    const f = getFeederIds(`R16-${i}`);
+    if (f && f.includes(matchId)) out.push(`R16-${i}`);
+  }
+  for (let i = 1; i <= 4; i++) {
+    const f = getFeederIds(`QF-${i}`);
+    if (f && f.includes(matchId)) out.push(`QF-${i}`);
+  }
+  for (const sf of ['SF-1', 'SF-2']) {
+    const f = getFeederIds(sf);
+    if (f && f.includes(matchId)) out.push(sf);
+  }
+  for (const top of ['FINAL', '3RD']) {
+    const f = getFeederIds(top);
+    if (f && f.includes(matchId)) out.push(top);
+  }
+  return out;
+}
+
+/**
+ * Walk the bracket forward from `changedMatchId`. For each downstream match
+ * that has a stored pick token, check whether that token still matches one
+ * of the two feeders' current picks. If it doesn't, the user's pick is no
+ * longer reachable — clear it, then recurse to its dependents.
+ *
+ * This implements the user's intuition: "if we advance a team into a slot
+ * it should only reset the slots it feeds into if there's now an invalid
+ * team there." A "team" here is a slot token; "invalid" means the token
+ * isn't in the downstream match's candidate set (= the picks at its two
+ * feeders).
+ *
+ * Mutates `picks` in place (caller already has a fresh copy).
+ */
+function validateDownstream(changedMatchId: string, picks: Record<string, string>) {
+  const dependents = dependentMatches(changedMatchId);
+  for (const dep of dependents) {
+    const stored = picks[dep];
+    if (!stored) continue;
+    const feeders = getFeederIds(dep);
+    if (!feeders) continue;
+    const candidateA = picks[feeders[0]] ?? null;
+    const candidateB = picks[feeders[1]] ?? null;
+    if (stored !== candidateA && stored !== candidateB) {
+      delete picks[dep];
+      validateDownstream(dep, picks);
+    }
+  }
 }
 
 /** Local clock parser, lifted from LiveScores. ESPN sometimes wraps the

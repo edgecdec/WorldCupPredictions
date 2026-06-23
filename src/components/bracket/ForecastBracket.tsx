@@ -7,25 +7,36 @@ import { getFeederMatchupIds } from '@/lib/knockoutBracket';
 
 /**
  * Optional pick-mode contract. When supplied, ForecastBracket turns into a
- * pickable knockout bracket:
- *   - Each side becomes clickable; onPick fires with (matchId, 'A' | 'B').
- *   - The popover with the team list moves from click to hover (Tooltip).
- *   - For sides with no forecast data (e.g. R16+ before group stage is done),
- *     pickContent(slotId) is consulted to render whatever the user's current
- *     picks resolve that side to (typically the leading team of the picked
- *     feeder slot).
- *   - ChampionBanner is hidden — the user picks the champion themselves.
+ * pickable knockout bracket. Picks are stored as **slot tokens** — every
+ * "team" in the bracket is identified by the slot it came from. R32 slots
+ * are stable tokens ('R32-3-A'); R16+ "teams" are whichever feeder-match
+ * slot the user picked (the slot is itself a token like 'R32-3-A').
+ *
+ *   - Each side becomes clickable; onPick fires with (matchId, slotToken).
+ *   - For each cell, the caller resolves "which slot token is on this side
+ *     right now?" via slotForSide(matchId, side). At R32, that's the slot
+ *     itself ('R32-3-A'). At R16+, it's whichever slot-token the user picked
+ *     at the feeder match. Returns null for sides whose feeder isn't yet
+ *     picked.
+ *   - displayTeam (for rendering) is the *leading team* of the resolved
+ *     slot, looked up via teamForSlot. So picking R32-3-A in R32, then
+ *     picking R16-2-A means R16-2-A displays the lead team of R32-3-A.
+ *   - isPicked styling fires when picks[matchId] === slotForSide(...).
+ *   - The hover popover shows the slot's full ranked candidate list.
+ *   - ChampionBanner is hidden.
  */
 export interface PickModeProps {
-  /** Map of matchId ('R32-1', 'R16-3', 'FINAL', etc.) → 'A' | 'B' indicating
-   *  which side the user picked to advance. */
-  picks: Record<string, 'A' | 'B'>;
-  onPick: (matchId: string, side: 'A' | 'B') => void;
-  /** Fallback content for an empty slot, given the slotId ('R16-2-A' etc.).
-   *  Used to render the user's downstream pick into a slot that has no
-   *  worker forecast data. Returns either a team name to render with a flag,
-   *  or null/undefined to fall through to the TBD placeholder. */
-  pickContent?: (slotId: string) => string | null | undefined;
+  /** matchId ('R32-1', 'R16-3', 'FINAL', etc.) → picked slot token (e.g.
+   *  'R32-3-A' meaning "the A side of R32-3 advances this match"). */
+  picks: Record<string, string>;
+  onPick: (matchId: string, slotToken: string) => void;
+  /** Resolve "which slot token is currently on this side of this match?".
+   *  Returns null when the feeder isn't picked yet (the cell renders TBD). */
+  slotForSide: (matchId: string, side: 'A' | 'B') => string | null;
+  /** Resolve "which team leads this slot right now?". Used to render the
+   *  team name in the cell. Returns null if the slot has no distribution
+   *  data yet (sim still warming up). */
+  teamForSlot: (slotToken: string) => string | null;
 }
 
 /**
@@ -89,7 +100,7 @@ function SlotPopoverContent({ slot, numSims, countryCodeMap }: { slot: BracketSl
 
 function TeamCell({ slot, slotId, numSims, countryCodeMap, position, pickMode, matchId, side }: {
   slot: BracketSlotResult | undefined;
-  /** The slot's id, e.g. 'R32-3-A'. Needed for pickContent fallbacks. */
+  /** The slot's id, e.g. 'R32-3-A'. Used for popover labelling. */
   slotId: string;
   numSims: number;
   countryCodeMap: Record<string, string>;
@@ -100,27 +111,30 @@ function TeamCell({ slot, slotId, numSims, countryCodeMap, position, pickMode, m
   side: 'A' | 'B';
 }) {
   const inPickMode = Boolean(pickMode);
-  const isPicked = pickMode?.picks[matchId] === side;
   const top = slot && slot.teams.length > 0 ? slot.teams[0] : null;
-  const pickFallback = !top && pickMode?.pickContent ? pickMode.pickContent(slotId) : null;
-  const displayTeam = top?.team ?? pickFallback ?? null;
-  const pct = top ? Math.round((top.count / numSims) * 100) : null;
+  // In pick mode, ask the caller which slot token is on this side right now.
+  // For R32, that's the slot id itself; for R16+, it's whatever the user
+  // picked at the feeder match. Null = TBD (feeder not picked yet).
+  const sideSlot = inPickMode ? pickMode!.slotForSide(matchId, side) : null;
+  // The team name to render in the cell: in pick mode, look up the slot's
+  // leader; in forecast mode, just use the slot's top team.
+  const displayTeam = inPickMode
+    ? (sideSlot ? pickMode!.teamForSlot(sideSlot) : null)
+    : (top?.team ?? null);
+  const isPicked = inPickMode && sideSlot !== null && pickMode!.picks[matchId] === sideSlot;
+  // Show % only in forecast mode.
+  const pct = !inPickMode && top ? Math.round((top.count / numSims) * 100) : null;
   const hasHoverList = Boolean(slot && slot.teams.length > 0);
 
-  // Visual styling: picked side gets a primary-color border; in pick mode the
-  // cell is always clickable (even with no forecast data, as long as it has
-  // pickFallback content). In forecast mode it's only clickable when there's
-  // a popover to open.
-  const handleClick = inPickMode && displayTeam
-    ? () => pickMode!.onPick(matchId, side)
+  // Pick mode click commits this side's slot token to the match.
+  const handleClick = inPickMode && sideSlot
+    ? () => pickMode!.onPick(matchId, sideSlot)
     : undefined;
 
-  // Cell appearance distinguishes three states for pick mode:
+  // Pick-mode states:
   //   - picked: bold blue background + scale-up (mirrors /bracket MM-style)
-  //   - showing a downstream team (pickFallback): dimmed, italic — clearly
-  //     "this team would be here if you pick this side" not "this team is
-  //     locked in"
-  //   - has forecast data (R32) or unpicked R16+: standard rendering
+  //   - has a team but unpicked: standard rendering (clickable to commit)
+  //   - no team: TBD placeholder (no click target)
   const cell = (
     <Box
       onClick={handleClick}
@@ -152,8 +166,7 @@ function TeamCell({ slot, slotId, numSims, countryCodeMap, position, pickMode, m
             sx={{
               flex: 1, fontSize: '0.65rem', lineHeight: 1.2,
               fontWeight: isPicked ? 700 : 500,
-              fontStyle: pickFallback && !isPicked ? 'italic' : 'normal',
-              color: pickFallback && !isPicked ? 'text.secondary' : 'text.primary',
+              color: 'text.primary',
             }}
           >
             {displayTeam}

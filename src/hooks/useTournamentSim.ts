@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { PELE_RATINGS, AVG_GA } from '@/lib/peleRatings';
 import { THIRD_PLACE_LOOKUP } from '@/lib/thirdPlaceLookup';
 import { KNOCKOUT_HOST } from '@/lib/matchVenues';
+import { stableActualResultsKey } from '@/lib/simInputKey';
 import type { ScoringSettings, GroupPrediction } from '@/types';
 import { DEFAULT_SCORING } from '@/types';
 
@@ -110,6 +111,13 @@ export interface InProgressGroupMatch {
   /** Pre-sampled final scorelines from the live model — the worker draws one
    *  per simulation iteration to capture the joint distribution. */
   sampledScores: Array<[number, number]>;
+  /** Optional: the live score + parsed minute the samples were drawn from.
+   *  The worker ignores these; they exist so the dedupe key in hooks can
+   *  detect "real" state changes (a goal, the clock advancing) without being
+   *  fooled by random resampling on every parent recompute. */
+  currentScoreA?: number;
+  currentScoreB?: number;
+  minutesPlayed?: number;
 }
 
 export interface ActualResults {
@@ -200,17 +208,25 @@ export function useTournamentSim(
     });
   }, [players, scoringSettings, actualResults]);
 
-  // Dedupe relaunches by deep-equality of the inputs that matter — players,
-  // scoring, actualResults each get fresh references on every live-scores
-  // poll (30s) but the underlying payload usually didn't change. Triggering
-  // on the stable inputKey instead of the raw refs avoids two bugs:
-  //   1. wasted CPU re-running a 10k-sim worker every 30s for no new info,
-  //   2. (the worse one) the cleanup of the previous effect would terminate
-  //      the running worker, then the early-return-on-dedupe pattern would
-  //      skip registering a new cleanup AND skip calling run() — leaving the
-  //      worker terminated with no replacement, so the bracket / leaderboard
-  //      could end up permanently empty if a poll fired mid-warmup.
-  const inputKey = JSON.stringify({ players, scoringSettings, actualResults });
+  // Dedupe relaunches on the *meaningful* state of the inputs.
+  // Two reasons:
+  //   1. liveScores polling produces a new actualResults reference every
+  //      30s; without dedupe the worker restarts every 30s and never
+  //      finishes (the cleanup terminates it mid-warmup).
+  //   2. inProgressGroupMatches[*].sampledScores is freshly drawn via
+  //      Math.random() on every actualResults recompute. A naive
+  //      JSON.stringify of actualResults would differ on every render,
+  //      causing the worker to restart whenever the page re-renders for
+  //      ANY reason. End result: mid-game forecasts never produce output
+  //      and the page falls back to pre-game percentages.
+  // We strip sampledScores and rely on the live game's identity + score
+  // + minute (which DO change meaningfully) to drive reruns.
+  const inputKey = JSON.stringify({
+    players, scoringSettings,
+    // Strip sampledScores so a fresh random draw doesn't fire spurious
+    // worker restarts every render. See stableActualResultsKey for detail.
+    actualResults: stableActualResultsKey(actualResults),
+  });
   useEffect(() => {
     run();
     return () => {

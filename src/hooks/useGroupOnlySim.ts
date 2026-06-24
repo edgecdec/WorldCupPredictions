@@ -1,8 +1,9 @@
 'use client';
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { PELE_RATINGS, AVG_GA } from '@/lib/peleRatings';
 import { THIRD_PLACE_LOOKUP } from '@/lib/thirdPlaceLookup';
 import { GROUPS, type ActualResults } from '@/hooks/useTournamentSim';
+import { stableActualResultsKey } from '@/lib/simInputKey';
 
 const NUM_SIMS = 10000;
 
@@ -70,20 +71,22 @@ export function useGroupOnlySim(actualResults?: ActualResults) {
     });
   }, [actualResults]);
 
-  // actualResults gets a new object reference on every useLiveScores poll
-  // (30s) even when the underlying payload didn't change. Re-running the
-  // worker on every poll wastes ~1s of CPU and — more importantly — kills
-  // the in-flight worker mid-run, which can leave the bracket empty if the
-  // poll fires before the worker emits its first partial.
-  //
-  // Dedupe by deep-equality (JSON.stringify) of the inputs that actually
-  // matter, NOT by `actualResults` reference. Trigger the effect on the
-  // stable key; the effect body then kicks off run() and the cleanup
-  // terminates the worker on unmount. This avoids the prior bug where the
-  // cleanup ran when actualResults's reference changed (terminating the
-  // worker) but the early-return then skipped registering a new cleanup,
-  // and skipped re-running run().
-  const inputKey = JSON.stringify({ actualResults });
+  // Dedupe worker runs by a key that captures the *meaningful* state of
+  // the inputs — NOT the raw object identity. Two reasons:
+  //   1. actualResults gets a new reference on every useLiveScores poll
+  //      (30s) even when the payload didn't change. Without dedupe the
+  //      worker restarts every 30s and never finishes (the cleanup
+  //      terminates it mid-warmup).
+  //   2. inProgressGroupMatches[*].sampledScores are freshly drawn via
+  //      Math.random() each time actualResults is recomputed, so a naive
+  //      JSON.stringify(actualResults) would always differ — same root
+  //      cause as bug 1 but for the live-game samples specifically.
+  //      Without this strip, mid-game forecasts would silently fall back
+  //      to pre-game percentages because the worker never finishes.
+  // Strip sampledScores and instead key on each in-progress game's
+  // identity + current scoreline + parsed-minute. That captures every
+  // change that actually affects the sim output.
+  const inputKey = useMemo(() => stableActualResultsKey(actualResults), [actualResults]);
   useEffect(() => {
     run();
     return () => {

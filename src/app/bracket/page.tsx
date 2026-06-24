@@ -537,6 +537,7 @@ function KnockoutBracketTab({
       if (!samples) continue;
       (inProgressGroupMatches[gn] ??= []).push({
         teamA: game.home.name, teamB: game.away.name, sampledScores: samples,
+        currentScoreA: sA, currentScoreB: sB, minutesPlayed: parsed,
       });
     }
     return {
@@ -761,14 +762,33 @@ function validateDownstream(changedMatchId: string, picks: Record<string, string
   }
 }
 
-/** Local clock parser, lifted from LiveScores. ESPN sometimes wraps the
- *  stoppage minute with an apostrophe ("90'+6'") — strip them all. */
+/** Parse ESPN's clock to an "elapsed minutes" number for the live-game
+ *  Monte Carlo. Handles the variety of formats ESPN actually sends:
+ *    "45'", "67'"            → regulation minute (45, 67)
+ *    "45+3'", "45'+3'"       → stoppage in 1H (48)
+ *    "90+6'", "90'+6'"       → stoppage in 2H (96)
+ *    "HT" / "Halftime"        → 45
+ *    "FT" / "Fulltime"        → 90
+ *    "67:23" (rare)           → minute part (67)
+ *  Any other non-empty string falls back to a period-based estimate so the
+ *  game still feeds the sim instead of dropping out (which would silently
+ *  default that match to pre-game forecast — exactly the bug the user
+ *  caught at HT and during stoppage). */
 function parseMinutes(clock: string, period: number): number | null {
-  const c = (clock || '').trim().replace(/'/g, '');
-  if (!c) return period === 1 ? 1 : period === 2 ? 46 : null;
+  const raw = (clock || '').trim();
+  const c = raw.replace(/'/g, '').toLowerCase();
+  // Empty → mid-half fallback based on period.
+  if (!c) return period === 1 ? 23 : period === 2 ? 68 : null;
   const m = c.match(/^(\d+)(?:\+(\d+))?$/);
   if (m) return parseInt(m[1], 10) + (m[2] ? parseInt(m[2], 10) : 0);
-  if (/^ht$/i.test(c)) return 45;
-  if (/^ft$/i.test(c)) return 90;
+  const m2 = c.match(/^(\d+):(\d+)$/);
+  if (m2) return parseInt(m2[1], 10);
+  if (/^h(t|alf-?time|alf time)$/.test(c)) return 45;
+  if (/^f(t|ull-?time|ull time)$/.test(c)) return 90;
+  // Unrecognized format — don't drop the game, just estimate from period
+  // so it still contributes a meaningful sample rather than being skipped
+  // and falling back to pre-game forecasts.
+  if (period === 1) return 23;
+  if (period === 2) return 68;
   return null;
 }

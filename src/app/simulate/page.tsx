@@ -518,18 +518,27 @@ export default function SimulatePage() {
         }
         const rd = t.results_data;
         const ar: ActualResults = {};
-        if (rd?.groupStage?.groupResults?.length) {
+        // ONLY treat groupStage as final standings if all 12 groups are
+        // present. A partial groupStage (some groups complete, others still
+        // in flight) was previously triggering this branch — which lost the
+        // per-match scoreline data and made the worker re-simulate the whole
+        // group stage from pre-game. The bug was visible as /simulate showing
+        // pre-tournament percentages mid-stage.
+        const TOTAL_GROUPS = 12;
+        const isFullGroupStage = (rd?.groupStage?.groupResults?.length ?? 0) === TOTAL_GROUPS
+          && (rd?.groupStage?.advancingThirdPlace?.length ?? 0) === 8;
+        if (isFullGroupStage) {
           const standings: Record<string, string[]> = {};
-          for (const gr of rd.groupStage.groupResults) {
+          for (const gr of rd!.groupStage!.groupResults) {
             standings[gr.groupName] = gr.order;
           }
           ar.finalGroupStandings = standings;
-          ar.finalAdvancing3rd = rd.groupStage.advancingThirdPlace ?? [];
+          ar.finalAdvancing3rd = rd!.groupStage!.advancingThirdPlace;
         } else {
-          // Start from any DB-tracked group matches, then merge in ESPN-final
-          // games whose FT scores haven't been written to the DB yet so the
-          // worker treats just-finished games as locked instead of resimulating
-          // their W/D/L outcomes.
+          // Partial or no group stage: feed the worker the raw per-match
+          // scoreline data so it can lock completed games. Then merge in
+          // any ESPN state='post' games not yet written to the DB (sync
+          // lag) so the worker treats just-finished games as locked too.
           const groupMatches: Record<string, Array<{ teamA: string; teamB: string; scoreA: number; scoreB: number }>> = {};
           for (const [g, arr] of Object.entries(rd?.groupMatches ?? {})) {
             groupMatches[g] = [...(arr as Array<{ teamA: string; teamB: string; scoreA: number; scoreB: number }>)];

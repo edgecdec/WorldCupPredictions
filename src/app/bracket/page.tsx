@@ -541,13 +541,20 @@ function KnockoutBracketTab({
         currentScoreA: sA, currentScoreB: sB, minutesPlayed: parsed,
       });
     }
+    // Only treat groupStage as "final" when all 12 groups + 8 advancing
+    // 3rd-place teams are present. A partial groupStage feeds the worker
+    // via groupMatches (per-match scorelines) instead.
+    const TOTAL_GROUPS = 12;
+    const gs = (rd as TournamentResults | null)?.groupStage;
+    const isFullGroupStage = (gs?.groupResults.length ?? 0) === TOTAL_GROUPS
+      && (gs?.advancingThirdPlace?.length ?? 0) === 8;
     return {
       groupMatches: Object.keys(groupMatches).length > 0 ? groupMatches : undefined,
       inProgressGroupMatches: Object.keys(inProgressGroupMatches).length > 0 ? inProgressGroupMatches : undefined,
-      finalGroupStandings: (rd as TournamentResults | null)?.groupStage
-        ? Object.fromEntries((rd as TournamentResults).groupStage!.groupResults.map((gr) => [gr.groupName, gr.order]))
+      finalGroupStandings: isFullGroupStage
+        ? Object.fromEntries(gs!.groupResults.map((gr) => [gr.groupName, gr.order]))
         : undefined,
-      finalAdvancing3rd: (rd as TournamentResults | null)?.groupStage?.advancingThirdPlace,
+      finalAdvancing3rd: isFullGroupStage ? gs!.advancingThirdPlace : undefined,
     };
   }, [tournament, liveGames, teamToGroup]);
 

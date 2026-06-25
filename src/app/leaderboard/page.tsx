@@ -154,12 +154,19 @@ function LeaderboardContent() {
         teamA: game.home.name, teamB: game.away.name, scoreA: sA, scoreB: sB,
       });
     }
+    // Only mark as 'final group standings' when ALL 12 groups + 8 advancing
+    // 3rd-place teams are decided. A partial groupStage (some groups complete,
+    // others in flight) is not "final" — feed it through groupMatches so the
+    // worker locks completed scorelines but still simulates the rest.
+    const TOTAL_GROUPS = 12;
+    const isFullGroupStage = (r.groupStage?.groupResults.length ?? 0) === TOTAL_GROUPS
+      && (r.groupStage?.advancingThirdPlace?.length ?? 0) === 8;
     return {
       groupMatches: Object.keys(groupMatches).length > 0 ? groupMatches : undefined,
-      finalGroupStandings: r.groupStage
-        ? Object.fromEntries(r.groupStage.groupResults.map((gr) => [gr.groupName, gr.order]))
+      finalGroupStandings: isFullGroupStage
+        ? Object.fromEntries(r.groupStage!.groupResults.map((gr) => [gr.groupName, gr.order]))
         : undefined,
-      finalAdvancing3rd: r.groupStage?.advancingThirdPlace,
+      finalAdvancing3rd: isFullGroupStage ? r.groupStage!.advancingThirdPlace : undefined,
       knockoutWinners: r.knockout,
     };
   }, [results, liveGames, teamToGroup]);

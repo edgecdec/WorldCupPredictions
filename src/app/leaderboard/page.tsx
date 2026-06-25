@@ -61,6 +61,11 @@ function LeaderboardContent() {
   const [bracketData, setBracketData] = useState<BracketData | null>(null);
   const [loading, setLoading] = useState(false);
   const [breakdownEntry, setBreakdownEntry] = useState<LeaderboardEntry | null>(null);
+  // Phase-locked flags drive whether per-group/per-round cells render the
+  // locked total (bold integer) or the worker's expected (italic decimal).
+  // We only show locked once the entire phase is fully decided.
+  const [groupsPhaseLocked, setGroupsPhaseLocked] = useState(false);
+  const [knockoutPhaseLocked, setKnockoutPhaseLocked] = useState(false);
 
   const loadGroups = useCallback(async () => {
     const res = await fetch('/api/groups');
@@ -86,6 +91,8 @@ function LeaderboardContent() {
         setScoringSettings(data.scoring_settings);
         setResults(data.results ?? null);
         setBracketData(data.bracket_data ?? null);
+        setGroupsPhaseLocked(Boolean(data.groupsPhaseLocked));
+        setKnockoutPhaseLocked(Boolean(data.knockoutPhaseLocked));
       }
     } finally {
       setLoading(false);
@@ -294,6 +301,8 @@ function LeaderboardContent() {
             groupDistributionsByKey={groupDistributionsByKey}
             roundDistributionsByKey={roundDistributionsByKey}
             scoreDistributionsByKey={scoreDistributionsByKey}
+            groupsPhaseLocked={groupsPhaseLocked}
+            knockoutPhaseLocked={knockoutPhaseLocked}
             onRowClick={setBreakdownEntry}
           />
         </>

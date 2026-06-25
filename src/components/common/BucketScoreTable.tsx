@@ -35,6 +35,15 @@ export interface BucketScoreTableProps {
   roundDistributionsByKey?: Record<string, Record<string, Record<number, number>>>;
   /** Map of userKey → overall score distribution (for Exp Pts hover). */
   scoreDistributionsByKey?: Record<string, Record<number, number>>;
+  /** Group-stage phase is fully decided (all 12 groups + 8 advancing 3rd-place
+   *  teams known). When false, per-group cells render the expected (italic
+   *  decimal) value even for completed groups, because each group's locked
+   *  total still excludes the 3rd-finisher's advanceCorrect bonus until the
+   *  cross-group advancing set resolves. */
+  groupsPhaseLocked?: boolean;
+  /** Knockout phase is fully decided (final winner known). When false, per-
+   *  round cells render expected. */
+  knockoutPhaseLocked?: boolean;
   /** Optional click handler for a row to open a deeper breakdown dialog. */
   onRowClick?: (entry: LeaderboardEntry) => void;
 }
@@ -103,9 +112,22 @@ function ExpPtsCell({
 }
 
 /** A single bucket cell — locked actual or italic expected. Hovering an expected
- *  cell shows a small histogram of the distribution. */
+ *  cell shows a small histogram of the distribution.
+ *
+ *  Display rule: even when this bucket's own data is "locked" (e.g. all 6
+ *  matches in a group are complete, or all R32 results are in), we still
+ *  show the expected (italic decimal) value until the *entire phase* is
+ *  fully decided. That's because the bucket's locked total can still grow
+ *  when downstream pieces resolve (a group's 3rd-finisher advance bonus
+ *  awards once the cross-group advancing set is known). Showing locked
+ *  prematurely would mislead — points "appear" later, which feels arbitrary.
+ *
+ *  When phaseFullyLocked is true AND we have a locked value, show the bold
+ *  integer (truly final). When phaseFullyLocked is false, prefer expected
+ *  but include a hover breakdown showing locked-so-far + pending delta.
+ */
 function BucketCell({
-  locked, expected, distribution, label, isLive,
+  locked, expected, distribution, label, isLive, phaseFullyLocked,
 }: {
   locked?: number;
   expected?: number;
@@ -114,11 +136,14 @@ function BucketCell({
   /** Label for the popover header (e.g. 'Group A', 'R32'). */
   label?: string;
   isLive?: boolean;
+  phaseFullyLocked?: boolean;
 }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const hasHistogram = locked == null && expected != null && distribution && Object.keys(distribution).length > 0;
+  const hasHistogram = expected != null && distribution && Object.keys(distribution).length > 0;
 
-  if (locked != null) {
+  // Fully final: phase is locked AND this bucket has a locked total. Render
+  // the bold integer — the score will not change.
+  if (phaseFullyLocked && locked != null) {
     return (
       <TableCell align="center" sx={{ py: 0.5, px: 0.25, fontWeight: 700, fontSize: '0.8rem', minWidth: COL_BUCKET_WIDTH }}>
         {locked}
@@ -161,6 +186,12 @@ function BucketCell({
             <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', mt: 0.5, fontSize: '0.6rem' }}>
               Each bar = % of sims with that exact score.
             </Typography>
+            {locked != null && (
+              <Typography variant="caption" sx={{ display: 'block', mt: 0.5, fontSize: '0.6rem' }}>
+                Locked so far: <strong>{locked}</strong> · pending {(expected - locked).toFixed(1)} from
+                {' '}third-place advancement
+              </Typography>
+            )}
           </Popover>
         )}
       </TableCell>
@@ -182,6 +213,8 @@ export default function BucketScoreTable({
   groupDistributionsByKey = {},
   roundDistributionsByKey = {},
   scoreDistributionsByKey = {},
+  groupsPhaseLocked = false,
+  knockoutPhaseLocked = false,
   onRowClick,
 }: BucketScoreTableProps) {
   const theme = useTheme();
@@ -230,22 +263,25 @@ export default function BucketScoreTable({
         return (b.expectedScore - a.expectedScore) * signMul;
       }
       if (typeof sortKey === 'object') {
+        // Mirror the cell display rule: use locked only when the phase is
+        // fully decided, otherwise sort by the expected value (since that's
+        // what's being shown).
         if (sortKey.type === 'group') {
           const aLocked = a.entry.groupScoresLocked?.[sortKey.name];
           const bLocked = b.entry.groupScoresLocked?.[sortKey.name];
-          const aVal = aLocked != null ? aLocked : (a.groupExp[sortKey.name] ?? 0);
-          const bVal = bLocked != null ? bLocked : (b.groupExp[sortKey.name] ?? 0);
+          const aVal = (groupsPhaseLocked && aLocked != null) ? aLocked : (a.groupExp[sortKey.name] ?? 0);
+          const bVal = (groupsPhaseLocked && bLocked != null) ? bLocked : (b.groupExp[sortKey.name] ?? 0);
           return (bVal - aVal) * signMul;
         }
         const aLocked = a.entry.roundScoresLocked?.[sortKey.name];
         const bLocked = b.entry.roundScoresLocked?.[sortKey.name];
-        const aVal = aLocked != null ? aLocked : (a.roundExp[sortKey.name] ?? 0);
-        const bVal = bLocked != null ? bLocked : (b.roundExp[sortKey.name] ?? 0);
+        const aVal = (knockoutPhaseLocked && aLocked != null) ? aLocked : (a.roundExp[sortKey.name] ?? 0);
+        const bVal = (knockoutPhaseLocked && bLocked != null) ? bLocked : (b.roundExp[sortKey.name] ?? 0);
         return (bVal - aVal) * signMul;
       }
       return 0;
     });
-  }, [enriched, sortKey, sortDir]);
+  }, [enriched, sortKey, sortDir, groupsPhaseLocked, knockoutPhaseLocked]);
 
   const ranked = useMemo(() => sorted.map((s, i) => ({ ...s, rank: i + 1 })), [sorted]);
 
@@ -446,6 +482,7 @@ export default function BucketScoreTable({
                       expected={groupExp[g]}
                       distribution={groupDist[g]}
                       label={`Group ${g}`}
+                      phaseFullyLocked={groupsPhaseLocked}
                     />
                   ))}
                   {mode === 'knockout' && ROUND_LABELS.map((r) => (
@@ -455,6 +492,7 @@ export default function BucketScoreTable({
                       expected={roundExp[r]}
                       distribution={roundDist[r]}
                       label={r === '3RD' ? '3rd Place' : r === 'FINAL' ? 'Final' : r}
+                      phaseFullyLocked={knockoutPhaseLocked}
                     />
                   ))}
                 </TableRow>
@@ -497,14 +535,15 @@ export default function BucketScoreTable({
                   {GROUP_NAMES.map((g) => {
                     const locked = drawerEntry.groupScoresLocked?.[g];
                     const expectedVal = groupExp[g];
+                    const showFinal = groupsPhaseLocked && locked != null;
                     return (
                       <TableRow key={g}>
                         <TableCell sx={{ py: 0.5, px: 1, width: 80 }}>Group {g}</TableCell>
-                        <TableCell sx={{ py: 0.5, px: 1, color: locked != null ? 'text.primary' : 'text.secondary' }}>
-                          {locked != null ? '✓ FINAL' : '· pending'}
+                        <TableCell sx={{ py: 0.5, px: 1, color: showFinal ? 'text.primary' : 'text.secondary' }}>
+                          {showFinal ? '✓ FINAL' : '· pending'}
                         </TableCell>
-                        <TableCell align="right" sx={{ py: 0.5, px: 1, fontWeight: locked != null ? 700 : 400, fontStyle: locked == null ? 'italic' : undefined }}>
-                          {locked != null ? locked : (expectedVal != null ? expectedVal.toFixed(1) : '—')}
+                        <TableCell align="right" sx={{ py: 0.5, px: 1, fontWeight: showFinal ? 700 : 400, fontStyle: !showFinal ? 'italic' : undefined }}>
+                          {showFinal ? locked : (expectedVal != null ? expectedVal.toFixed(1) : '—')}
                         </TableCell>
                       </TableRow>
                     );
@@ -519,14 +558,15 @@ export default function BucketScoreTable({
                   {ROUND_LABELS.map((r) => {
                     const locked = drawerEntry.roundScoresLocked?.[r];
                     const expectedVal = roundExp[r];
+                    const showFinal = knockoutPhaseLocked && locked != null;
                     return (
                       <TableRow key={r}>
                         <TableCell sx={{ py: 0.5, px: 1, width: 80 }}>{r === '3RD' ? '3rd Place' : r === 'FINAL' ? 'Final' : r}</TableCell>
-                        <TableCell sx={{ py: 0.5, px: 1, color: locked != null ? 'text.primary' : 'text.secondary' }}>
-                          {locked != null ? '✓ FINAL' : '· pending'}
+                        <TableCell sx={{ py: 0.5, px: 1, color: showFinal ? 'text.primary' : 'text.secondary' }}>
+                          {showFinal ? '✓ FINAL' : '· pending'}
                         </TableCell>
-                        <TableCell align="right" sx={{ py: 0.5, px: 1, fontWeight: locked != null ? 700 : 400, fontStyle: locked == null ? 'italic' : undefined }}>
-                          {locked != null ? locked : (expectedVal != null ? expectedVal.toFixed(1) : '—')}
+                        <TableCell align="right" sx={{ py: 0.5, px: 1, fontWeight: showFinal ? 700 : 400, fontStyle: !showFinal ? 'italic' : undefined }}>
+                          {showFinal ? locked : (expectedVal != null ? expectedVal.toFixed(1) : '—')}
                         </TableCell>
                       </TableRow>
                     );

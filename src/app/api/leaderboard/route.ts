@@ -127,6 +127,24 @@ export async function GET(req: NextRequest) {
     for (const r of Object.keys(ROUND_MATCH_COUNTS)) roundsLocked[r] = false;
   }
 
+  // Phase-level locks. A "phase fully locked" means every piece of that
+  // phase's scoring is decided — at which point per-bucket cells can flip
+  // from expected (italic decimal) to locked (bold integer).
+  //
+  // Group stage: all 12 group standings finalized AND the 8 advancing 3rd-
+  // place teams known. Until then, each group's locked total still excludes
+  // the 3rd-finisher's advanceCorrect + the advancementCorrectBonus, so the
+  // cell should show expected.
+  const TOTAL_GROUPS = 12;
+  const groupsPhaseLocked = !!(
+    groupStageResults
+    && groupStageResults.groupResults.length === TOTAL_GROUPS
+    && groupStageResults.advancingThirdPlace
+    && groupStageResults.advancingThirdPlace.length === 8
+  );
+  // Knockout phase: the final result is known.
+  const knockoutPhaseLocked = !!(knockoutResults && knockoutResults.FINAL);
+
   const predictions = db
     .prepare(
       `SELECT p.id, p.user_id, p.bracket_name, p.group_predictions,
@@ -314,5 +332,7 @@ export async function GET(req: NextRequest) {
     results: resultsData,
     bracket_data: bracketData,
     phase,
+    groupsPhaseLocked,
+    knockoutPhaseLocked,
   });
 }

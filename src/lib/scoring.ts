@@ -37,14 +37,28 @@ function didTeamAdvancePredicted(
   return false;
 }
 
+/**
+ * Did this team advance, given the final group-stage outcome?
+ *
+ *   1st / 2nd → always advances (deterministic from order alone).
+ *   4th       → never advances.
+ *   3rd       → advances iff their team is in advancingThirdPlace.
+ *
+ * `advancingThirdPlace = undefined` means we don't yet know who advances
+ * (the group stage isn't fully resolved). Callers should treat the 3rd-
+ * place return value as "pending" in that case and skip awarding /
+ * penalizing the advanceCorrect points for the 3rd-finisher.
+ */
 function didTeamAdvanceActual(
   teamName: string,
   actualPosition: number,
-  advancingThirdPlace: string[],
-): boolean {
+  advancingThirdPlace: string[] | undefined,
+): boolean | undefined {
   if (actualPosition <= 2) return true;
-  if (actualPosition === 3) return advancingThirdPlace.includes(teamName);
-  return false;
+  if (actualPosition >= 4) return false;
+  // actualPosition === 3: only decidable when the advancing set is known.
+  if (advancingThirdPlace === undefined) return undefined;
+  return advancingThirdPlace.includes(teamName);
 }
 
 export function scoreGroupStage(
@@ -56,6 +70,15 @@ export function scoreGroupStage(
 ): GroupStageScoreResult {
   const perGroup: GroupScoreDetail[] = [];
 
+  // `advancingThirdPlace` is the 8 teams advancing on a 3rd-place tiebreak.
+  // When it's an empty array we treat that as "not yet known" — the partial-
+  // scoring flow at the API uses `[]` to mean "this group is complete but
+  // the 3rd-place advancement across the whole stage hasn't resolved yet."
+  // Pass it as `undefined` to the helper so it can return "pending" for
+  // 3rd-finishers in that case.
+  const thirdPlaceKnown = results.advancingThirdPlace && results.advancingThirdPlace.length > 0;
+  const knownAdvancing = thirdPlaceKnown ? results.advancingThirdPlace : undefined;
+
   for (const result of results.groupResults) {
     const prediction = predictions.find((p) => p.groupName === result.groupName);
     if (!prediction) continue;
@@ -63,7 +86,10 @@ export function scoreGroupStage(
     let advanceCorrectPoints = 0;
     let exactPositionPoints = 0;
     let upsetBonusPoints = 0;
+    // Track whether every advance call was decidable AND correct. If even one
+    // 3rd-finisher's call is pending, we can't award the advancementBonus yet.
     let allAdvanceCorrect = true;
+    let anyAdvancePending = false;
     let allPositionsCorrect = true;
 
     for (let i = 0; i < 4; i++) {
@@ -73,10 +99,14 @@ export function scoreGroupStage(
       if (predictedIndex === -1) continue;
       const predictedPosition = predictedIndex + 1;
 
-      // Advance correct
+      // Advance correct. `actualAdvance === undefined` means we don't yet
+      // know whether the 3rd-place team advances — skip awarding and skip
+      // penalizing for now; revisit when the advancing set is known.
       const predictedAdvance = didTeamAdvancePredicted(teamName, predictedPosition, thirdPlacePicks);
-      const actualAdvance = didTeamAdvanceActual(teamName, actualPosition, results.advancingThirdPlace);
-      if (predictedAdvance === actualAdvance) {
+      const actualAdvance = didTeamAdvanceActual(teamName, actualPosition, knownAdvancing);
+      if (actualAdvance === undefined) {
+        anyAdvancePending = true;
+      } else if (predictedAdvance === actualAdvance) {
         advanceCorrectPoints += settings.advanceCorrect;
       } else {
         allAdvanceCorrect = false;
@@ -107,7 +137,14 @@ export function scoreGroupStage(
       }
     }
 
-    const advancementBonus = allAdvanceCorrect ? settings.advancementCorrectBonus : 0;
+    // Award the advancementCorrectBonus only when EVERY advance call has
+    // resolved AND every one was right. If any call is pending (3rd-place
+    // advancement unresolved), defer the bonus rather than failing it —
+    // it'll pay out once the partial-scoring path sees the locked advancing
+    // set on a subsequent run.
+    const advancementBonus = (!anyAdvancePending && allAdvanceCorrect)
+      ? settings.advancementCorrectBonus
+      : 0;
     const perfectBonus = allPositionsCorrect ? settings.perfectOrderBonus : 0;
 
     const groupTotal = advanceCorrectPoints + exactPositionPoints + upsetBonusPoints + advancementBonus + perfectBonus;

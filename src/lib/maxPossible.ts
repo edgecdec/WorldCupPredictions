@@ -108,7 +108,17 @@ export function calculateMaxPossible(
   currentKnockoutScore: number,
   settings: ScoringSettings = DEFAULT_SCORING,
 ): MaxPossibleResult {
+  // "Fully resolved" group stage means all 12 groups + 8 third-place teams.
+  // A partial groupStage (some groups complete, advancingThirdPlace empty)
+  // shouldn't lock currentGroupScore as the final group total — the remaining
+  // groups can still earn points.
   const hasGroupResults = groupStageResults && groupStageResults.groupResults.length > 0;
+  const groupStageFullyResolved = !!(
+    hasGroupResults
+    && groupStageResults!.groupResults.length === 12
+    && groupStageResults!.advancingThirdPlace
+    && groupStageResults!.advancingThirdPlace.length === 8
+  );
   const hasKnockout = knockoutResults && knockoutMatchups && knockoutMatchups.length > 0;
 
   // Champion eliminated check
@@ -120,8 +130,14 @@ export function calculateMaxPossible(
     hasBeenEliminated(championPick, knockoutResults, knockoutMatchups)
   );
 
-  if (!hasGroupResults) {
-    // Pre-tournament or group stage in progress: max = theoretical max of everything
+  if (!groupStageFullyResolved) {
+    // Pre-tournament, partial group stage, or completion before advancing-
+    // third-place is locked: current score is whatever scored so far, the
+    // remaining unscored groups + the deferred 3rd-place bits + knockout
+    // all add their theoretical max. We approximate by taking the
+    // theoretical-max-of-everything as the upper bound (slightly loose
+    // when partial scoring has already taken place, but never less than
+    // the real max).
     const maxGroup = maxGroupStagePoints(predictions, thirdPlacePicks, bracketData, settings.groupStage);
     const maxKO = maxKnockoutPoints(settings.knockout);
     return { maxTotal: maxGroup + maxKO, championEliminated };

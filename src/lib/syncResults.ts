@@ -1,8 +1,7 @@
 import { getDb } from '@/lib/db';
 import { parseBracketData } from '@/lib/bracketData';
-import { fetchCompletedMatches, fetchGroupStandings, type CompletedMatch } from '@/lib/espnSync';
+import { fetchCompletedMatches, type CompletedMatch } from '@/lib/espnSync';
 import { generateKnockoutBracket, getFeederMatchupIds } from '@/lib/knockoutBracket';
-import { isGroupStageComplete } from '@/lib/bestThirdPlace';
 import { computeLiveStandings } from '@/lib/liveStandings';
 import type { TournamentResults, GroupStageResults } from '@/types';
 
@@ -127,56 +126,78 @@ export async function syncEspnResults(): Promise<SyncResult> {
       }
     }
 
-    // Check if group stage is now complete and finalize standings.
-    // We use ESPN's /standings only as a completeness check (every team
-    // played their 3 games) — the actual ordering is computed from the
-    // groupMatches we've persisted, applying the 2026 FIFA tiebreaker
-    // chain (H2H first → overall → Fair Play → FIFA ranking). This
-    // matches the Live Standings page and the worker.
-    let groupStageCompleted = false;
-    if (!existing.groupStage) {
-      try {
-        const standings = await fetchGroupStandings(bracketData);
-        if (standings.length === 12 && isGroupStageComplete(standings)) {
-          const tables = computeLiveStandings(bracketData, existing.groupMatches ?? {}, {});
-          if (tables.length === 12 && tables.every((t) => t.standings.length === 4)) {
-            const groupResults = tables.map((gt) => ({
-              groupName: gt.groupName,
-              order: gt.standings.map((s) => s.team) as [string, string, string, string],
-            }));
-            // Best 3rd place across groups: pts → overall GD → overall GF →
-            // FP → FIFA rank → alpha. No H2H since these teams haven't met.
-            const teamRank = (team: string) => {
-              for (const g of bracketData.groups) {
-                const t = g.teams.find((x) => x.name === team);
-                if (t) return t.fifaRanking ?? 9999;
-              }
-              return 9999;
-            };
-            const thirds = tables
-              .map((t) => t.standings[2])
-              .sort((a, b) =>
-                (b.points - a.points)
-                || (b.goalDifference - a.goalDifference)
-                || (b.goalsFor - a.goalsFor)
-                || (b.fairPlay - a.fairPlay)
-                || (teamRank(a.team) - teamRank(b.team))
-                || a.team.localeCompare(b.team))
-              .slice(0, 8)
-              .map((s) => s.team);
-            const gsResults: GroupStageResults = { groupResults, advancingThirdPlace: thirds };
-            const knockoutBracket = generateKnockoutBracket(gsResults, bracketData);
-            existing.groupStage = gsResults;
-            existing.knockoutBracket = knockoutBracket;
-            groupStageCompleted = true;
+    // Compute group standings whenever any group's 6 matches are complete.
+    // We write `groupStage` two-pass:
+    //   1. partial: groupResults for completed groups only, advancingThirdPlace=[].
+    //      Lets the leaderboard score those groups for everything except the
+    //      3rd-place advancement bits.
+    //   2. final: when all 12 groups are complete, populate advancingThirdPlace
+    //      and generate the knockout bracket.
+    // The existing "final" check still runs every sync — it's idempotent on
+    // already-finalized data.
+    const TOTAL_GROUPS = 12;
+    const MATCHES_PER_GROUP = 6;
+    const hasFinalStage = existing.groupStage
+      && existing.groupStage.advancingThirdPlace
+      && existing.groupStage.advancingThirdPlace.length === 8;
+    let groupStageChanged = false;
+    if (!hasFinalStage) {
+      const liveTables = computeLiveStandings(bracketData, existing.groupMatches ?? {}, {});
+      const isComplete = (g: string) =>
+        (existing.groupMatches?.[g]?.length ?? 0) >= MATCHES_PER_GROUP;
+      const completedTables = liveTables.filter((t) => isComplete(t.groupName));
+      const partialResults = completedTables
+        .filter((t) => t.standings.length === 4)
+        .map((gt) => ({
+          groupName: gt.groupName,
+          order: gt.standings.map((s) => s.team) as [string, string, string, string],
+        }));
+
+      if (completedTables.length === TOTAL_GROUPS && liveTables.every((t) => t.standings.length === 4)) {
+        // All 12 groups complete: write the full GroupStageResults with the
+        // 8 advancing 3rd-place teams determined.
+        const teamRank = (team: string) => {
+          for (const g of bracketData.groups) {
+            const t = g.teams.find((x) => x.name === team);
+            if (t) return t.fifaRanking ?? 9999;
           }
+          return 9999;
+        };
+        const thirds = liveTables
+          .map((t) => t.standings[2])
+          .sort((a, b) =>
+            (b.points - a.points)
+            || (b.goalDifference - a.goalDifference)
+            || (b.goalsFor - a.goalsFor)
+            || (b.fairPlay - a.fairPlay)
+            || (teamRank(a.team) - teamRank(b.team))
+            || a.team.localeCompare(b.team))
+          .slice(0, 8)
+          .map((s) => s.team);
+        const gsResults: GroupStageResults = { groupResults: partialResults, advancingThirdPlace: thirds };
+        const knockoutBracket = generateKnockoutBracket(gsResults, bracketData);
+        if (!deepEqual(existing.groupStage, gsResults)) {
+          existing.groupStage = gsResults;
+          existing.knockoutBracket = knockoutBracket;
+          groupStageChanged = true;
         }
-      } catch {
-        // Standings unavailable — keep going with whatever we have
+      } else if (partialResults.length > 0) {
+        // Some (but not all) groups complete: write a partial GroupStageResults
+        // with advancingThirdPlace=[] so scoreGroupStage treats 3rd-place
+        // advancement as pending. Recompute on every sync so newly-completed
+        // groups get added.
+        const partial: GroupStageResults = { groupResults: partialResults, advancingThirdPlace: [] };
+        if (!deepEqual(existing.groupStage, partial)) {
+          existing.groupStage = partial;
+          // Don't write a knockoutBracket yet — slot assignments depend on
+          // the advancing 3rd-place set, which isn't known.
+          delete (existing as Partial<typeof existing>).knockoutBracket;
+          groupStageChanged = true;
+        }
       }
     }
 
-    const updated = groupMatchesAdded + knockoutWinnersAdded + (groupStageCompleted ? 1 : 0) + cardEventsBackfilled;
+    const updated = groupMatchesAdded + knockoutWinnersAdded + (groupStageChanged ? 1 : 0) + cardEventsBackfilled;
     if (updated > 0) {
       db.prepare(
         "UPDATE tournaments SET results_data = ?, results_updated_at = datetime('now') WHERE id = ?",
@@ -188,13 +209,20 @@ export async function syncEspnResults(): Promise<SyncResult> {
       ).run(row.id);
     }
 
-    return { ok: true, updated, groupMatchesAdded, knockoutWinnersAdded, groupStageCompleted };
+    return { ok: true, updated, groupMatchesAdded, knockoutWinnersAdded, groupStageCompleted: groupStageChanged };
   } finally {
     syncInProgress = false;
   }
 }
 
 /** Find which knockout match ID a completed match corresponds to. */
+/** Cheap deep-equality via JSON for the small plain-data structures we
+ *  use here. Order matters in arrays — that's fine because we always
+ *  build them in a deterministic order. */
+function deepEqual(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 function findKnockoutMatchId(m: CompletedMatch, existing: ResultsWithMeta): string | null {
   const matchups = existing.knockoutBracket;
   if (!matchups) return null;

@@ -203,10 +203,22 @@ interface SimResponse {
     /** matchId → outcome → userKey → expected total score given that outcome. */
     conditionalScores?: Record<string, Record<string, Record<string, number>>>;
   };
-  /** Present only when the request was mode: 'groupOnly'. R32 slot teams keyed
-   *  by 'R32-{n}-A' / 'R32-{n}-B' → team → fraction-of-sims they filled that side. */
+  /** Present only when the request was mode: 'groupOnly'. */
   groupOnlyResults?: {
+    /** R32 slot teams keyed by 'R32-{n}-A' / 'R32-{n}-B' → team → fraction
+     *  of sims they filled that side. */
     r32SlotDistributions: Record<string, Record<string, number>>;
+    /** team → P(team advances | team finished 3rd in their group). 1.0 means
+     *  every sim where the team finished 3rd resulted in them advancing —
+     *  i.e. they're CLINCHED to advance if their actual finish is 3rd.
+     *  0.0 means they're clinched-out. Anything in between is undecided. */
+    thirdAdvanceProb: Record<string, number>;
+    /** Companion to thirdAdvanceProb: how many sims out of total this team
+     *  actually finished 3rd. A team that only finished 3rd in 5 of 10000
+     *  sims with thirdAdvanceProb=1.0 is still a high-confidence clinch,
+     *  but the absolute count lets downstream consumers be conservative if
+     *  they want. */
+    thirdFinishCounts: Record<string, number>;
   };
 }
 
@@ -1049,6 +1061,14 @@ function runGroupOnly(
   // eslint-disable-next-line no-restricted-globals
   const localCtx = self as unknown as Worker;
   const slotCounts: Record<string, Record<string, number>> = {};
+  // Per (team, group): how often did this team finish 3rd in their group, and
+  // of those, how often did they advance? After numSims iterations, the
+  // ratio gives us P(team T advances | T finished 3rd). A value of 1.0 means
+  // T advances in every universe where T finished 3rd; 0.0 means T never
+  // advances in that case. Used to detect mid-stage 3rd-place clinches
+  // before all 12 groups complete.
+  const thirdFinishCounts: Record<string, number> = {};
+  const thirdAdvanceCounts: Record<string, number> = {};
   const groupStageLocked = finalGroupStandings && Object.keys(finalGroupStandings).length === Object.keys(groups).length;
 
   const buildPartial = (sims: number) => {
@@ -1058,7 +1078,20 @@ function runGroupOnly(
       for (const [team, c] of Object.entries(counts)) m[team] = c / sims;
       dist[slot] = m;
     }
-    return { r32SlotDistributions: dist };
+    // P(T advances | T finished 3rd). Only include teams that finished 3rd
+    // at least once — otherwise the question is moot for them.
+    const thirdAdvanceProb: Record<string, number> = {};
+    for (const [team, n] of Object.entries(thirdFinishCounts)) {
+      if (n === 0) continue;
+      thirdAdvanceProb[team] = (thirdAdvanceCounts[team] ?? 0) / n;
+    }
+    return {
+      r32SlotDistributions: dist,
+      thirdAdvanceProb,
+      // Also expose the absolute count so downstream code can confidence-gate
+      // ("100% of 10000 sims" vs "100% of 5 sims" feels different).
+      thirdFinishCounts: { ...thirdFinishCounts },
+    };
   };
 
   // GroupOnly is roughly 2x faster per iteration than the full sim, so a
@@ -1106,6 +1139,16 @@ function runGroupOnly(
       if (!team) continue;
       if (!slotCounts[slot]) slotCounts[slot] = {};
       slotCounts[slot][team] = (slotCounts[slot][team] ?? 0) + 1;
+    }
+    // Track 3rd-place advance probability for mid-stage clinch detection.
+    const advancing3rdSet = new Set(advancing3rd);
+    for (const order of Object.values(groupOrder)) {
+      const thirdTeam = order[2];
+      if (!thirdTeam) continue;
+      thirdFinishCounts[thirdTeam] = (thirdFinishCounts[thirdTeam] ?? 0) + 1;
+      if (advancing3rdSet.has(thirdTeam)) {
+        thirdAdvanceCounts[thirdTeam] = (thirdAdvanceCounts[thirdTeam] ?? 0) + 1;
+      }
     }
   }
   localCtx.postMessage({

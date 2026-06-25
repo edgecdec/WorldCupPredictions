@@ -10,6 +10,11 @@ const NUM_SIMS = 10000;
 export interface GroupOnlySimResults {
   /** Per R32 slot side ('R32-1-A' / 'R32-1-B' / ...) → team → fraction (0..1). */
   r32SlotDistributions: Record<string, Record<string, number>>;
+  /** team → P(team advances | team finished 3rd in their group). 1.0 = clinched
+   *  to advance (if 3rd); 0.0 = clinched-out. See worker docs for detail. */
+  thirdAdvanceProb: Record<string, number>;
+  /** team → number of sims where the team actually finished 3rd in their group. */
+  thirdFinishCounts: Record<string, number>;
 }
 
 /**

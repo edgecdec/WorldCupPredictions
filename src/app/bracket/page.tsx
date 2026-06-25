@@ -605,8 +605,30 @@ function KnockoutBracketTab({
   // What slot token is on a given side of a given match? At R32: the slot id
   // ('R32-3-A'). At R16+: whichever slot token the user picked at the feeder
   // match. If the feeder isn't picked yet → null (cell shows TBD).
+  //
+  // Special case: the 3rd-place playoff is fed by the LOSERS of the two SFs,
+  // not the winners. picks[SF-N] is the SF winner, so the loser is the OTHER
+  // candidate at SF-N — i.e. the one of SF-N's feeders (QF picks) that the
+  // user didn't pick as the SF winner.
   const slotForSide = useCallback((matchId: string, side: 'A' | 'B'): string | null => {
     if (matchId.startsWith('R32-')) return `${matchId}-${side}`;
+
+    if (matchId === '3RD') {
+      const sfMatch = side === 'A' ? 'SF-1' : 'SF-2';
+      const sfPick = picks[sfMatch];
+      if (!sfPick) return null; // SF not picked yet → loser is undefined
+      const sfFeeders = getFeederIds(sfMatch);
+      if (!sfFeeders) return null;
+      const candA = picks[sfFeeders[0]];
+      const candB = picks[sfFeeders[1]];
+      // The loser is whichever SF candidate token isn't the SF winner. If
+      // only one candidate has been picked (and it's the winner), the loser
+      // is still TBD; if it's NOT the winner, the loser is that pick.
+      if (candA && candA !== sfPick) return candA;
+      if (candB && candB !== sfPick) return candB;
+      return null;
+    }
+
     const feeders = getFeederIds(matchId);
     if (!feeders) return null;
     const feederMatch = feeders[side === 'A' ? 0 : 1];
@@ -740,32 +762,64 @@ function dependentMatches(matchId: string): string[] {
   return out;
 }
 
+/** Candidate slot tokens at a given match, given current picks. For most
+ *  matches, the two candidates are the picks at the two feeder matches
+ *  (= the winners flowing up). For the 3rd-place playoff, the candidates
+ *  are the LOSERS of the two SFs — derived as the other QF pick at each
+ *  SF (the one the user didn't choose as the SF winner). */
+function candidateTokens(matchId: string, picks: Record<string, string>): Array<string | null> {
+  if (matchId === '3RD') {
+    const loserOf = (sf: string): string | null => {
+      const sfPick = picks[sf];
+      if (!sfPick) return null;
+      const f = getFeederIds(sf);
+      if (!f) return null;
+      const a = picks[f[0]];
+      const b = picks[f[1]];
+      if (a && a !== sfPick) return a;
+      if (b && b !== sfPick) return b;
+      return null;
+    };
+    return [loserOf('SF-1'), loserOf('SF-2')];
+  }
+  const feeders = getFeederIds(matchId);
+  if (!feeders) return [null, null];
+  return [picks[feeders[0]] ?? null, picks[feeders[1]] ?? null];
+}
+
 /**
  * Walk the bracket forward from `changedMatchId`. For each downstream match
  * that has a stored pick token, check whether that token still matches one
- * of the two feeders' current picks. If it doesn't, the user's pick is no
- * longer reachable — clear it, then recurse to its dependents.
+ * of its current candidates. If it doesn't, the user's pick is no longer
+ * reachable — clear it, then recurse.
  *
- * This implements the user's intuition: "if we advance a team into a slot
- * it should only reset the slots it feeds into if there's now an invalid
- * team there." A "team" here is a slot token; "invalid" means the token
- * isn't in the downstream match's candidate set (= the picks at its two
- * feeders).
- *
- * Mutates `picks` in place (caller already has a fresh copy).
+ * "Downstream" here also needs to include the 3rd-place playoff: any QF or
+ * SF change can invalidate the 3RD pick (since 3RD's candidates are derived
+ * from BOTH the SF picks and their QF-level feeders). dependentMatches
+ * already returns 3RD as a dependent of SF — and since 3RD's candidates
+ * recompute from QF + SF state, validating it here works as long as we
+ * cascade through SF whenever a QF changes. We already do that.
  */
 function validateDownstream(changedMatchId: string, picks: Record<string, string>) {
   const dependents = dependentMatches(changedMatchId);
   for (const dep of dependents) {
     const stored = picks[dep];
     if (!stored) continue;
-    const feeders = getFeederIds(dep);
-    if (!feeders) continue;
-    const candidateA = picks[feeders[0]] ?? null;
-    const candidateB = picks[feeders[1]] ?? null;
-    if (stored !== candidateA && stored !== candidateB) {
+    const [candA, candB] = candidateTokens(dep, picks);
+    if (stored !== candA && stored !== candB) {
       delete picks[dep];
       validateDownstream(dep, picks);
+    }
+  }
+  // 3RD depends on SF AND on the QF feeders of each SF. When a QF changes,
+  // dependentMatches(QF) returns the SF — which we recurse into — but we
+  // also need to revalidate 3RD because its loser set just shifted. Direct
+  // check here is cheap.
+  if (!changedMatchId.startsWith('SF-') && changedMatchId !== '3RD') {
+    const stored = picks['3RD'];
+    if (stored) {
+      const [candA, candB] = candidateTokens('3RD', picks);
+      if (stored !== candA && stored !== candB) delete picks['3RD'];
     }
   }
 }

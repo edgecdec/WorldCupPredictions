@@ -10,6 +10,7 @@ import type { LiveGame } from '@/types';
 import TeamFlag from '@/components/common/TeamFlag';
 import type { BracketSlotResult } from '@/hooks/useTournamentSim';
 import { computeMatchOdds, computeLiveOdds, sampleLiveScores, type MatchOdds } from '@/lib/matchOdds';
+import { parseEspnClock } from '@/lib/parseEspnClock';
 
 const STATE_IN = 'in';
 const STATE_POST = 'post';
@@ -18,29 +19,7 @@ const ESPN_SCOREBOARD_URL = 'https://www.espn.com/soccer/scoreboard/_/league/fif
 const TOP_SCORELINES = 6;
 const SAMPLES_FOR_HOVER = 2000;
 
-/** Parse ESPN's clock string into elapsed minutes.
- *  Known ESPN formats:
- *    "45'", "67'"          — regulation minute with trailing tick
- *    "90'+6'", "45+2'"     — regulation + stoppage. The tick can appear after
- *                            the regulation minute, after stoppage, or both.
- *    "67:23"               — minute:second clock
- *    "HT", "FT"            — half/full time
- *  We strip apostrophes before matching so the various ESPN tick placements
- *  all parse to the same number. */
-function parseMinutesPlayed(clock: string, period: number): number | null {
-  const raw = (clock || '').trim();
-  if (!raw) return null;
-  const c = raw.replace(/'/g, '');
-  const m = c.match(/^(\d+)(?:\+(\d+))?$/);
-  if (m) return parseInt(m[1], 10) + (m[2] ? parseInt(m[2], 10) : 0);
-  const m2 = c.match(/^(\d+):(\d+)$/);
-  if (m2) return parseInt(m2[1], 10);
-  if (/^ht$/i.test(c)) return 45;
-  if (/^ft$/i.test(c)) return 90;
-  if (period === 1) return 1;
-  if (period === 2) return 46;
-  return null;
-}
+// Clock parsing moved to lib/parseEspnClock for sharing.
 
 function fmtPct(p: number): string {
   return `${Math.round(p * 100)}%`;
@@ -368,7 +347,7 @@ function GameCard({ game, countryCodeMap, bracketSlots, numSims, currentUserKey,
   const isLive = game.state === STATE_IN;
   const isFinal = game.state === STATE_POST;
   const stage = game.stage ?? 'group';
-  const minutesPlayed = isLive ? parseMinutesPlayed(game.clock, game.period) : null;
+  const minutesPlayed = isLive ? parseEspnClock(game.clock, game.period) : null;
   const scoreA = parseInt(game.home.score, 10) || 0;
   const scoreB = parseInt(game.away.score, 10) || 0;
 

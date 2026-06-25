@@ -16,6 +16,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTournamentSim, GROUPS } from '@/hooks/useTournamentSim';
 import type { PlayerEntry, ActualResults, InProgressGroupMatch } from '@/hooks/useTournamentSim';
 import { sampleLiveScores } from '@/lib/matchOdds';
+import { parseEspnClock } from '@/lib/parseEspnClock';
 import { useSelectedGroup } from '@/hooks/useSelectedGroup';
 import AuthForm from '@/components/auth/AuthForm';
 import TeamFlag from '@/components/common/TeamFlag';
@@ -54,20 +55,7 @@ function pct(count: number, total: number): string {
   return `${Math.round((count / total) * 100)}%`;
 }
 
-/** Parse ESPN's clock string into minutes elapsed. Mirrors LiveScores.tsx. */
-function parseEspnMinute(clock: string, period: number): number | null {
-  const c = (clock || '').trim();
-  if (!c) return null;
-  const m = c.match(/^(\d+)(?:\+(\d+))?'?$/);
-  if (m) return parseInt(m[1], 10) + (m[2] ? parseInt(m[2], 10) : 0);
-  const m2 = c.match(/^(\d+):(\d+)$/);
-  if (m2) return parseInt(m2[1], 10);
-  if (/^ht$/i.test(c)) return 45;
-  if (/^ft$/i.test(c)) return 90;
-  if (period === 1) return 1;
-  if (period === 2) return 46;
-  return null;
-}
+// parseEspnClock moved to lib/parseEspnClock for sharing across pages.
 
 function pctNum(count: number, total: number): number {
   return Math.round((count / total) * 100);
@@ -580,7 +568,7 @@ export default function SimulatePage() {
             if ((g.stage ?? 'group') !== 'group') continue;
             const groupName = teamToGroup[g.home?.name];
             if (!groupName || teamToGroup[g.away?.name] !== groupName) continue;
-            const minutesPlayed = parseEspnMinute(g.clock, g.period);
+            const minutesPlayed = parseEspnClock(g.clock, g.period);
             if (minutesPlayed === null) continue;
             const sA = parseInt(g.home.score, 10) || 0;
             const sB = parseInt(g.away.score, 10) || 0;
@@ -590,6 +578,13 @@ export default function SimulatePage() {
               teamA: g.home.name,
               teamB: g.away.name,
               sampledScores: samples,
+              // Score + minute give the dedupe key something concrete to
+              // compare so a goal or HT/stoppage transition actually triggers
+              // a worker rerun (the random sampledScores get stripped from
+              // the compare to avoid spurious reruns).
+              currentScoreA: sA,
+              currentScoreB: sB,
+              minutesPlayed,
             });
           }
           if (Object.keys(inProgress).length > 0) {
@@ -599,12 +594,19 @@ export default function SimulatePage() {
 
         if (Object.keys(ar).length > 0) {
           setActualResults((prev) => {
-            // Compare without sampledScores (random per fetch — would always differ)
+            // Compare without sampledScores (re-drawn every poll so they'd
+            // always differ). Keep teams + current score + minute so a goal
+            // or clock change DOES trigger a rerun.
             const stripSamples = (x: ActualResults | undefined) => {
               if (!x?.inProgressGroupMatches) return x;
-              const stripped: Record<string, Array<{ teamA: string; teamB: string }>> = {};
+              const stripped: Record<string, Array<{ teamA: string; teamB: string; currentScoreA?: number; currentScoreB?: number; minutesPlayed?: number }>> = {};
               for (const [g, ms] of Object.entries(x.inProgressGroupMatches)) {
-                stripped[g] = ms.map((m) => ({ teamA: m.teamA, teamB: m.teamB }));
+                stripped[g] = ms.map((m) => ({
+                  teamA: m.teamA, teamB: m.teamB,
+                  currentScoreA: m.currentScoreA,
+                  currentScoreB: m.currentScoreB,
+                  minutesPlayed: m.minutesPlayed,
+                }));
               }
               return { ...x, inProgressGroupMatches: stripped };
             };

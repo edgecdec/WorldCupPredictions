@@ -325,16 +325,21 @@ export default function BracketPage() {
 
       {tournamentStarted && (
         <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ mb: 2 }}>
+          {/* Knockout Bracket first — that's now the primary action since
+              group picks are locked once group stage starts. Visible to
+              everyone (not admin-gated). Knockout picks remain editable
+              server-side until lock_time_knockout passes; the API enforces
+              that gate, so no client-side disable is needed here. */}
+          <Tab label="Knockout Bracket" />
           <Tab label="My Predictions" />
           <Tab label="Live Standings" />
-          {user?.is_admin && <Tab label="Knockout Bracket" />}
         </Tabs>
       )}
 
-      {activeTab === 1 && tournamentStarted ? (
-        <GroupStandings groupOrders={groupOrders} countryCodeMap={countryCodeMap} />
-      ) : activeTab === 2 && tournamentStarted && user?.is_admin ? (
+      {activeTab === 0 && tournamentStarted ? (
         <KnockoutBracketTab countryCodeMap={countryCodeMap} tournament={tournament} />
+      ) : activeTab === 2 && tournamentStarted ? (
+        <GroupStandings groupOrders={groupOrders} countryCodeMap={countryCodeMap} />
       ) : (
         <>
           <TextField

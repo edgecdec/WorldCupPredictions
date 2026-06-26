@@ -302,8 +302,15 @@ export default function BracketPage() {
         )}
       </Box>
 
-      {tournament.lock_time_groups && (
-        <CountdownTimer targetDate={tournament.lock_time_groups} label="Predictions lock in" />
+      {/* Countdown switches based on which deadline is next:
+          - pre-group-lock: count down to group lock
+          - post-group-lock & pre-knockout-lock: count down to knockout lock
+          - post-knockout-lock: nothing (everything's locked) */}
+      {tournament.lock_time_groups && !isLocked && (
+        <CountdownTimer targetDate={tournament.lock_time_groups} label="Group predictions lock in" />
+      )}
+      {isLocked && tournament.lock_time_knockout && new Date() < new Date(tournament.lock_time_knockout) && (
+        <CountdownTimer targetDate={tournament.lock_time_knockout} label="Knockout bracket locks in" />
       )}
 
       {!user && (
@@ -321,7 +328,9 @@ export default function BracketPage() {
       {error && <Alert severity="error" sx={{ my: 2 }} onClose={() => setError('')}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ my: 2 }} onClose={() => setSuccess('')}>{success}</Alert>}
 
-      <ScoringRulesSummary mode="group" />
+      {/* Show the relevant rules for the active tab. Knockout tab → knockout
+          rules; the other tabs (My Predictions, Live Standings) → group rules. */}
+      <ScoringRulesSummary mode={activeTab === 0 && tournamentStarted ? 'knockout' : 'group'} />
 
       {tournamentStarted && (
         <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ mb: 2 }}>
@@ -499,6 +508,18 @@ function KnockoutBracketTab({
   // Live scores for in-progress group games — same pattern leaderboard uses.
   const { games: liveGames } = useLiveScores(true);
 
+  const bracketData = tournament?.bracket_data as BracketData | undefined;
+
+  // team name → FIFA ranking, used by the autofill chalk strategy.
+  const teamRankings = useMemo(() => {
+    const m: Record<string, number> = {};
+    if (!bracketData) return m;
+    for (const g of bracketData.groups) {
+      for (const t of g.teams) m[t.name] = t.fifaRanking ?? 9999;
+    }
+    return m;
+  }, [bracketData]);
+
   // Team → group lookup for bucketing live games.
   const teamToGroup = useMemo(() => {
     const m: Record<string, string> = {};
@@ -672,6 +693,76 @@ function KnockoutBracketTab({
     });
   }, []);
 
+  // "Chalk autofill": for every match the user hasn't picked yet, pick the
+  // side whose currently-leading team has the better (lower) FIFA ranking.
+  // Walks matches in bracket dependency order (R32 first, then R16, etc.)
+  // so each later match sees the freshly-filled feeder picks.
+  const handleAutofillChalk = useCallback(() => {
+    if (!results) return; // need R32 distributions before we can resolve leaders
+    setPicks((prev) => {
+      const next = { ...prev };
+      const leaderOf = (slotToken: string | null): string | null => {
+        if (!slotToken) return null;
+        // Recursively resolve: an R16+ pick's slotToken is the feeder's pick,
+        // which may itself be a non-R32 token if we're walking up. Follow
+        // until we hit an R32 slot, then look up the distribution leader.
+        let cur: string = slotToken;
+        for (let safety = 0; safety < 10; safety++) {
+          if (cur.startsWith('R32-') && (cur.endsWith('-A') || cur.endsWith('-B'))) {
+            return teamForSlot(cur);
+          }
+          // cur is a matchId-with-suffix token like 'R32-3-A' (R32) or in our
+          // model R16+ picks store the feeder R32 token directly — so cur
+          // should already be R32-N-A/B by now. Defensive break:
+          break;
+        }
+        return teamForSlot(cur);
+      };
+      const sideForMatch = (matchId: string): 'A' | 'B' | null => {
+        // Look up both slot tokens on this match and pick the side whose
+        // leader has the better (lower) FIFA ranking. Tie → A.
+        const aToken = (matchId === '3RD')
+          ? candidateTokens('3RD', next)[0]
+          : (matchId.startsWith('R32-') ? `${matchId}-A` : next[getFeederIds(matchId)![0]] ?? null);
+        const bToken = (matchId === '3RD')
+          ? candidateTokens('3RD', next)[1]
+          : (matchId.startsWith('R32-') ? `${matchId}-B` : next[getFeederIds(matchId)![1]] ?? null);
+        if (!aToken && !bToken) return null;
+        if (!aToken) return 'B';
+        if (!bToken) return 'A';
+        const aTeam = leaderOf(aToken);
+        const bTeam = leaderOf(bToken);
+        if (!aTeam && !bTeam) return null;
+        if (!aTeam) return 'B';
+        if (!bTeam) return 'A';
+        const aRank = teamRankings[aTeam] ?? 9999;
+        const bRank = teamRankings[bTeam] ?? 9999;
+        return aRank <= bRank ? 'A' : 'B';
+      };
+      const tryFill = (matchId: string) => {
+        if (next[matchId]) return; // user already picked it — don't overwrite
+        const side = sideForMatch(matchId);
+        if (!side) return;
+        const token = (matchId === '3RD')
+          ? candidateTokens('3RD', next)[side === 'A' ? 0 : 1]
+          : (matchId.startsWith('R32-')
+            ? `${matchId}-${side}`
+            : next[getFeederIds(matchId)![side === 'A' ? 0 : 1]]);
+        if (!token) return;
+        next[matchId] = token;
+      };
+      // Dependency order: R32 → R16 → QF → SF → FINAL → 3RD (3RD depends on
+      // SF losers, so SF must be picked first).
+      for (let i = 1; i <= 16; i++) tryFill(`R32-${i}`);
+      for (let i = 1; i <= 8; i++) tryFill(`R16-${i}`);
+      for (let i = 1; i <= 4; i++) tryFill(`QF-${i}`);
+      for (const sf of ['SF-1', 'SF-2']) tryFill(sf);
+      tryFill('FINAL');
+      tryFill('3RD');
+      return next;
+    });
+  }, [results, teamForSlot, teamRankings]);
+
   const handleSave = async () => {
     setSaving(true);
     setSaveMsg(null);
@@ -696,8 +787,8 @@ function KnockoutBracketTab({
 
   const r32PickedCount = Object.keys(picks).filter((k) => k.startsWith('R32-')).length;
   const totalPicked = Object.keys(picks).length;
-  // 31 matches total (16 R32 + 8 R16 + 4 QF + 2 SF + FINAL + 3RD).
-  const TOTAL_MATCHES = 31;
+  // 32 matches total: 16 R32 + 8 R16 + 4 QF + 2 SF + FINAL + 3RD.
+  const TOTAL_MATCHES = 32;
 
   return (
     <Box>
@@ -717,6 +808,15 @@ function KnockoutBracketTab({
               {saveMsg.msg}
             </Typography>
           )}
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={handleAutofillChalk}
+            disabled={!results || totalPicked === TOTAL_MATCHES}
+            title="Fill empty matches with the side whose leading team is higher-ranked"
+          >
+            Easy Fill
+          </Button>
           <Button variant="contained" size="small" onClick={handleSave} disabled={saving || totalPicked === 0}>
             {saving ? 'Saving…' : 'Save Picks'}
           </Button>

@@ -143,6 +143,13 @@ export function useTournamentSim(
   players?: PlayerEntry[],
   scoringSettings?: ScoringSettings,
   actualResults?: ActualResults,
+  opts?: {
+    /** True once lock_time_knockout has passed — knockout picks should now
+     *  count toward projected scores. False (default) means pre-lock: the
+     *  worker scores group-stage only per player so Exp Pts isn't inflated
+     *  by knockout picks the user can still change. */
+    scoreKnockoutPicks?: boolean;
+  },
 ) {
   const workerRef = useRef<Worker | null>(null);
   const [results, setResults] = useState<TournamentSimResults | null>(null);
@@ -205,8 +212,9 @@ export function useTournamentSim(
       finalGroupStandings: actualResults?.finalGroupStandings,
       finalAdvancing3rd: actualResults?.finalAdvancing3rd,
       actualKnockoutResults: actualResults?.knockoutWinners,
+      scoreKnockoutPicks: opts?.scoreKnockoutPicks ?? false,
     });
-  }, [players, scoringSettings, actualResults]);
+  }, [players, scoringSettings, actualResults, opts?.scoreKnockoutPicks]);
 
   // Dedupe relaunches on the *meaningful* state of the inputs.
   // Two reasons:
@@ -226,6 +234,7 @@ export function useTournamentSim(
     // Strip sampledScores so a fresh random draw doesn't fire spurious
     // worker restarts every render. See stableActualResultsKey for detail.
     actualResults: stableActualResultsKey(actualResults),
+    scoreKnockoutPicks: opts?.scoreKnockoutPicks ?? false,
   });
   useEffect(() => {
     run();

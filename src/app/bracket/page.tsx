@@ -585,6 +585,19 @@ function KnockoutBracketTab({
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
 
+  // Load the user's saved knockout picks once on mount so the bracket
+  // hydrates with what's in the DB. Without this, the page rendered an
+  // empty bracket every visit — making save look like it didn't work.
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/picks').then((r) => r.json()).then((data) => {
+      if (cancelled) return;
+      const ko = data?.prediction?.knockout_picks;
+      if (ko && typeof ko === 'object') setPicks(ko as Record<string, string>);
+    }).catch(() => { /* silent — start with empty picks */ });
+    return () => { cancelled = true; };
+  }, []);
+
   // Lead team name for any slot token (R32-N-A/B or, recursively, whatever
   // R32 token a downstream pick resolves to). For non-R32 tokens we don't
   // store a separate distribution — we just resolve the token to its R32

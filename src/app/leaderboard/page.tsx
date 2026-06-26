@@ -66,6 +66,9 @@ function LeaderboardContent() {
   // We only show locked once the entire phase is fully decided.
   const [groupsPhaseLocked, setGroupsPhaseLocked] = useState(false);
   const [knockoutPhaseLocked, setKnockoutPhaseLocked] = useState(false);
+  // True once lock_time_knockout has passed. Until then, the worker scores
+  // group-stage only per user (knockout picks can still change).
+  const [knockoutsLocked, setKnockoutsLocked] = useState(false);
 
   const loadGroups = useCallback(async () => {
     const res = await fetch('/api/groups');
@@ -93,6 +96,7 @@ function LeaderboardContent() {
         setBracketData(data.bracket_data ?? null);
         setGroupsPhaseLocked(Boolean(data.groupsPhaseLocked));
         setKnockoutPhaseLocked(Boolean(data.knockoutPhaseLocked));
+        setKnockoutsLocked(Boolean(data.knockoutsLocked));
       }
     } finally {
       setLoading(false);
@@ -178,7 +182,12 @@ function LeaderboardContent() {
     };
   }, [results, liveGames, teamToGroup]);
 
-  const { results: simResults, running: simRunning, progress: simProgress, numSims: simNumSims, simsCompleted: simSimsCompleted } = useTournamentSim(playerEntries, scoringSettings ?? undefined, actualResults);
+  const { results: simResults, running: simRunning, progress: simProgress, numSims: simNumSims, simsCompleted: simSimsCompleted } = useTournamentSim(
+    playerEntries,
+    scoringSettings ?? undefined,
+    actualResults,
+    { scoreKnockoutPicks: knockoutsLocked },
+  );
 
   // Map worker output to userKey-indexed lookups for BucketScoreTable.
   const expectedScoresByKey = useMemo(() => {

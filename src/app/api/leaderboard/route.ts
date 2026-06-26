@@ -87,6 +87,10 @@ export async function GET(req: NextRequest) {
   });
   const isPreTournament = phase === 'pre-tournament';
   const isPreKnockout = isPreTournament || phase === 'group-stage';
+  // Knockout picks are "locked in" only once the knockout phase has begun.
+  // Before then, users can still change their knockout picks, so Exp Pts
+  // shouldn't include their projected knockout-pick scoring.
+  const knockoutsLocked = phase === 'knockout' || phase === 'complete';
   const isAdmin = authUser.isAdmin;
 
   const groupStageResults: GroupStageResults | undefined = resultsData.groupStage;
@@ -334,5 +338,6 @@ export async function GET(req: NextRequest) {
     phase,
     groupsPhaseLocked,
     knockoutPhaseLocked,
+    knockoutsLocked,
   });
 }

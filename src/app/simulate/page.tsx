@@ -496,6 +496,9 @@ export default function SimulatePage() {
   const [groupId, setGroupId] = useSelectedGroup('everyone');
   const [userGroups, setUserGroups] = useState<Array<{ id: string; name: string }>>([]);
   const [actualResults, setActualResults] = useState<ActualResults | undefined>(undefined);
+  // True once lock_time_knockout has passed. Until then, the worker scores
+  // group-stage only per user (knockout picks aren't yet locked in).
+  const [knockoutsLocked, setKnockoutsLocked] = useState(false);
 
   useEffect(() => {
     // Pre-compute team → group for in-progress matches.
@@ -515,6 +518,9 @@ export default function SimulatePage() {
         const t = tRes.tournament;
         if (t.lock_time_groups) {
           setTournamentStarted(new Date() >= new Date(t.lock_time_groups));
+        }
+        if (t.lock_time_knockout) {
+          setKnockoutsLocked(new Date() >= new Date(t.lock_time_knockout));
         }
         const rd = t.results_data;
         const ar: ActualResults = {};
@@ -665,7 +671,9 @@ export default function SimulatePage() {
       .catch(() => {});
   }, [user, groupId]);
 
-  const { results, progress, running, numSims, simsCompleted, rerun } = useTournamentSim(players, scoring, actualResults);
+  const { results, progress, running, numSims, simsCompleted, rerun } = useTournamentSim(
+    players, scoring, actualResults, { scoreKnockoutPicks: knockoutsLocked },
+  );
   // While partial results stream in, divide raw counts by simsCompleted (not
   // numSims) so percentages reflect the actual sample size. Falls back to
   // numSims at the end (or to 1 to avoid division-by-zero before any sims).

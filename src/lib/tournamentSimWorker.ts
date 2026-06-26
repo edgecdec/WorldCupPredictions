@@ -119,6 +119,15 @@ interface TournamentSimRequest {
   numSims: number;
   entries?: PlayerEntry[];
   scoring?: ScoringSettings;
+  /**
+   * When false (default), the worker scores ONLY group-stage points for each
+   * player and skips knockout scoring entirely — even if a user has saved
+   * knockout picks. Used pre-knockout-lock so the leaderboard's projected
+   * "Exp Pts" reflects only what's truly committed (group picks) and isn't
+   * inflated by knockout picks that the user can still change before lock.
+   * Set to true once lock_time_knockout has passed.
+   */
+  scoreKnockoutPicks?: boolean;
   teamSeeds?: Record<string, number>;
   teamRankings?: Record<string, number>;
   thirdPlaceLookup?: Record<string, string[]>;
@@ -1161,7 +1170,11 @@ function runGroupOnly(
 const ctx = self as unknown as Worker;
 
 ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
-  const { mode, ratings, avgGA, groups, numSims, entries, scoring, teamSeeds, teamRankings, thirdPlaceLookup, actualGroupMatches, actualKnockoutResults, finalGroupStandings, finalAdvancing3rd, knockoutHosts, inProgressGroupMatches } = e.data;
+  const { mode, ratings, avgGA, groups, numSims, entries, scoring, teamSeeds, teamRankings, thirdPlaceLookup, actualGroupMatches, actualKnockoutResults, finalGroupStandings, finalAdvancing3rd, knockoutHosts, inProgressGroupMatches, scoreKnockoutPicks } = e.data;
+  // Default to FALSE: pre-lock, the leaderboard's expected-points projection
+  // should be group-stage only. Callers explicitly pass true once knockout
+  // picks are locked in to include them in scoring.
+  const includeKnockoutScoring = scoreKnockoutPicks === true;
 
   // Fast path for the knockout-picker UI: simulate the group stage only,
   // compute R32 slot team distributions, and return. No knockout matches
@@ -1431,12 +1444,18 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
       }
 
       const scores: { key: string; score: number; perGroup: Record<string, number>; perRound: Record<string, number> }[] = [];
+      const EMPTY_PER_ROUND: Record<string, number> = {};
       for (const ent of entries!) {
         const gs = scoreGroupStageEntry(
           ent.group_predictions, ent.third_place_picks,
           groupOrder, advancing3rd, teamSeeds!, scoring!.groupStage,
         );
-        const ko = scoreKnockoutEntry(ent.knockout_picks, koMatchResults, teamRankings ?? {}, scoring!.knockout);
+        // Pre-knockout-lock: skip knockout scoring so the projected score
+        // is group-only. Knockout picks can still change so it would be
+        // misleading to bake them into Exp Pts.
+        const ko = includeKnockoutScoring
+          ? scoreKnockoutEntry(ent.knockout_picks, koMatchResults, teamRankings ?? {}, scoring!.knockout)
+          : { total: 0, perRound: EMPTY_PER_ROUND };
         scores.push({
           key: ent.key,
           score: gs.total + ko.total,

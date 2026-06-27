@@ -24,8 +24,21 @@ export default function GroupChat({ groupId, currentUser }: { groupId: string; c
     return () => clearInterval(iv);
   }, [load]);
 
+  // Scroll the chat's own scrollable container to its bottom when new
+  // messages arrive — NOT every poll, and crucially with block: 'nearest'
+  // so the page itself doesn't scroll. Previously this fired every 10s and
+  // used the default scrollIntoView behavior, which bubbled out and scrolled
+  // the entire /leaderboard page to the bottom every poll.
+  const lastSeenIdRef = useRef<string | number | null>(null);
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messages.length === 0) return;
+    const lastId = messages[messages.length - 1].id;
+    if (lastId === lastSeenIdRef.current) return; // no new message
+    lastSeenIdRef.current = lastId;
+    // Scroll the bottom-of-chat sentinel into view within its scroll
+    // container only. block:'nearest' + inline:'nearest' keeps the
+    // browser from scrolling outer ancestors.
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
   }, [messages]);
 
   const send = async () => {

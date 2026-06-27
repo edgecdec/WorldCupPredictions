@@ -184,7 +184,14 @@ function BucketCell({
             onClose={() => setAnchor(null)}
             anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
             transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+            // All four focus/scroll-management disables. Without these MUI
+            // grabs focus on render and the browser scrolls the focused
+            // element into view — visible as the page randomly jumping to
+            // the bottom every few seconds as sim partials rerender.
             disableRestoreFocus
+            disableAutoFocus
+            disableEnforceFocus
+            disableScrollLock
             sx={{ pointerEvents: 'none' }}
             slotProps={{ paper: { sx: { p: 1.5 } } }}
           >
@@ -231,7 +238,12 @@ export default function BucketScoreTable({
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [mode, setMode] = useState<Mode>('groups');
   const [drawerEntry, setDrawerEntry] = useState<LeaderboardEntry | null>(null);
-  const [sortKey, setSortKey] = useState<SortKey>('expectedScore');
+  // Default sort: Pts if anyone's locked in a point, otherwise Exp Pts.
+  // Once the user clicks a column, their choice sticks (we only set this on
+  // mount via lazy initializer).
+  const [sortKey, setSortKey] = useState<SortKey>(() =>
+    entries.some((e) => (e.totalScore ?? 0) > 0) ? 'totalScore' : 'expectedScore',
+  );
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   // Compute effective expected score per entry: API totalScore (locked) + remaining
@@ -265,11 +277,10 @@ export default function BucketScoreTable({
         return (b.expectedScore - a.expectedScore) * signMul;
       }
       if (sortKey === 'expectedScore') {
-        // Locked totalScore is the primary tiebreaker — never inverted by sortDir
-        // because we want users with real points to anchor above expected ones.
-        // Within tied totalScore, expectedScore follows the sortDir direction.
-        const dt = b.entry.totalScore - a.entry.totalScore;
-        if (dt !== 0) return dt;
+        // Sort purely by expectedScore. Previously we always pre-sorted by
+        // locked totalScore (so "users with real points anchor above expected
+        // ones"), which once Pts was non-zero became a hidden primary sort —
+        // clicking Exp Pts only reordered within Pts buckets. Fixed.
         return (b.expectedScore - a.expectedScore) * signMul;
       }
       if (typeof sortKey === 'object') {

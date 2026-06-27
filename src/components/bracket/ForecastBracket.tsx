@@ -569,14 +569,18 @@ function MediumForecastBracket({ slotMap, numSims, countryCodeMap, pickMode, tea
           <ConnectorColumn pairCount={sf.length} direction="left" />
           <RoundColumn matchIds={sf} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} pickMode={pickMode} teamRankings={teamRankings} />
           <ConnectorColumn pairCount={1} direction="left" />
-          {/* Final + 3rd — render Final highlighted, 3rd as a separate column. */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minWidth: 130, flexShrink: 0 }}>
+          {/* Final + 3rd — render Final highlighted, 3rd as a separate column.
+              Both columns need flex:1 so they grow proportionally with the
+              R32/R16/QF/SF columns above. Without flex:1 they stayed pinned
+              at their minWidth (105) while the round columns flexed wider on
+              ≥1000px screens — making the labels above them drift off-column. */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minWidth: 105, flexShrink: 0, flex: 1 }}>
             <Box sx={{ border: 2, borderColor: 'warning.main', borderRadius: 1, p: 0.25, width: '100%' }}>
               <MatchupCell matchId="FINAL" slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} pickMode={pickMode} teamRankings={teamRankings} />
             </Box>
           </Box>
           <Box sx={{ width: 12, flexShrink: 0 }} />
-          <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minWidth: 130, flexShrink: 0, opacity: 0.85 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minWidth: 105, flexShrink: 0, flex: 1, opacity: 0.85 }}>
             <Box sx={{ width: '100%' }}>
               <MatchupCell matchId="3RD" slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} pickMode={pickMode} teamRankings={teamRankings} />
             </Box>

@@ -610,6 +610,7 @@ function KnockoutBracketTab({
   const [picksLoaded, setPicksLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
 
   // Load the user's saved knockout picks once on mount so the bracket
   // hydrates with what's in the DB. Without this, the page rendered an
@@ -874,6 +875,16 @@ function KnockoutBracketTab({
           >
             Smart Fill
           </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            color="error"
+            onClick={() => setConfirmClearOpen(true)}
+            disabled={totalPicked === 0 || knockoutLocked}
+            title="Clear every knockout pick"
+          >
+            Clear
+          </Button>
           <Button variant="contained" size="small" onClick={handleSave} disabled={saving || totalPicked === 0}>
             {saving ? 'Saving…' : 'Save Picks'}
           </Button>
@@ -898,6 +909,29 @@ function KnockoutBracketTab({
         totalPicked={totalPicked}
         total={TOTAL_MATCHES}
       />
+      <Dialog open={confirmClearOpen} onClose={() => setConfirmClearOpen(false)}>
+        <DialogTitle>Clear all knockout picks?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            This will remove all {totalPicked} of your bracket picks. Autosave will
+            then persist the empty bracket. You can refill via Smart Fill or
+            Step-by-Step afterwards.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmClearOpen(false)}>Cancel</Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={() => {
+              setPicks({});
+              setConfirmClearOpen(false);
+            }}
+          >
+            Clear All
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

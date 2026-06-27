@@ -607,6 +607,7 @@ function KnockoutBracketTab({
   // of R32-3 advances this match"). At R32 the token is the slot id; at R16+
   // it's whichever feeder slot token the user picked at the feeder match.
   const [picks, setPicks] = useState<Record<string, string>>({});
+  const [picksLoaded, setPicksLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
 
@@ -619,9 +620,17 @@ function KnockoutBracketTab({
       if (cancelled) return;
       const ko = data?.prediction?.knockout_picks;
       if (ko && typeof ko === 'object') setPicks(ko as Record<string, string>);
-    }).catch(() => { /* silent — start with empty picks */ });
+      setPicksLoaded(true);
+    }).catch(() => { setPicksLoaded(true); /* still flip so autosave engages */ });
     return () => { cancelled = true; };
   }, []);
+
+  // Once picks are loaded from the server, treat that as the autosave
+  // baseline so we don't immediately resave the same payload.
+  useEffect(() => {
+    if (picksLoaded) markSaved(picksJson);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picksLoaded]);
 
   // Lead team name for any slot token (R32-N-A/B or, recursively, whatever
   // R32 token a downstream pick resolves to). For non-R32 tokens we don't
@@ -768,6 +777,35 @@ function KnockoutBracketTab({
     return null;
   }, [matchOrder, picks]);
 
+  // Whether knockout picks are still editable (mirrors the server-side
+  // gate on /api/picks).
+  const knockoutLockTime = tournament?.lock_time_knockout
+    ? new Date(tournament.lock_time_knockout)
+    : null;
+  const knockoutLocked = knockoutLockTime ? new Date() >= knockoutLockTime : false;
+
+  // Autosave: debounced 2s after the last pick change. Saves the current
+  // picks map to /api/picks via the same endpoint as the explicit Save
+  // button. Disabled when locked or before initial picks have hydrated.
+  const picksJson = useMemo(() => JSON.stringify(picks), [picks]);
+  const doAutosave = useCallback(async (): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/picks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save_knockout', knockout_picks: picks }),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }, [picks]);
+  const { status: autosaveStatus, markSaved } = useAutosave({
+    dataJson: picksLoaded ? picksJson : '',
+    disabled: knockoutLocked || !picksLoaded,
+    saveFn: doAutosave,
+  });
+
   const handleSave = async () => {
     setSaving(true);
     setSaveMsg(null);
@@ -781,8 +819,12 @@ function KnockoutBracketTab({
         body: JSON.stringify({ action: 'save_knockout', knockout_picks: picks }),
       });
       const data = await res.json();
-      if (res.ok && data.ok) setSaveMsg({ kind: 'success', msg: 'Picks saved.' });
-      else setSaveMsg({ kind: 'error', msg: data.error ?? 'Failed to save picks.' });
+      if (res.ok && data.ok) {
+        setSaveMsg({ kind: 'success', msg: 'Picks saved.' });
+        markSaved(picksJson); // sync autosave baseline so it doesn't refire
+      } else {
+        setSaveMsg({ kind: 'error', msg: data.error ?? 'Failed to save picks.' });
+      }
     } catch {
       setSaveMsg({ kind: 'error', msg: 'Network error.' });
     } finally {
@@ -813,6 +855,7 @@ function KnockoutBracketTab({
               {saveMsg.msg}
             </Typography>
           )}
+          {!knockoutLocked && <AutosaveIndicator status={autosaveStatus} />}
           <Button
             variant="outlined"
             size="small"
@@ -1007,6 +1050,13 @@ function dependentMatches(matchId: string): string[] {
  *  are the LOSERS of the two SFs — derived as the other QF pick at each
  *  SF (the one the user didn't choose as the SF winner). */
 function candidateTokens(matchId: string, picks: Record<string, string>): Array<string | null> {
+  // R32: the candidates are the two slot ids themselves (no feeders — R32 is
+  // the first round). Without this branch we returned [null, null] for R32
+  // matches, which broke Smart Fill and Step-by-Step (both rely on
+  // candidateTokens to enumerate options at R32).
+  if (matchId.startsWith('R32-')) {
+    return [`${matchId}-A`, `${matchId}-B`];
+  }
   if (matchId === '3RD') {
     const loserOf = (sf: string): string | null => {
       const sfPick = picks[sf];

@@ -840,6 +840,7 @@ function KnockoutBracketTab({
         bracketSlots={bracketSlots}
         numSims={simsCompleted || numSims}
         countryCodeMap={countryCodeMap}
+        teamRankings={teamRankings}
         pickMode={{ picks, onPick: handlePick, slotForSide, teamForSlot }}
       />
       <StepByStepDialog
@@ -850,6 +851,7 @@ function KnockoutBracketTab({
         onPick={handlePick}
         teamForSlot={teamForSlot}
         countryCodeMap={countryCodeMap}
+        teamRankings={teamRankings}
         totalPicked={totalPicked}
         total={TOTAL_MATCHES}
       />
@@ -861,7 +863,7 @@ function KnockoutBracketTab({
  *  two candidate teams; click one to commit and advance. Auto-closes when
  *  there's no next match. */
 function StepByStepDialog({
-  open, onClose, nextMatch, picks, onPick, teamForSlot, countryCodeMap, totalPicked, total,
+  open, onClose, nextMatch, picks, onPick, teamForSlot, countryCodeMap, teamRankings, totalPicked, total,
 }: {
   open: boolean;
   onClose: () => void;
@@ -870,6 +872,7 @@ function StepByStepDialog({
   onPick: (matchId: string, slotToken: string) => void;
   teamForSlot: (slotToken: string) => string | null;
   countryCodeMap: Record<string, string>;
+  teamRankings: Record<string, number>;
   totalPicked: number;
   total: number;
 }) {
@@ -931,6 +934,11 @@ function StepByStepDialog({
                   )}
                   <Typography variant="body1" sx={{ fontWeight: 700, textTransform: 'none' }}>
                     {team ?? 'TBD'}
+                    {team && teamRankings[team] != null && (
+                      <Box component="span" sx={{ fontSize: '0.7rem', color: 'text.secondary', ml: 0.5, fontWeight: 500 }}>
+                        #{teamRankings[team]}
+                      </Box>
+                    )}
                   </Typography>
                 </Button>
               ))}

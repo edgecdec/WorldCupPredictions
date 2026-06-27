@@ -312,6 +312,7 @@ function LeaderboardContent() {
             scoreDistributionsByKey={scoreDistributionsByKey}
             groupsPhaseLocked={groupsPhaseLocked}
             knockoutPhaseLocked={knockoutPhaseLocked}
+            knockoutsStarted={knockoutsLocked}
             onRowClick={setBreakdownEntry}
           />
         </>

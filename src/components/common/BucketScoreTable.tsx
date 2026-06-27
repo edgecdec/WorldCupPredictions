@@ -12,6 +12,8 @@ import ScoreHistogram from '@/components/common/ScoreHistogram';
 
 const GROUP_NAMES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'] as const;
 const ROUND_LABELS = ['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'] as const;
+// Total knockout matches: 16 R32 + 8 R16 + 4 QF + 2 SF + Final + 3rd.
+const TOTAL_KNOCKOUT_MATCHES = 32;
 
 const COL_USER_WIDTH = 140;
 const COL_RANK_WIDTH = 36;
@@ -44,6 +46,13 @@ export interface BucketScoreTableProps {
   /** Knockout phase is fully decided (final winner known). When false, per-
    *  round cells render expected. */
   knockoutPhaseLocked?: boolean;
+  /** True once knockout matches have started (lock_time_knockout passed).
+   *  Before this is true, the knockout-mode table shows a single "Picks"
+   *  column with each user's bracket-completion count instead of the six
+   *  per-round columns (which would all be —, since nothing's scored yet
+   *  and per-round expected scores don't include knockout-pick scoring
+   *  pre-lock). */
+  knockoutsStarted?: boolean;
   /** Optional click handler for a row to open a deeper breakdown dialog. */
   onRowClick?: (entry: LeaderboardEntry) => void;
 }
@@ -215,6 +224,7 @@ export default function BucketScoreTable({
   scoreDistributionsByKey = {},
   groupsPhaseLocked = false,
   knockoutPhaseLocked = false,
+  knockoutsStarted = false,
   onRowClick,
 }: BucketScoreTableProps) {
   const theme = useTheme();
@@ -367,7 +377,7 @@ export default function BucketScoreTable({
             </TableSortLabel>
           </TableCell>
         ))}
-        {mode === 'knockout' && ROUND_LABELS.map((r) => (
+        {mode === 'knockout' && knockoutsStarted && ROUND_LABELS.map((r) => (
           <TableCell key={r} align="center" sx={{ fontWeight: 700, minWidth: COL_BUCKET_WIDTH, py: 1, px: 0.25 }}>
             <TableSortLabel
               active={isSortActive({ type: 'round', name: r })}
@@ -378,6 +388,13 @@ export default function BucketScoreTable({
             </TableSortLabel>
           </TableCell>
         ))}
+        {mode === 'knockout' && !knockoutsStarted && (
+          // Pre-knockout: single "Picks" column showing X/32 bracket completion.
+          // Per-round columns are pointless before any match plays (all '—').
+          <TableCell align="center" sx={{ fontWeight: 700, py: 1, px: 1 }}>
+            Picks
+          </TableCell>
+        )}
       </TableRow>
     </TableHead>
   );
@@ -485,7 +502,7 @@ export default function BucketScoreTable({
                       phaseFullyLocked={groupsPhaseLocked}
                     />
                   ))}
-                  {mode === 'knockout' && ROUND_LABELS.map((r) => (
+                  {mode === 'knockout' && knockoutsStarted && ROUND_LABELS.map((r) => (
                     <BucketCell
                       key={r}
                       locked={entry.roundScoresLocked?.[r]}
@@ -495,6 +512,11 @@ export default function BucketScoreTable({
                       phaseFullyLocked={knockoutPhaseLocked}
                     />
                   ))}
+                  {mode === 'knockout' && !knockoutsStarted && (
+                    <TableCell align="center" sx={{ py: 0.5, px: 1, fontSize: '0.85rem', fontWeight: 700, color: (entry.completion?.knockoutFilled ?? 0) >= TOTAL_KNOCKOUT_MATCHES ? 'success.main' : 'text.primary' }}>
+                      {entry.completion?.knockoutFilled ?? 0}/{TOTAL_KNOCKOUT_MATCHES}
+                    </TableCell>
+                  )}
                 </TableRow>
               );
             })}

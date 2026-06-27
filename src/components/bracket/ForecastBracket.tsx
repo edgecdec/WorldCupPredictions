@@ -109,10 +109,17 @@ function SlotPopoverContent({ slot, numSims, countryCodeMap, teamRankings }: { s
   );
 }
 
-function TeamCell({ slot, slotId, numSims, countryCodeMap, position, pickMode, matchId, side, teamRankings }: {
+function TeamCell({ slot, slotId, slotMap, numSims, countryCodeMap, position, pickMode, matchId, side, teamRankings }: {
+  /** Distribution for this match's own A/B slot (if any). In pick mode this
+   *  is only populated for R32 — for R16+ the effective distribution comes
+   *  from whichever R32-side feeder the user picked (resolved below via
+   *  slotMap + slotForSide). */
   slot: BracketSlotResult | undefined;
   /** The slot's id, e.g. 'R32-3-A'. Used for popover labelling. */
   slotId: string;
+  /** Map of slotId → distribution. Used in pick mode to look up the
+   *  distribution of an R16+ side's resolved feeder R32 slot. */
+  slotMap?: Map<string, BracketSlotResult>;
   numSims: number;
   countryCodeMap: Record<string, string>;
   position: 'top' | 'bottom';
@@ -123,35 +130,48 @@ function TeamCell({ slot, slotId, numSims, countryCodeMap, position, pickMode, m
   teamRankings?: Record<string, number>;
 }) {
   const inPickMode = Boolean(pickMode);
-  const top = slot && slot.teams.length > 0 ? slot.teams[0] : null;
   // In pick mode, ask the caller which slot token is on this side right now.
   // For R32, that's the slot id itself; for R16+, it's whatever the user
   // picked at the feeder match. Null = TBD (feeder not picked yet).
   const sideSlot = inPickMode ? pickMode!.slotForSide(matchId, side) : null;
+  // The *effective* distribution slot for this cell:
+  //   - forecast mode: use the prop directly
+  //   - pick mode, R32: this matchup's own slot prop (already correct)
+  //   - pick mode, R16+: the resolved feeder slot's distribution. Look it
+  //     up via slotMap so the multi-team strip + hover list reflect the
+  //     full team distribution the user is effectively backing, not just
+  //     the leader name.
+  const effectiveSlot: BracketSlotResult | undefined = (inPickMode && sideSlot && slotMap)
+    ? (slotMap.get(sideSlot) ?? slot)
+    : slot;
+  const top = effectiveSlot && effectiveSlot.teams.length > 0 ? effectiveSlot.teams[0] : null;
   // The team name to render in the cell: in pick mode, look up the slot's
-  // leader; in forecast mode, just use the slot's top team.
+  // leader via the resolver; in forecast mode, just use the slot's top team.
   const displayTeam = inPickMode
     ? (sideSlot ? pickMode!.teamForSlot(sideSlot) : null)
     : (top?.team ?? null);
   const isPicked = inPickMode && sideSlot !== null && pickMode!.picks[matchId] === sideSlot;
   // Show % only in forecast mode.
   const pct = !inPickMode && top ? Math.round((top.count / numSims) * 100) : null;
-  const hasHoverList = Boolean(slot && slot.teams.length > 0);
+  const hasHoverList = Boolean(effectiveSlot && effectiveSlot.teams.length > 0);
 
   // Multi-team display: when this slot has a real probability distribution
   // and ISN'T effectively resolved (one team ≥ 99%), show the top 3 teams
-  // (+ any beyond top-3 that are over 5%) as flag+% chips inline. This
-  // gives the user the upset-bonus picture for the slot at a glance.
-  // The user's picked side still shows just the lead name with rank — they
-  // committed, no need to flash other possibilities.
+  // (+ any beyond top-3 that are over 5%) as flag+% chips inline.
+  //
+  // We show the strip even for PICKED cells in pick mode, and we propagate
+  // it forward through subsequent rounds: an R16 side picked from an R32
+  // slot still inherits that R32 slot's distribution, so the user can see
+  // the full team probability they're effectively backing all the way to
+  // the Final, not just the current leader.
   const FINAL_THRESHOLD = 0.99;
   const EXTRA_MIN_PCT = 5;
-  const distroEntries: Array<{ team: string; pct: number }> = slot
-    ? slot.teams.map((t) => ({ team: t.team, pct: (t.count / numSims) * 100 }))
+  const distroEntries: Array<{ team: string; pct: number }> = effectiveSlot
+    ? effectiveSlot.teams.map((t) => ({ team: t.team, pct: (t.count / numSims) * 100 }))
     : [];
   const topTeamPct = distroEntries[0]?.pct ?? 0;
   const isResolvedSingle = topTeamPct / 100 >= FINAL_THRESHOLD;
-  const showMultiTeam = !isPicked && distroEntries.length > 1 && !isResolvedSingle;
+  const showMultiTeam = distroEntries.length > 1 && !isResolvedSingle;
   // Top 3 + any extras above EXTRA_MIN_PCT.
   const chipTeams = showMultiTeam
     ? (() => {
@@ -254,7 +274,7 @@ function TeamCell({ slot, slotId, numSims, countryCodeMap, position, pickMode, m
         tooltip: { sx: { bgcolor: 'background.paper', color: 'text.primary', boxShadow: 3, p: 0, maxWidth: 'none' } },
         arrow: { sx: { color: 'background.paper' } },
       }}
-      title={<SlotPopoverContent slot={slot!} numSims={numSims} countryCodeMap={countryCodeMap} teamRankings={teamRankings} />}
+      title={<SlotPopoverContent slot={effectiveSlot!} numSims={numSims} countryCodeMap={countryCodeMap} teamRankings={teamRankings} />}
     >
       {cell}
     </Tooltip>
@@ -271,8 +291,8 @@ function MatchupCell({ matchId, slotMap, numSims, countryCodeMap, pickMode, team
 }) {
   return (
     <Box sx={{ my: 0.125 }}>
-      <TeamCell slot={slotMap.get(`${matchId}-A`)} slotId={`${matchId}-A`} matchId={matchId} side="A" numSims={numSims} countryCodeMap={countryCodeMap} position="top" pickMode={pickMode} teamRankings={teamRankings} />
-      <TeamCell slot={slotMap.get(`${matchId}-B`)} slotId={`${matchId}-B`} matchId={matchId} side="B" numSims={numSims} countryCodeMap={countryCodeMap} position="bottom" pickMode={pickMode} teamRankings={teamRankings} />
+      <TeamCell slot={slotMap.get(`${matchId}-A`)} slotMap={slotMap} slotId={`${matchId}-A`} matchId={matchId} side="A" numSims={numSims} countryCodeMap={countryCodeMap} position="top" pickMode={pickMode} teamRankings={teamRankings} />
+      <TeamCell slot={slotMap.get(`${matchId}-B`)} slotMap={slotMap} slotId={`${matchId}-B`} matchId={matchId} side="B" numSims={numSims} countryCodeMap={countryCodeMap} position="bottom" pickMode={pickMode} teamRankings={teamRankings} />
     </Box>
   );
 }

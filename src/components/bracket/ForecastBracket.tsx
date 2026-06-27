@@ -156,30 +156,17 @@ function TeamCell({ slot, slotId, slotMap, numSims, countryCodeMap, position, pi
   const hasHoverList = Boolean(effectiveSlot && effectiveSlot.teams.length > 0);
 
   // Multi-team display: when this slot has a real probability distribution
-  // and ISN'T effectively resolved (one team ≥ 99%), show the top 3 teams
-  // (+ any beyond top-3 that are over 5%) as flag+% chips inline.
-  //
-  // We show the strip even for PICKED cells in pick mode, and we propagate
-  // it forward through subsequent rounds: an R16 side picked from an R32
-  // slot still inherits that R32 slot's distribution, so the user can see
-  // the full team probability they're effectively backing all the way to
-  // the Final, not just the current leader.
+  // and isn't effectively resolved (one team ≥ 99%), show the top 3 teams
+  // as flag+% chips. Capped at 3 to keep the cell compact enough that the
+  // full bracket fits without horizontal scroll on common screens.
   const FINAL_THRESHOLD = 0.99;
-  const EXTRA_MIN_PCT = 5;
   const distroEntries: Array<{ team: string; pct: number }> = effectiveSlot
     ? effectiveSlot.teams.map((t) => ({ team: t.team, pct: (t.count / numSims) * 100 }))
     : [];
   const topTeamPct = distroEntries[0]?.pct ?? 0;
   const isResolvedSingle = topTeamPct / 100 >= FINAL_THRESHOLD;
   const showMultiTeam = distroEntries.length > 1 && !isResolvedSingle;
-  // Top 3 + any extras above EXTRA_MIN_PCT.
-  const chipTeams = showMultiTeam
-    ? (() => {
-        const top3 = distroEntries.slice(0, 3);
-        const extras = distroEntries.slice(3).filter((t) => t.pct >= EXTRA_MIN_PCT);
-        return [...top3, ...extras];
-      })()
-    : null;
+  const chipTeams = showMultiTeam ? distroEntries.slice(0, 3) : null;
 
   // Pick mode click commits this side's slot token to the match.
   const handleClick = inPickMode && sideSlot
@@ -194,7 +181,7 @@ function TeamCell({ slot, slotId, slotMap, numSims, countryCodeMap, position, pi
     <Box
       onClick={handleClick}
       sx={{
-        px: 0.5, py: 0.2, minWidth: 120, minHeight: 20,
+        px: 0.5, py: 0.2, minWidth: 100, minHeight: 20, width: '100%',
         cursor: handleClick ? 'pointer' : (hasHoverList ? 'help' : 'default'),
         borderTop: position === 'top' ? 1 : 0,
         borderBottom: 1,
@@ -307,7 +294,7 @@ function RoundColumn({ matchIds, slotMap, numSims, countryCodeMap, isFirstRound,
   teamRankings?: Record<string, number>;
 }) {
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', minWidth: 130, flexShrink: 0, flex: 1 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', minWidth: 105, flexShrink: 0, flex: 1 }}>
       {matchIds.map((id) => (
         <Box key={id} sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', py: isFirstRound ? 0.25 : 0, flex: 1 }}>
           <MatchupCell matchId={id} slotMap={slotMap} numSims={numSims} countryCodeMap={countryCodeMap} pickMode={pickMode} teamRankings={teamRankings} />
@@ -562,7 +549,7 @@ function MediumForecastBracket({ slotMap, numSims, countryCodeMap, pickMode, tea
             { label: '🏆 Final', warning: true }, { label: '🥉 3rd Place' },
           ].map((l, i, arr) => (
             <Box key={i} sx={{ display: 'contents' }}>
-              <Box sx={{ minWidth: 130, flexShrink: 0, textAlign: 'center' }}>
+              <Box sx={{ minWidth: 105, flexShrink: 0, flex: 1, textAlign: 'center' }}>
                 <Typography variant="caption" sx={{ fontWeight: 700, color: l.warning ? 'warning.main' : 'text.secondary', fontSize: '0.6rem' }}>
                   {l.label}
                 </Typography>
@@ -649,7 +636,7 @@ export default function ForecastBracket({ bracketSlots, numSims, countryCodeMap,
       <Box sx={{ display: 'flex', alignItems: 'flex-end', minWidth: 'fit-content', mb: 0.5 }}>
         {leftRounds.map((ids, i) => (
           <Box key={`lbl-left-${i}`} sx={{ display: 'contents' }}>
-            <Box sx={{ minWidth: 130, flexShrink: 0, textAlign: 'center' }}>
+            <Box sx={{ minWidth: 105, flexShrink: 0, flex: 1, textAlign: 'center' }}>
               <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', fontSize: '0.6rem' }}>
                 {roundDisplayNames[roundLabels[i]]}
               </Typography>
@@ -665,7 +652,7 @@ export default function ForecastBracket({ bracketSlots, numSims, countryCodeMap,
         {rightRounds.map((ids, i) => (
           <Box key={`lbl-right-${i}`} sx={{ display: 'contents' }}>
             {i > 0 && <Box sx={{ width: 12, flexShrink: 0 }} />}
-            <Box sx={{ minWidth: 130, flexShrink: 0, textAlign: 'center' }}>
+            <Box sx={{ minWidth: 105, flexShrink: 0, flex: 1, textAlign: 'center' }}>
               <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', fontSize: '0.6rem' }}>
                 {roundDisplayNames[roundLabels[3 - i]]}
               </Typography>

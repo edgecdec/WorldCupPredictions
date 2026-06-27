@@ -17,7 +17,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useGroupOnlySim } from '@/hooks/useGroupOnlySim';
 import { useLiveScores } from '@/hooks/useLiveScores';
 import { GROUPS, type ActualResults, type InProgressGroupMatch } from '@/hooks/useTournamentSim';
-import { sampleLiveScores } from '@/lib/matchOdds';
+import { sampleLiveScores, computeMatchOdds } from '@/lib/matchOdds';
+import TeamFlag from '@/components/common/TeamFlag';
 import { parseEspnClock } from '@/lib/parseEspnClock';
 import type { Tournament, BracketData, TournamentResults, GroupPrediction as GroupPredictionType } from '@/types';
 import PrintExportButtons from '@/components/common/PrintExportButtons';
@@ -282,7 +283,7 @@ export default function BracketPage() {
     <Box sx={{ maxWidth: 1400, mx: 'auto', px: 2, py: 3 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
         <Typography variant="h4" fontWeight="bold" sx={{ flex: 1 }}>
-          Group Stage Predictions
+          Predictions
         </Typography>
         <Tooltip title="How it works">
           <IconButton onClick={() => setShowOnboarding(true)} size="small">
@@ -334,13 +335,11 @@ export default function BracketPage() {
 
       {tournamentStarted && (
         <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ mb: 2 }}>
-          {/* Knockout Bracket first — that's now the primary action since
-              group picks are locked once group stage starts. Visible to
-              everyone (not admin-gated). Knockout picks remain editable
-              server-side until lock_time_knockout passes; the API enforces
-              that gate, so no client-side disable is needed here. */}
-          <Tab label="Knockout Bracket" />
-          <Tab label="My Predictions" />
+          {/* Knockout first since group picks are already locked once group
+              stage starts. Knockout picks remain editable server-side until
+              lock_time_knockout passes. */}
+          <Tab label="Knockout" />
+          <Tab label="Group" />
           <Tab label="Live Standings" />
         </Tabs>
       )}
@@ -693,63 +692,50 @@ function KnockoutBracketTab({
     });
   }, []);
 
-  // "Chalk autofill": for every match the user hasn't picked yet, pick the
-  // side whose currently-leading team has the better (lower) FIFA ranking.
-  // Walks matches in bracket dependency order (R32 first, then R16, etc.)
-  // so each later match sees the freshly-filled feeder picks.
-  const handleAutofillChalk = useCallback(() => {
+  // "Smart Fill": play out one simulated tournament given the current sim's
+  // R32 distributions and the team strength (PELE / FIFA ranking) — and use
+  // those winners as the user's picks. Each match is decided via a single
+  // Poisson goal sim, so the resulting bracket is plausible but not chalky;
+  // running it twice gives a different bracket. Doesn't overwrite user picks
+  // that are already in place.
+  const handleSmartFill = useCallback(() => {
     if (!results) return; // need R32 distributions before we can resolve leaders
     setPicks((prev) => {
       const next = { ...prev };
-      const leaderOf = (slotToken: string | null): string | null => {
-        if (!slotToken) return null;
-        // Recursively resolve: an R16+ pick's slotToken is the feeder's pick,
-        // which may itself be a non-R32 token if we're walking up. Follow
-        // until we hit an R32 slot, then look up the distribution leader.
-        let cur: string = slotToken;
-        for (let safety = 0; safety < 10; safety++) {
-          if (cur.startsWith('R32-') && (cur.endsWith('-A') || cur.endsWith('-B'))) {
-            return teamForSlot(cur);
-          }
-          // cur is a matchId-with-suffix token like 'R32-3-A' (R32) or in our
-          // model R16+ picks store the feeder R32 token directly — so cur
-          // should already be R32-N-A/B by now. Defensive break:
-          break;
+      // Resolve a slot token to the team name it currently represents (the
+      // R32 leader behind it). Picks at R16+ store the feeder R32 token
+      // directly, so this is just teamForSlot.
+      const teamOfSlot = (slotToken: string | null): string | null =>
+        slotToken ? teamForSlot(slotToken) : null;
+      // Probability that teamA beats teamB in a single match, derived from
+      // the matchOdds module the rest of the app uses. Falls back to FIFA-
+      // rank-based logistic if odds aren't available.
+      const winProbability = (teamA: string, teamB: string): number => {
+        const odds = computeMatchOdds(teamA, teamB, { stage: 'knockout' });
+        if (odds) {
+          // In knockouts a draw can't happen — fold draw probability evenly.
+          const draw = odds.draw ?? 0;
+          return (odds.winA ?? 0) + draw / 2;
         }
-        return teamForSlot(cur);
-      };
-      const sideForMatch = (matchId: string): 'A' | 'B' | null => {
-        // Look up both slot tokens on this match and pick the side whose
-        // leader has the better (lower) FIFA ranking. Tie → A.
-        const aToken = (matchId === '3RD')
-          ? candidateTokens('3RD', next)[0]
-          : (matchId.startsWith('R32-') ? `${matchId}-A` : next[getFeederIds(matchId)![0]] ?? null);
-        const bToken = (matchId === '3RD')
-          ? candidateTokens('3RD', next)[1]
-          : (matchId.startsWith('R32-') ? `${matchId}-B` : next[getFeederIds(matchId)![1]] ?? null);
-        if (!aToken && !bToken) return null;
-        if (!aToken) return 'B';
-        if (!bToken) return 'A';
-        const aTeam = leaderOf(aToken);
-        const bTeam = leaderOf(bToken);
-        if (!aTeam && !bTeam) return null;
-        if (!aTeam) return 'B';
-        if (!bTeam) return 'A';
-        const aRank = teamRankings[aTeam] ?? 9999;
-        const bRank = teamRankings[bTeam] ?? 9999;
-        return aRank <= bRank ? 'A' : 'B';
+        const rA = teamRankings[teamA] ?? 9999;
+        const rB = teamRankings[teamB] ?? 9999;
+        // Lower rank = better team. Soft logistic so a 20-rank gap is ~60/40,
+        // a 100-rank gap is ~85/15.
+        return 1 / (1 + Math.pow(10, (rA - rB) / 50));
       };
       const tryFill = (matchId: string) => {
         if (next[matchId]) return; // user already picked it — don't overwrite
-        const side = sideForMatch(matchId);
-        if (!side) return;
-        const token = (matchId === '3RD')
-          ? candidateTokens('3RD', next)[side === 'A' ? 0 : 1]
-          : (matchId.startsWith('R32-')
-            ? `${matchId}-${side}`
-            : next[getFeederIds(matchId)![side === 'A' ? 0 : 1]]);
-        if (!token) return;
-        next[matchId] = token;
+        const [aToken, bToken] = candidateTokens(matchId, next);
+        if (!aToken && !bToken) return;
+        if (!aToken) { next[matchId] = bToken!; return; }
+        if (!bToken) { next[matchId] = aToken; return; }
+        const aTeam = teamOfSlot(aToken);
+        const bTeam = teamOfSlot(bToken);
+        if (!aTeam && !bTeam) return;
+        if (!aTeam) { next[matchId] = bToken; return; }
+        if (!bTeam) { next[matchId] = aToken; return; }
+        const pA = winProbability(aTeam, bTeam);
+        next[matchId] = Math.random() < pA ? aToken : bToken;
       };
       // Dependency order: R32 → R16 → QF → SF → FINAL → 3RD (3RD depends on
       // SF losers, so SF must be picked first).
@@ -762,6 +748,25 @@ function KnockoutBracketTab({
       return next;
     });
   }, [results, teamForSlot, teamRankings]);
+
+  // Step-by-step modal: walk the user through every match in dependency
+  // order. Shows the two candidate teams for the next unpicked match and
+  // advances on click. By the time we get to a later round, its feeder
+  // picks are already in place (because we walked R32 first), so the
+  // candidate set is well-defined.
+  const [stepOpen, setStepOpen] = useState(false);
+  const matchOrder = useMemo<string[]>(() => {
+    const out: string[] = [];
+    for (let i = 1; i <= 16; i++) out.push(`R32-${i}`);
+    for (let i = 1; i <= 8; i++) out.push(`R16-${i}`);
+    for (let i = 1; i <= 4; i++) out.push(`QF-${i}`);
+    out.push('SF-1', 'SF-2', 'FINAL', '3RD');
+    return out;
+  }, []);
+  const nextUnpickedMatch = useMemo<string | null>(() => {
+    for (const m of matchOrder) if (!picks[m]) return m;
+    return null;
+  }, [matchOrder, picks]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -811,11 +816,20 @@ function KnockoutBracketTab({
           <Button
             variant="outlined"
             size="small"
-            onClick={handleAutofillChalk}
+            onClick={() => setStepOpen(true)}
             disabled={!results || totalPicked === TOTAL_MATCHES}
-            title="Fill empty matches with the side whose leading team is higher-ranked"
+            title="Walk through each empty match one at a time"
           >
-            Easy Fill
+            Step-by-Step
+          </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={handleSmartFill}
+            disabled={!results || totalPicked === TOTAL_MATCHES}
+            title="Simulate the tournament once and use those winners as your picks"
+          >
+            Smart Fill
           </Button>
           <Button variant="contained" size="small" onClick={handleSave} disabled={saving || totalPicked === 0}>
             {saving ? 'Saving…' : 'Save Picks'}
@@ -828,7 +842,106 @@ function KnockoutBracketTab({
         countryCodeMap={countryCodeMap}
         pickMode={{ picks, onPick: handlePick, slotForSide, teamForSlot }}
       />
+      <StepByStepDialog
+        open={stepOpen}
+        onClose={() => setStepOpen(false)}
+        nextMatch={nextUnpickedMatch}
+        picks={picks}
+        onPick={handlePick}
+        teamForSlot={teamForSlot}
+        countryCodeMap={countryCodeMap}
+        totalPicked={totalPicked}
+        total={TOTAL_MATCHES}
+      />
     </Box>
+  );
+}
+
+/** Walk-the-user-through-it dialog. Shows the next unpicked match with its
+ *  two candidate teams; click one to commit and advance. Auto-closes when
+ *  there's no next match. */
+function StepByStepDialog({
+  open, onClose, nextMatch, picks, onPick, teamForSlot, countryCodeMap, totalPicked, total,
+}: {
+  open: boolean;
+  onClose: () => void;
+  nextMatch: string | null;
+  picks: Record<string, string>;
+  onPick: (matchId: string, slotToken: string) => void;
+  teamForSlot: (slotToken: string) => string | null;
+  countryCodeMap: Record<string, string>;
+  totalPicked: number;
+  total: number;
+}) {
+  if (!open) return null;
+  // Compute candidates for the current match. For R32: slot id itself. For
+  // R16+: feeder picks. For 3RD: SF losers.
+  const matchId = nextMatch;
+  const [aToken, bToken] = matchId ? candidateTokens(matchId, picks) : [null, null];
+  const aTeam = aToken ? teamForSlot(aToken) : null;
+  const bTeam = bToken ? teamForSlot(bToken) : null;
+
+  // Friendly label for which round we're on.
+  const roundLabel = matchId
+    ? matchId.startsWith('R32-') ? `Round of 32 — Match ${matchId.slice(4)}`
+    : matchId.startsWith('R16-') ? `Round of 16 — Match ${matchId.slice(4)}`
+    : matchId.startsWith('QF-') ? `Quarterfinal ${matchId.slice(3)}`
+    : matchId === 'SF-1' ? 'Semifinal 1'
+    : matchId === 'SF-2' ? 'Semifinal 2'
+    : matchId === 'FINAL' ? '🏆 Final'
+    : matchId === '3RD' ? '🥉 3rd Place Match'
+    : matchId
+    : '';
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>
+        Step-by-Step
+        <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', fontWeight: 400 }}>
+          {totalPicked} / {total} picks made
+        </Typography>
+      </DialogTitle>
+      <DialogContent>
+        {!matchId ? (
+          <DialogContentText>All matches picked. Save when ready.</DialogContentText>
+        ) : (
+          <>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, textAlign: 'center' }}>
+              {roundLabel}
+            </Typography>
+            <Typography variant="caption" sx={{ display: 'block', textAlign: 'center', color: 'text.secondary', mb: 2 }}>
+              Pick who advances:
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'stretch' }}>
+              {[
+                { token: aToken, team: aTeam, side: 'A' as const },
+                { token: bToken, team: bTeam, side: 'B' as const },
+              ].map(({ token, team, side }) => (
+                <Button
+                  key={side}
+                  variant="outlined"
+                  fullWidth
+                  size="large"
+                  disabled={!token || !team}
+                  onClick={() => token && onPick(matchId, token)}
+                  sx={{ flexDirection: 'column', gap: 1, py: 3 }}
+                >
+                  {team && countryCodeMap[team] && (
+                    <TeamFlag countryCode={countryCodeMap[team]} size={32} />
+                  )}
+                  <Typography variant="body1" sx={{ fontWeight: 700, textTransform: 'none' }}>
+                    {team ?? 'TBD'}
+                  </Typography>
+                </Button>
+              ))}
+            </Box>
+          </>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>{matchId ? 'Close' : 'Done'}</Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 

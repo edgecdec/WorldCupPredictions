@@ -14,8 +14,8 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useTournamentSim, GROUPS } from '@/hooks/useTournamentSim';
-import type { PlayerEntry, ActualResults, InProgressGroupMatch } from '@/hooks/useTournamentSim';
-import { sampleLiveScores } from '@/lib/matchOdds';
+import type { PlayerEntry, ActualResults, InProgressGroupMatch, InProgressKnockoutMatch } from '@/hooks/useTournamentSim';
+import { sampleLiveScores, sampleLiveKnockoutWinners } from '@/lib/matchOdds';
 import { parseEspnClock } from '@/lib/parseEspnClock';
 import { useSelectedGroup } from '@/hooks/useSelectedGroup';
 import AuthForm from '@/components/auth/AuthForm';
@@ -607,23 +607,60 @@ export default function SimulatePage() {
           }
         }
 
+        // Same idea for in-progress KNOCKOUT matches. Skip if knockout
+        // winners for that match are already finalized — once ESPN/DB marks
+        // it done, the locked result takes precedence and live samples
+        // would just confuse things.
+        if (sRes?.ok && Array.isArray(sRes.games)) {
+          const inProgressKnockouts: InProgressKnockoutMatch[] = [];
+          for (const g of sRes.games) {
+            if (g.state !== 'in') continue;
+            if ((g.stage ?? 'group') !== 'knockout') continue;
+            const minutesPlayed = parseEspnClock(g.clock, g.period);
+            if (minutesPlayed === null) continue;
+            const sA = parseInt(g.home.score, 10) || 0;
+            const sB = parseInt(g.away.score, 10) || 0;
+            const samples = sampleLiveKnockoutWinners(g.home.name, g.away.name, sA, sB, minutesPlayed, 1000);
+            if (!samples) continue;
+            inProgressKnockouts.push({
+              teamA: g.home.name, teamB: g.away.name,
+              sampledWinners: samples,
+              currentScoreA: sA, currentScoreB: sB, minutesPlayed,
+            });
+          }
+          if (inProgressKnockouts.length > 0) ar.inProgressKnockoutMatches = inProgressKnockouts;
+        }
+
         if (Object.keys(ar).length > 0) {
           setActualResults((prev) => {
             // Compare without sampledScores (re-drawn every poll so they'd
             // always differ). Keep teams + current score + minute so a goal
             // or clock change DOES trigger a rerun.
             const stripSamples = (x: ActualResults | undefined) => {
-              if (!x?.inProgressGroupMatches) return x;
-              const stripped: Record<string, Array<{ teamA: string; teamB: string; currentScoreA?: number; currentScoreB?: number; minutesPlayed?: number }>> = {};
-              for (const [g, ms] of Object.entries(x.inProgressGroupMatches)) {
-                stripped[g] = ms.map((m) => ({
-                  teamA: m.teamA, teamB: m.teamB,
-                  currentScoreA: m.currentScoreA,
-                  currentScoreB: m.currentScoreB,
-                  minutesPlayed: m.minutesPlayed,
-                }));
+              if (!x) return x;
+              const out: ActualResults = { ...x };
+              if (x.inProgressGroupMatches) {
+                const stripped: Record<string, Array<{ teamA: string; teamB: string; currentScoreA?: number; currentScoreB?: number; minutesPlayed?: number }>> = {};
+                for (const [g, ms] of Object.entries(x.inProgressGroupMatches)) {
+                  stripped[g] = ms.map((m) => ({
+                    teamA: m.teamA, teamB: m.teamB,
+                    currentScoreA: m.currentScoreA,
+                    currentScoreB: m.currentScoreB,
+                    minutesPlayed: m.minutesPlayed,
+                  }));
+                }
+                (out as unknown as { inProgressGroupMatches: typeof stripped }).inProgressGroupMatches = stripped;
               }
-              return { ...x, inProgressGroupMatches: stripped };
+              if (x.inProgressKnockoutMatches) {
+                (out as unknown as { inProgressKnockoutMatches: Array<{ teamA: string; teamB: string; currentScoreA?: number; currentScoreB?: number; minutesPlayed?: number }> }).inProgressKnockoutMatches =
+                  x.inProgressKnockoutMatches.map((m) => ({
+                    teamA: m.teamA, teamB: m.teamB,
+                    currentScoreA: m.currentScoreA,
+                    currentScoreB: m.currentScoreB,
+                    minutesPlayed: m.minutesPlayed,
+                  }));
+              }
+              return out;
             };
             if (JSON.stringify(stripSamples(prev)) === JSON.stringify(stripSamples(ar))) return prev;
             return ar;

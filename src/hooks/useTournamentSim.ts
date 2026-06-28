@@ -120,11 +120,28 @@ export interface InProgressGroupMatch {
   minutesPlayed?: number;
 }
 
+export interface InProgressKnockoutMatch {
+  teamA: string;
+  teamB: string;
+  /** Pre-sampled winners from the live model — already incorporates current
+   *  scoreline, minutes remaining, and ET/pens resolution. The worker draws
+   *  one per sim iteration to preserve joint distribution with downstream
+   *  rounds. */
+  sampledWinners: string[];
+  /** Identity fields for dedupe — exclude from worker payload concerns. */
+  currentScoreA?: number;
+  currentScoreB?: number;
+  minutesPlayed?: number;
+}
+
 export interface ActualResults {
   /** Completed group stage matches keyed by group name. */
   groupMatches?: Record<string, ActualMatch[]>;
   /** In-progress group matches keyed by group name. */
   inProgressGroupMatches?: Record<string, InProgressGroupMatch[]>;
+  /** In-progress knockout matches — flat list, lookup is by team pair in
+   *  the worker. */
+  inProgressKnockoutMatches?: InProgressKnockoutMatch[];
   /**
    * Final group stage standings (when the group stage is complete and locked).
    * If set, the simulation uses these orders directly instead of simulating
@@ -212,6 +229,7 @@ export function useTournamentSim(
       finalGroupStandings: actualResults?.finalGroupStandings,
       finalAdvancing3rd: actualResults?.finalAdvancing3rd,
       actualKnockoutResults: actualResults?.knockoutWinners,
+      inProgressKnockoutMatches: actualResults?.inProgressKnockoutMatches,
       scoreKnockoutPicks: opts?.scoreKnockoutPicks ?? false,
     });
   }, [players, scoringSettings, actualResults, opts?.scoreKnockoutPicks]);

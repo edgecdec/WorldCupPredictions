@@ -344,6 +344,71 @@ export function sampleLiveScores(
   return samples;
 }
 
+// Knuth's algorithm — fine for small lambdas (our ET values are well under 2).
+function poissonSample(lambda: number): number {
+  const L = Math.exp(-lambda);
+  let k = 0, p = 1;
+  do { k++; p *= Math.random(); } while (p > L);
+  return k - 1;
+}
+
+/**
+ * Sample N winners for an in-progress KNOCKOUT match. Builds on top of
+ * sampleLiveScores to get regulation scorelines, then resolves any ties via
+ * ET+pens using the same model the simulator uses for from-scratch knockouts:
+ *   - if regulation produces a winner, that's the winner
+ *   - else 40% chance someone scores in ET (half-strength Poisson sample)
+ *   - else penalty shootout with a slight lean toward the higher-PELE team
+ *
+ * The output is N team-name samples, ready to be fed into the tournament sim
+ * as a uniform random draw per iteration.
+ */
+export function sampleLiveKnockoutWinners(
+  teamA: string,
+  teamB: string,
+  scoreA: number,
+  scoreB: number,
+  minutesPlayed: number,
+  numSamples: number = DEFAULT_SCORELINE_SAMPLES,
+  opts: { matchId?: string | null } = {},
+): string[] | null {
+  const regulation = sampleLiveScores(teamA, teamB, scoreA, scoreB, minutesPlayed, numSamples, { stage: 'knockout', matchId: opts.matchId });
+  if (!regulation) return null;
+
+  const base = computeBaseLambdas(teamA, teamB, { stage: 'knockout', matchId: opts.matchId });
+  if (!base) return null;
+  const { lambdaA, lambdaB } = base;
+
+  // Pen-shootout probability: slight edge to better PELE rating, capped near
+  // 60/40. Mirrors simulateKnockoutMatch in the tournament worker.
+  const rA = PELE_RATINGS[teamA];
+  const rB = PELE_RATINGS[teamB];
+  const peleA = rA?.pele ?? 1, peleB = rB?.pele ?? 1;
+  const probA = peleA / (peleA + peleB);
+  const penProbA = 0.5 + (probA - 0.5) * 0.4;
+
+  // ET expected goals = half of regulation (extra time is 30' not 90', and
+  // teams play more cautiously). Matches simulateKnockoutMatch's formulation.
+  const etLambdaA = lambdaA / 2;
+  const etLambdaB = lambdaB / 2;
+
+  const winners: string[] = new Array(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    const [ga, gb] = regulation[i];
+    if (ga > gb) { winners[i] = teamA; continue; }
+    if (gb > ga) { winners[i] = teamB; continue; }
+    // Tied at 90'. 40% chance ET decides it.
+    if (Math.random() < 0.4) {
+      const etA = poissonSample(etLambdaA);
+      const etB = poissonSample(etLambdaB);
+      if (etA !== etB) { winners[i] = etA > etB ? teamA : teamB; continue; }
+    }
+    // Pens
+    winners[i] = Math.random() < penProbA ? teamA : teamB;
+  }
+  return winners;
+}
+
 /**
  * Score-state hazard multiplier — varies with both margin and game minute.
  * Late-game urgency ramps up the trailing-team boost and leading-team damp,

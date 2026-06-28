@@ -161,6 +161,18 @@ interface TournamentSimRequest {
    */
   actualKnockoutResults?: Record<string, string>;
   /**
+   * In-progress knockout matches — analogue of inProgressGroupMatches but
+   * collapsed to a single winner per sample (knockouts have no draws). Keyed
+   * by team pair so the worker can look up by (teamA, teamB) regardless of
+   * which downstream slot the match feeds. Built on the page via
+   * sampleLiveKnockoutWinners using the current scoreline and minute.
+   */
+  inProgressKnockoutMatches?: Array<{
+    teamA: string;
+    teamB: string;
+    sampledWinners: string[];
+  }>;
+  /**
    * Per-knockout-match host country. When a host nation plays a match in
    * their own country, they get the homeField PELE bonus applied.
    * Map of matchId -> 'USA' | 'Mexico' | 'Canada'.
@@ -817,12 +829,21 @@ function simulateKnockout(
   actualKnockoutResults?: Record<string, string>,
   knockoutHosts?: Record<string, string>,
   form?: Record<string, number>,
+  inProgressKnockoutLookup?: Map<string, string[]>,
 ): { slotTeams: Record<string, string>; champion: string } {
-  // Helper: pick a winner — use real result if exists, otherwise simulate.
-  // If a host nation is playing in their own country, apply home field advantage.
+  // Helper: pick a winner — finalized result > live in-progress pre-samples >
+  // fresh sim. Finalized takes precedence so once a game ends our cells stop
+  // drifting; live samples already factor in the current scoreline + minute.
   const winnerOf = (matchId: string, teamA: string, teamB: string): string => {
     const actual = actualKnockoutResults?.[matchId];
     if (actual && (actual === teamA || actual === teamB)) return actual;
+    if (inProgressKnockoutLookup) {
+      const live = inProgressKnockoutLookup.get(`${teamA}|${teamB}`)
+                ?? inProgressKnockoutLookup.get(`${teamB}|${teamA}`);
+      if (live && live.length > 0) {
+        return live[Math.floor(Math.random() * live.length)];
+      }
+    }
     const host = knockoutHosts?.[matchId];
     let homeFor: string | undefined;
     if (host === teamA && ratings[teamA]?.homeField) homeFor = teamA;
@@ -1170,7 +1191,20 @@ function runGroupOnly(
 const ctx = self as unknown as Worker;
 
 ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
-  const { mode, ratings, avgGA, groups, numSims, entries, scoring, teamSeeds, teamRankings, thirdPlaceLookup, actualGroupMatches, actualKnockoutResults, finalGroupStandings, finalAdvancing3rd, knockoutHosts, inProgressGroupMatches, scoreKnockoutPicks } = e.data;
+  const { mode, ratings, avgGA, groups, numSims, entries, scoring, teamSeeds, teamRankings, thirdPlaceLookup, actualGroupMatches, actualKnockoutResults, finalGroupStandings, finalAdvancing3rd, knockoutHosts, inProgressGroupMatches, inProgressKnockoutMatches, scoreKnockoutPicks } = e.data;
+
+  // Build a fast lookup of in-progress knockout samples by team pair. Both
+  // (A|B) and (B|A) keys are populated so the worker can find the match
+  // regardless of which team is on which bracket side. Empty map when
+  // there are no live knockouts — falls through to from-scratch sim.
+  const inProgressKnockoutLookup = new Map<string, string[]>();
+  if (inProgressKnockoutMatches) {
+    for (const m of inProgressKnockoutMatches) {
+      if (!m.sampledWinners?.length) continue;
+      inProgressKnockoutLookup.set(`${m.teamA}|${m.teamB}`, m.sampledWinners);
+      inProgressKnockoutLookup.set(`${m.teamB}|${m.teamA}`, m.sampledWinners);
+    }
+  }
   // Default to FALSE: pre-lock, the leaderboard's expected-points projection
   // should be group-stage only. Callers explicitly pass true once knockout
   // picks are locked in to include them in scoring.
@@ -1406,7 +1440,7 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
     }
 
     // Simulate knockout
-    const { slotTeams, champion } = simulateKnockout(groupOrder, advancing3rd, ratings, avgGA, thirdPlaceLookup, actualKnockoutResults, knockoutHosts, form);
+    const { slotTeams, champion } = simulateKnockout(groupOrder, advancing3rd, ratings, avgGA, thirdPlaceLookup, actualKnockoutResults, knockoutHosts, form, inProgressKnockoutLookup);
     championCounts[champion]++;
 
     // Track bracket slot occupancy

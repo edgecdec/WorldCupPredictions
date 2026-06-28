@@ -33,5 +33,14 @@ export function stableActualResultsKey(actualResults: ActualResults | undefined)
     }
     stripped.inProgressGames = m;
   }
+  if (actualResults.inProgressKnockoutMatches) {
+    // Strip sampledWinners for the same reason we strip sampledScores —
+    // they're freshly drawn via Math.random each parent recompute. Identity
+    // we DO want: team pair + current score + minute.
+    stripped.inProgressKnockouts = actualResults.inProgressKnockoutMatches.map((x) => ({
+      teamA: x.teamA, teamB: x.teamB,
+      scoreA: x.currentScoreA, scoreB: x.currentScoreB, minute: x.minutesPlayed,
+    }));
+  }
   return JSON.stringify(stripped);
 }

@@ -633,16 +633,13 @@ function KnockoutBracketTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [picksLoaded]);
 
-  // Lead team name for any slot token (R32-N-A/B or, recursively, whatever
-  // R32 token a downstream pick resolves to). For non-R32 tokens we don't
-  // store a separate distribution — we just resolve the token to its R32
-  // origin and look up that distribution's leader.
-  const teamForSlot = useCallback((slotToken: string): string | null => {
-    // slotToken is always 'R32-N-A' or 'R32-N-B' since R16+ picks store the
-    // feeder match's R32 slot token. (See slotForSide below — non-R32 picks
-    // copy through the feeder's pick value.)
+  // Lead team name for any slot reference. Two formats flow through here:
+  //   - Slot token 'R32-N-A/B' (pre-lock) → resolve via r32SlotDistributions
+  //   - Team name (post-lock, after knockout migration) → pass through
+  const teamForSlot = useCallback((slotRef: string): string | null => {
+    if (!/^R32-\d+-[AB]$/.test(slotRef)) return slotRef; // already a team name
     const dists = results?.r32SlotDistributions ?? {};
-    const d = dists[slotToken];
+    const d = dists[slotRef];
     if (!d) return null;
     let best: string | null = null;
     let bestP = -1;

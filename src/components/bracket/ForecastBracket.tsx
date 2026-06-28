@@ -150,7 +150,13 @@ function TeamCell({ slot, slotId, slotMap, numSims, countryCodeMap, position, pi
   const displayTeam = inPickMode
     ? (sideSlot ? pickMode!.teamForSlot(sideSlot) : null)
     : (top?.team ?? null);
-  const isPicked = inPickMode && sideSlot !== null && pickMode!.picks[matchId] === sideSlot;
+  // Picked-state matches either format: pre-lock token equality or post-lock
+  // team-name equality against the cell's resolved team.
+  const pickedVal = inPickMode ? pickMode!.picks[matchId] : null;
+  const isPicked = inPickMode && (
+    (sideSlot !== null && pickedVal === sideSlot) ||
+    (displayTeam !== null && pickedVal === displayTeam)
+  );
   // Show % only in forecast mode.
   const pct = !inPickMode && top ? Math.round((top.count / numSims) * 100) : null;
   const hasHoverList = Boolean(effectiveSlot && effectiveSlot.teams.length > 0);

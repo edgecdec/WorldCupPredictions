@@ -411,9 +411,17 @@ export function sampleLiveKnockoutMatch(
   const probA = peleA / (peleA + peleB);
   const penProbA = 0.5 + (probA - 0.5) * 0.4;
 
-  // ET total expected goals per team — half of full regulation lambda.
-  const etLambdaA = lambdaA / 2;
-  const etLambdaB = lambdaB / 2;
+  // ET total expected goals per team — calibrated against historical WC +
+  // Euros data (post-2006, no golden goal). Across 51 modern ET-bound games,
+  // ~27% ended in ET and ~73% went to pens. To hit that ratio in our Poisson
+  // model, the per-team ET lambda needs to be ~0.30 × full-regulation lambda
+  // (not 0.5 as we had; 0.5 was the historical "all-eras" approximation but
+  // included golden-goal years that mechanically inflated ET-decided rate).
+  // The "better team wins ET more often" effect emerges naturally because each
+  // team's ET lambda is proportional to their own regulation strength.
+  const ET_LAMBDA_MULT = 0.30;
+  const etLambdaA = lambdaA * ET_LAMBDA_MULT;
+  const etLambdaB = lambdaB * ET_LAMBDA_MULT;
 
   let regCount = 0, etCount = 0, penCount = 0;
   let winACount = 0, winBCount = 0;

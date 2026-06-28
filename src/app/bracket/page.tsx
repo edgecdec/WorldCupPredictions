@@ -603,10 +603,25 @@ function KnockoutBracketTab({
     return out;
   }, [results, simsCompleted, numSims]);
 
-  // User's picks: matchId -> slot token (e.g. 'R32-3-A' meaning "the A side
-  // of R32-3 advances this match"). At R32 the token is the slot id; at R16+
-  // it's whichever feeder slot token the user picked at the feeder match.
+  // User's picks: matchId -> winning TEAM NAME (e.g. 'Canada'). Storing
+  // team names directly is what scoring.ts expects and what the post-lock
+  // migration normalized everyone to.
   const [picks, setPicks] = useState<Record<string, string>>({});
+
+  // Populated R32 bracket (matchId -> {teamA, teamB}) from results_data.
+  // The picker reads from here to know which two teams to show in each R32
+  // cell. R16+ teams are derived from picks[feederMatch].
+  const r32TeamsByMatch = useMemo<Record<string, { teamA: string | null; teamB: string | null }>>(() => {
+    const out: Record<string, { teamA: string | null; teamB: string | null }> = {};
+    const ko = (tournament?.results_data as TournamentResults | undefined)?.knockoutBracket;
+    if (!ko) return out;
+    for (const m of ko) {
+      if (m.id.startsWith('R32-')) {
+        out[m.id] = { teamA: m.teamA ?? null, teamB: m.teamB ?? null };
+      }
+    }
+    return out;
+  }, [tournament]);
   const [picksLoaded, setPicksLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
@@ -655,20 +670,24 @@ function KnockoutBracketTab({
   // not the winners. picks[SF-N] is the SF winner, so the loser is the OTHER
   // candidate at SF-N — i.e. the one of SF-N's feeders (QF picks) that the
   // user didn't pick as the SF winner.
+  // Returns the TEAM NAME on the given side of this match given current
+  // picks. R32 reads from results_data.knockoutBracket; R16+ pulls from the
+  // feeder match's pick (already a team name). 3RD's sides are the SF losers.
   const slotForSide = useCallback((matchId: string, side: 'A' | 'B'): string | null => {
-    if (matchId.startsWith('R32-')) return `${matchId}-${side}`;
+    if (matchId.startsWith('R32-')) {
+      const r32 = r32TeamsByMatch[matchId];
+      if (!r32) return null;
+      return side === 'A' ? (r32.teamA ?? null) : (r32.teamB ?? null);
+    }
 
     if (matchId === '3RD') {
       const sfMatch = side === 'A' ? 'SF-1' : 'SF-2';
       const sfPick = picks[sfMatch];
-      if (!sfPick) return null; // SF not picked yet → loser is undefined
+      if (!sfPick) return null;
       const sfFeeders = getFeederIds(sfMatch);
       if (!sfFeeders) return null;
       const candA = picks[sfFeeders[0]];
       const candB = picks[sfFeeders[1]];
-      // The loser is whichever SF candidate token isn't the SF winner. If
-      // only one candidate has been picked (and it's the winner), the loser
-      // is still TBD; if it's NOT the winner, the loser is that pick.
       if (candA && candA !== sfPick) return candA;
       if (candB && candB !== sfPick) return candB;
       return null;
@@ -678,26 +697,22 @@ function KnockoutBracketTab({
     if (!feeders) return null;
     const feederMatch = feeders[side === 'A' ? 0 : 1];
     return picks[feederMatch] ?? null;
-  }, [picks]);
+  }, [picks, r32TeamsByMatch]);
 
-  const handlePick = useCallback((matchId: string, slotToken: string) => {
+  const handlePick = useCallback((matchId: string, team: string) => {
     setPicks((prev) => {
       const next = { ...prev };
       // Click the same side again to unpick. Downstream picks that referenced
-      // this match's winner become orphans — they should be cleared because
-      // their candidate set just changed.
-      if (next[matchId] === slotToken) {
+      // this match's winner become orphans and get cleared in validateDownstream.
+      if (next[matchId] === team) {
         delete next[matchId];
       } else {
-        next[matchId] = slotToken;
+        next[matchId] = team;
       }
-      // Validate downstream: any descendant pick whose stored slot token is
-      // no longer a candidate (i.e. no longer in either feeder's pick) gets
-      // cleared, recursively.
-      validateDownstream(matchId, next);
+      validateDownstream(matchId, next, r32TeamsByMatch);
       return next;
     });
-  }, []);
+  }, [r32TeamsByMatch]);
 
   // "Smart Fill": play out one simulated tournament given the current sim's
   // R32 distributions and the team strength (PELE / FIFA ranking) — and use
@@ -706,46 +721,28 @@ function KnockoutBracketTab({
   // running it twice gives a different bracket. Doesn't overwrite user picks
   // that are already in place.
   const handleSmartFill = useCallback(() => {
-    if (!results) return; // need R32 distributions before we can resolve leaders
     setPicks((prev) => {
       const next = { ...prev };
-      // Resolve a slot token to the team name it currently represents (the
-      // R32 leader behind it). Picks at R16+ store the feeder R32 token
-      // directly, so this is just teamForSlot.
-      const teamOfSlot = (slotToken: string | null): string | null =>
-        slotToken ? teamForSlot(slotToken) : null;
-      // Probability that teamA beats teamB in a single match, derived from
-      // the matchOdds module the rest of the app uses. Falls back to FIFA-
-      // rank-based logistic if odds aren't available.
       const winProbability = (teamA: string, teamB: string): number => {
         const odds = computeMatchOdds(teamA, teamB, { stage: 'knockout' });
         if (odds) {
-          // In knockouts a draw can't happen — fold draw probability evenly.
           const draw = odds.draw ?? 0;
           return (odds.winA ?? 0) + draw / 2;
         }
         const rA = teamRankings[teamA] ?? 9999;
         const rB = teamRankings[teamB] ?? 9999;
-        // Lower rank = better team. Soft logistic so a 20-rank gap is ~60/40,
-        // a 100-rank gap is ~85/15.
         return 1 / (1 + Math.pow(10, (rA - rB) / 50));
       };
       const tryFill = (matchId: string) => {
         if (next[matchId]) return; // user already picked it — don't overwrite
-        const [aToken, bToken] = candidateTokens(matchId, next);
-        if (!aToken && !bToken) return;
-        if (!aToken) { next[matchId] = bToken!; return; }
-        if (!bToken) { next[matchId] = aToken; return; }
-        const aTeam = teamOfSlot(aToken);
-        const bTeam = teamOfSlot(bToken);
+        const [aTeam, bTeam] = candidateTeams(matchId, next, r32TeamsByMatch);
         if (!aTeam && !bTeam) return;
-        if (!aTeam) { next[matchId] = bToken; return; }
-        if (!bTeam) { next[matchId] = aToken; return; }
+        if (!aTeam) { next[matchId] = bTeam!; return; }
+        if (!bTeam) { next[matchId] = aTeam; return; }
         const pA = winProbability(aTeam, bTeam);
-        next[matchId] = Math.random() < pA ? aToken : bToken;
+        next[matchId] = Math.random() < pA ? aTeam : bTeam;
       };
-      // Dependency order: R32 → R16 → QF → SF → FINAL → 3RD (3RD depends on
-      // SF losers, so SF must be picked first).
+      // Dependency order: R32 → R16 → QF → SF → FINAL → 3RD.
       for (let i = 1; i <= 16; i++) tryFill(`R32-${i}`);
       for (let i = 1; i <= 8; i++) tryFill(`R16-${i}`);
       for (let i = 1; i <= 4; i++) tryFill(`QF-${i}`);
@@ -754,7 +751,7 @@ function KnockoutBracketTab({
       tryFill('3RD');
       return next;
     });
-  }, [results, teamForSlot, teamRankings]);
+  }, [teamRankings, r32TeamsByMatch]);
 
   // Step-by-step modal: walk the user through every match in dependency
   // order. Shows the two candidate teams for the next unpicked match and
@@ -900,7 +897,7 @@ function KnockoutBracketTab({
         nextMatch={nextUnpickedMatch}
         picks={picks}
         onPick={handlePick}
-        teamForSlot={teamForSlot}
+        r32TeamsByMatch={r32TeamsByMatch}
         countryCodeMap={countryCodeMap}
         teamRankings={teamRankings}
         totalPicked={totalPicked}
@@ -937,26 +934,22 @@ function KnockoutBracketTab({
  *  two candidate teams; click one to commit and advance. Auto-closes when
  *  there's no next match. */
 function StepByStepDialog({
-  open, onClose, nextMatch, picks, onPick, teamForSlot, countryCodeMap, teamRankings, totalPicked, total,
+  open, onClose, nextMatch, picks, onPick, r32TeamsByMatch, countryCodeMap, teamRankings, totalPicked, total,
 }: {
   open: boolean;
   onClose: () => void;
   nextMatch: string | null;
   picks: Record<string, string>;
-  onPick: (matchId: string, slotToken: string) => void;
-  teamForSlot: (slotToken: string) => string | null;
+  onPick: (matchId: string, team: string) => void;
+  r32TeamsByMatch: Record<string, { teamA: string | null; teamB: string | null }>;
   countryCodeMap: Record<string, string>;
   teamRankings: Record<string, number>;
   totalPicked: number;
   total: number;
 }) {
   if (!open) return null;
-  // Compute candidates for the current match. For R32: slot id itself. For
-  // R16+: feeder picks. For 3RD: SF losers.
   const matchId = nextMatch;
-  const [aToken, bToken] = matchId ? candidateTokens(matchId, picks) : [null, null];
-  const aTeam = aToken ? teamForSlot(aToken) : null;
-  const bTeam = bToken ? teamForSlot(bToken) : null;
+  const [aTeam, bTeam] = matchId ? candidateTeams(matchId, picks, r32TeamsByMatch) : [null, null];
 
   // Friendly label for which round we're on.
   const roundLabel = matchId
@@ -991,16 +984,16 @@ function StepByStepDialog({
             </Typography>
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'stretch' }}>
               {[
-                { token: aToken, team: aTeam, side: 'A' as const },
-                { token: bToken, team: bTeam, side: 'B' as const },
-              ].map(({ token, team, side }) => (
+                { team: aTeam, side: 'A' as const },
+                { team: bTeam, side: 'B' as const },
+              ].map(({ team, side }) => (
                 <Button
                   key={side}
                   variant="outlined"
                   fullWidth
                   size="large"
-                  disabled={!token || !team}
-                  onClick={() => token && onPick(matchId, token)}
+                  disabled={!team}
+                  onClick={() => team && onPick(matchId, team)}
                   sx={{ flexDirection: 'column', gap: 1, py: 3 }}
                 >
                   {team && countryCodeMap[team] && (
@@ -1080,13 +1073,15 @@ function dependentMatches(matchId: string): string[] {
  *  (= the winners flowing up). For the 3rd-place playoff, the candidates
  *  are the LOSERS of the two SFs — derived as the other QF pick at each
  *  SF (the one the user didn't choose as the SF winner). */
-function candidateTokens(matchId: string, picks: Record<string, string>): Array<string | null> {
-  // R32: the candidates are the two slot ids themselves (no feeders — R32 is
-  // the first round). Without this branch we returned [null, null] for R32
-  // matches, which broke Smart Fill and Step-by-Step (both rely on
-  // candidateTokens to enumerate options at R32).
+function candidateTeams(
+  matchId: string,
+  picks: Record<string, string>,
+  r32TeamsByMatch: Record<string, { teamA: string | null; teamB: string | null }>,
+): Array<string | null> {
+  // R32: the two candidate teams come from the populated knockoutBracket.
   if (matchId.startsWith('R32-')) {
-    return [`${matchId}-A`, `${matchId}-B`];
+    const r32 = r32TeamsByMatch[matchId];
+    return [r32?.teamA ?? null, r32?.teamB ?? null];
   }
   if (matchId === '3RD') {
     const loserOf = (sf: string): string | null => {
@@ -1120,25 +1115,25 @@ function candidateTokens(matchId: string, picks: Record<string, string>): Array<
  * recompute from QF + SF state, validating it here works as long as we
  * cascade through SF whenever a QF changes. We already do that.
  */
-function validateDownstream(changedMatchId: string, picks: Record<string, string>) {
+function validateDownstream(
+  changedMatchId: string,
+  picks: Record<string, string>,
+  r32TeamsByMatch: Record<string, { teamA: string | null; teamB: string | null }>,
+) {
   const dependents = dependentMatches(changedMatchId);
   for (const dep of dependents) {
     const stored = picks[dep];
     if (!stored) continue;
-    const [candA, candB] = candidateTokens(dep, picks);
+    const [candA, candB] = candidateTeams(dep, picks, r32TeamsByMatch);
     if (stored !== candA && stored !== candB) {
       delete picks[dep];
-      validateDownstream(dep, picks);
+      validateDownstream(dep, picks, r32TeamsByMatch);
     }
   }
-  // 3RD depends on SF AND on the QF feeders of each SF. When a QF changes,
-  // dependentMatches(QF) returns the SF — which we recurse into — but we
-  // also need to revalidate 3RD because its loser set just shifted. Direct
-  // check here is cheap.
   if (!changedMatchId.startsWith('SF-') && changedMatchId !== '3RD') {
     const stored = picks['3RD'];
     if (stored) {
-      const [candA, candB] = candidateTokens('3RD', picks);
+      const [candA, candB] = candidateTeams('3RD', picks, r32TeamsByMatch);
       if (stored !== candA && stored !== candB) delete picks['3RD'];
     }
   }

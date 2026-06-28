@@ -352,16 +352,122 @@ function poissonSample(lambda: number): number {
   return k - 1;
 }
 
+/** Full breakdown of a single knockout-match sample. Tracks WHICH phase
+ *  the winner emerged from so the UI can show "X% wins in regulation, Y%
+ *  in ET, Z% on pens." */
+export interface KnockoutSampleOutcome {
+  winner: 'A' | 'B';
+  phase: 'regulation' | 'et' | 'pens';
+  /** Final scoreline including ET goals (pens not added to scoreline). */
+  finalA: number;
+  finalB: number;
+}
+
+export interface KnockoutSampleSummary {
+  /** Per-sample outcome — full distribution including phase + final score. */
+  samples: KnockoutSampleOutcome[];
+  /** Probability of each phase resolving the match (sum ≈ 1). */
+  regulationProb: number;
+  etProb: number;
+  pensProb: number;
+  /** Probability team A advances (across all phases). */
+  winProbA: number;
+  /** Probability team B advances (across all phases). */
+  winProbB: number;
+}
+
 /**
- * Sample N winners for an in-progress KNOCKOUT match. Builds on top of
- * sampleLiveScores to get regulation scorelines, then resolves any ties via
- * ET+pens using the same model the simulator uses for from-scratch knockouts:
- *   - if regulation produces a winner, that's the winner
- *   - else 40% chance someone scores in ET (half-strength Poisson sample)
- *   - else penalty shootout with a slight lean toward the higher-PELE team
+ * Full knockout-match sampler. Runs N trajectories through regulation, ET
+ * (if tied), and pens (if still tied). Each sample carries which phase
+ * decided it so the UI can show ET/pens probabilities and ET-inclusive
+ * scoreline distributions.
  *
- * The output is N team-name samples, ready to be fed into the tournament sim
- * as a uniform random draw per iteration.
+ * Phase model mirrors simulateKnockoutMatch in the tournament worker:
+ *   - Regulation scoreline sampled by simulateMatchTrajectory.
+ *   - If tied: 40% chance ET produces a winner (half-strength Poisson per
+ *     team, sampled as one bulk Poisson — abstracts away the two 15' halves).
+ *   - If still tied after ET: penalty shootout with a slight lean toward
+ *     the higher-PELE team.
+ */
+export function sampleLiveKnockoutMatch(
+  teamA: string,
+  teamB: string,
+  scoreA: number,
+  scoreB: number,
+  minutesPlayed: number,
+  numSamples: number = DEFAULT_SCORELINE_SAMPLES,
+  opts: { matchId?: string | null } = {},
+): KnockoutSampleSummary | null {
+  const regulation = sampleLiveScores(teamA, teamB, scoreA, scoreB, minutesPlayed, numSamples, { stage: 'knockout', matchId: opts.matchId });
+  if (!regulation) return null;
+
+  const base = computeBaseLambdas(teamA, teamB, { stage: 'knockout', matchId: opts.matchId });
+  if (!base) return null;
+  const { lambdaA, lambdaB } = base;
+
+  const rA = PELE_RATINGS[teamA];
+  const rB = PELE_RATINGS[teamB];
+  const peleA = rA?.pele ?? 1, peleB = rB?.pele ?? 1;
+  const probA = peleA / (peleA + peleB);
+  const penProbA = 0.5 + (probA - 0.5) * 0.4;
+
+  // ET total expected goals per team — half of full regulation lambda.
+  const etLambdaA = lambdaA / 2;
+  const etLambdaB = lambdaB / 2;
+
+  let regCount = 0, etCount = 0, penCount = 0;
+  let winACount = 0, winBCount = 0;
+  const samples: KnockoutSampleOutcome[] = new Array(numSamples);
+
+  for (let i = 0; i < numSamples; i++) {
+    const [ga, gb] = regulation[i];
+    if (ga !== gb) {
+      const winner = ga > gb ? 'A' : 'B';
+      regCount++;
+      if (winner === 'A') winACount++; else winBCount++;
+      samples[i] = { winner, phase: 'regulation', finalA: ga, finalB: gb };
+      continue;
+    }
+    // Tied at 90'. 40% of the time ET produces a winner.
+    if (Math.random() < 0.4) {
+      const etA = poissonSample(etLambdaA);
+      const etB = poissonSample(etLambdaB);
+      if (etA !== etB) {
+        const winner = etA > etB ? 'A' : 'B';
+        etCount++;
+        if (winner === 'A') winACount++; else winBCount++;
+        samples[i] = { winner, phase: 'et', finalA: ga + etA, finalB: gb + etB };
+        continue;
+      }
+      // ET also tied — fall through to pens, keep the ET goals in the scoreline.
+      const winner = Math.random() < penProbA ? 'A' : 'B';
+      penCount++;
+      if (winner === 'A') winACount++; else winBCount++;
+      samples[i] = { winner, phase: 'pens', finalA: ga + etA, finalB: gb + etB };
+      continue;
+    }
+    // 60% of the time we skip ET sim and go straight to pens (abstracts the
+    // ET = scoreless ≈ commonly seen outcome at the World Cup level).
+    const winner = Math.random() < penProbA ? 'A' : 'B';
+    penCount++;
+    if (winner === 'A') winACount++; else winBCount++;
+    samples[i] = { winner, phase: 'pens', finalA: ga, finalB: gb };
+  }
+
+  return {
+    samples,
+    regulationProb: regCount / numSamples,
+    etProb: etCount / numSamples,
+    pensProb: penCount / numSamples,
+    winProbA: winACount / numSamples,
+    winProbB: winBCount / numSamples,
+  };
+}
+
+/**
+ * Compatibility wrapper that returns just the winners (used by the
+ * tournament sim worker, which doesn't care about phase/scoreline). Built
+ * on top of sampleLiveKnockoutMatch so the model is single-sourced.
  */
 export function sampleLiveKnockoutWinners(
   teamA: string,
@@ -372,41 +478,9 @@ export function sampleLiveKnockoutWinners(
   numSamples: number = DEFAULT_SCORELINE_SAMPLES,
   opts: { matchId?: string | null } = {},
 ): string[] | null {
-  const regulation = sampleLiveScores(teamA, teamB, scoreA, scoreB, minutesPlayed, numSamples, { stage: 'knockout', matchId: opts.matchId });
-  if (!regulation) return null;
-
-  const base = computeBaseLambdas(teamA, teamB, { stage: 'knockout', matchId: opts.matchId });
-  if (!base) return null;
-  const { lambdaA, lambdaB } = base;
-
-  // Pen-shootout probability: slight edge to better PELE rating, capped near
-  // 60/40. Mirrors simulateKnockoutMatch in the tournament worker.
-  const rA = PELE_RATINGS[teamA];
-  const rB = PELE_RATINGS[teamB];
-  const peleA = rA?.pele ?? 1, peleB = rB?.pele ?? 1;
-  const probA = peleA / (peleA + peleB);
-  const penProbA = 0.5 + (probA - 0.5) * 0.4;
-
-  // ET expected goals = half of regulation (extra time is 30' not 90', and
-  // teams play more cautiously). Matches simulateKnockoutMatch's formulation.
-  const etLambdaA = lambdaA / 2;
-  const etLambdaB = lambdaB / 2;
-
-  const winners: string[] = new Array(numSamples);
-  for (let i = 0; i < numSamples; i++) {
-    const [ga, gb] = regulation[i];
-    if (ga > gb) { winners[i] = teamA; continue; }
-    if (gb > ga) { winners[i] = teamB; continue; }
-    // Tied at 90'. 40% chance ET decides it.
-    if (Math.random() < 0.4) {
-      const etA = poissonSample(etLambdaA);
-      const etB = poissonSample(etLambdaB);
-      if (etA !== etB) { winners[i] = etA > etB ? teamA : teamB; continue; }
-    }
-    // Pens
-    winners[i] = Math.random() < penProbA ? teamA : teamB;
-  }
-  return winners;
+  const summary = sampleLiveKnockoutMatch(teamA, teamB, scoreA, scoreB, minutesPlayed, numSamples, opts);
+  if (!summary) return null;
+  return summary.samples.map((s) => (s.winner === 'A' ? teamA : teamB));
 }
 
 /**

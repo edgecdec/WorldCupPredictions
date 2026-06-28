@@ -9,7 +9,7 @@ import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import type { LiveGame } from '@/types';
 import TeamFlag from '@/components/common/TeamFlag';
 import type { BracketSlotResult } from '@/hooks/useTournamentSim';
-import { computeMatchOdds, computeLiveOdds, sampleLiveScores, type MatchOdds } from '@/lib/matchOdds';
+import { computeMatchOdds, computeLiveOdds, sampleLiveScores, sampleLiveKnockoutMatch, type MatchOdds, type KnockoutSampleSummary } from '@/lib/matchOdds';
 import { parseEspnClock } from '@/lib/parseEspnClock';
 
 const STATE_IN = 'in';
@@ -151,6 +151,33 @@ function DrawRow({ drawPct }: { drawPct: number }) {
       <Typography variant="caption" sx={{ color: 'text.secondary', minWidth: 28, textAlign: 'right', fontSize: '0.65rem' }}>
         {fmtPct(drawPct)}
       </Typography>
+    </Box>
+  );
+}
+
+/** Knockout-only: probability the match goes to ET / pens to be decided.
+ *  Shown next to the team rows so users see why win % can drift toward 50/50
+ *  in tied late-game scenarios. */
+function ExtraTimeRow({ etPct, pensPct }: { etPct: number; pensPct: number }) {
+  if (etPct + pensPct < 0.005) return null;
+  return (
+    <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', py: 0.1, gap: 1 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }}>
+        <Typography variant="caption" sx={{ color: 'text.secondary', fontStyle: 'italic', fontSize: '0.65rem' }}>
+          ET
+        </Typography>
+        <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.65rem', minWidth: 28, textAlign: 'right' }}>
+          {fmtPct(etPct)}
+        </Typography>
+      </Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }}>
+        <Typography variant="caption" sx={{ color: 'text.secondary', fontStyle: 'italic', fontSize: '0.65rem' }}>
+          Pens
+        </Typography>
+        <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.65rem', minWidth: 28, textAlign: 'right' }}>
+          {fmtPct(pensPct)}
+        </Typography>
+      </Box>
     </Box>
   );
 }
@@ -374,24 +401,48 @@ function GameCard({ game, countryCodeMap, bracketSlots, numSims, currentUserKey,
 
   const showDraw = odds && stage === 'group';
 
-  // In knockouts, draws don't exist — a tie at 90' goes to ET/pens, which
-  // PELE doesn't model. Fold the draw mass evenly into both win probabilities
-  // so the cards show the actual chance of advancing.
+  // For LIVE knockouts: sample a full breakdown so the card can show ET/pens
+  // probabilities AND so the hover scoreline list includes ET goals. For
+  // pre-match knockouts we fall back to folding the draw analytically.
+  const [hoverEl, setHoverEl] = useState<HTMLElement | null>(null);
+  const liveKnockoutSummary = useMemo<KnockoutSampleSummary | null>(() => {
+    if (stage !== 'knockout' || !isLive || minutesPlayed === null) return null;
+    // The full breakdown is cheap enough at 1000 samples to run unconditionally;
+    // we use it both for the always-visible ET/Pens row and the hover list.
+    return sampleLiveKnockoutMatch(game.home.name, game.away.name, scoreA, scoreB, minutesPlayed, SAMPLES_FOR_HOVER);
+  }, [stage, isLive, minutesPlayed, scoreA, scoreB, game.home.name, game.away.name]);
+
+  // displayOdds: percentages shown next to each team name. For live knockouts
+  // come straight from the sampled summary; for pre-match knockouts fold draw
+  // mass evenly into both wins.
   const displayOdds = useMemo<MatchOdds | null>(() => {
+    if (liveKnockoutSummary) {
+      return {
+        winA: liveKnockoutSummary.winProbA,
+        draw: 0,
+        winB: liveKnockoutSummary.winProbB,
+        expectedScoreA: odds?.expectedScoreA ?? 0,
+        expectedScoreB: odds?.expectedScoreB ?? 0,
+      };
+    }
     if (!odds) return null;
     if (stage !== 'knockout') return odds;
     const half = odds.draw / 2;
     return { ...odds, winA: odds.winA + half, draw: 0, winB: odds.winB + half };
-  }, [odds, stage]);
+  }, [odds, stage, liveKnockoutSummary]);
 
-  // Lazily compute scoreline distribution only for live games, only on hover.
-  const [hoverEl, setHoverEl] = useState<HTMLElement | null>(null);
+  // Scoreline distribution shown on hover. Knockout: pull from the live
+  // breakdown so ET goals appear in the list. Group: original path.
   const scorelineFreqs = useMemo<ScorelineFreq[] | null>(() => {
     if (!isLive || !hoverEl || minutesPlayed === null) return null;
+    if (liveKnockoutSummary) {
+      const tuples = liveKnockoutSummary.samples.map((s) => [s.finalA, s.finalB] as [number, number]);
+      return topScorelines(tuples, TOP_SCORELINES);
+    }
     const samples = sampleLiveScores(game.home.name, game.away.name, scoreA, scoreB, minutesPlayed, SAMPLES_FOR_HOVER, { stage });
     if (!samples) return null;
     return topScorelines(samples, TOP_SCORELINES);
-  }, [isLive, hoverEl, minutesPlayed, scoreA, scoreB, game.home.name, game.away.name, stage]);
+  }, [isLive, hoverEl, minutesPlayed, scoreA, scoreB, game.home.name, game.away.name, stage, liveKnockoutSummary]);
 
   const handleEnter = useCallback((e: React.MouseEvent<HTMLElement>) => {
     if (isLive) setHoverEl(e.currentTarget);
@@ -456,6 +507,9 @@ function GameCard({ game, countryCodeMap, bracketSlots, numSims, currentUserKey,
             <TeamRow name={game.away.name} score={game.away.score} isLive={isLive} countryCode={countryCodeMap[game.away.name]} winPct={displayOdds?.winB} />
           )}
           {odds && showDraw && <DrawRow drawPct={odds.draw} />}
+          {liveKnockoutSummary && (
+            <ExtraTimeRow etPct={liveKnockoutSummary.etProb} pensPct={liveKnockoutSummary.pensProb} />
+          )}
           {game.venue && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, mt: 0.5, color: 'text.secondary' }}>
               <PlaceIcon sx={{ fontSize: 11 }} />

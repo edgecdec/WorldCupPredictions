@@ -155,11 +155,12 @@ function DrawRow({ drawPct }: { drawPct: number }) {
   );
 }
 
-/** Knockout-only: probability the match goes to ET / pens to be decided.
- *  Shown next to the team rows so users see why win % can drift toward 50/50
- *  in tied late-game scenarios. */
-function ExtraTimeRow({ etPct, pensPct }: { etPct: number; pensPct: number }) {
-  if (etPct + pensPct < 0.005) return null;
+/** Knockout-only: probability the match goes to ET (inclusive of pens) and
+ *  the subset that reaches pens. Pens is a strict subset of ET — a shootout
+ *  always plays the full 30 of extra time first — so "ET: 58%" includes
+ *  "Pens: 34%". The two are shown together so users can decompose the risk. */
+function ExtraTimeRow({ etInclusivePct, pensPct }: { etInclusivePct: number; pensPct: number }) {
+  if (etInclusivePct < 0.005) return null;
   return (
     <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', py: 0.1, gap: 1 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }}>
@@ -167,7 +168,7 @@ function ExtraTimeRow({ etPct, pensPct }: { etPct: number; pensPct: number }) {
           ET
         </Typography>
         <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.65rem', minWidth: 28, textAlign: 'right' }}>
-          {fmtPct(etPct)}
+          {fmtPct(etInclusivePct)}
         </Typography>
       </Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }}>
@@ -508,7 +509,10 @@ function GameCard({ game, countryCodeMap, bracketSlots, numSims, currentUserKey,
           )}
           {odds && showDraw && <DrawRow drawPct={odds.draw} />}
           {liveKnockoutSummary && (
-            <ExtraTimeRow etPct={liveKnockoutSummary.etProb} pensPct={liveKnockoutSummary.pensProb} />
+            <ExtraTimeRow
+              etInclusivePct={liveKnockoutSummary.etProb + liveKnockoutSummary.pensProb}
+              pensPct={liveKnockoutSummary.pensProb}
+            />
           )}
           {game.venue && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, mt: 0.5, color: 'text.secondary' }}>

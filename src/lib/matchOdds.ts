@@ -428,30 +428,24 @@ export function sampleLiveKnockoutMatch(
       samples[i] = { winner, phase: 'regulation', finalA: ga, finalB: gb };
       continue;
     }
-    // Tied at 90'. 40% of the time ET produces a winner.
-    if (Math.random() < 0.4) {
-      const etA = poissonSample(etLambdaA);
-      const etB = poissonSample(etLambdaB);
-      if (etA !== etB) {
-        const winner = etA > etB ? 'A' : 'B';
-        etCount++;
-        if (winner === 'A') winACount++; else winBCount++;
-        samples[i] = { winner, phase: 'et', finalA: ga + etA, finalB: gb + etB };
-        continue;
-      }
-      // ET also tied — fall through to pens, keep the ET goals in the scoreline.
-      const winner = Math.random() < penProbA ? 'A' : 'B';
-      penCount++;
+    // Tied at 90'. Always simulate ET first — pens can only happen if ET
+    // also ends level. Use ~40% conversion rate: the half-strength Poisson
+    // produces roughly that fraction of tied-at-90 games settled in ET,
+    // matching observed World Cup history.
+    const etA = poissonSample(etLambdaA);
+    const etB = poissonSample(etLambdaB);
+    if (etA !== etB) {
+      const winner = etA > etB ? 'A' : 'B';
+      etCount++;
       if (winner === 'A') winACount++; else winBCount++;
-      samples[i] = { winner, phase: 'pens', finalA: ga + etA, finalB: gb + etB };
+      samples[i] = { winner, phase: 'et', finalA: ga + etA, finalB: gb + etB };
       continue;
     }
-    // 60% of the time we skip ET sim and go straight to pens (abstracts the
-    // ET = scoreless ≈ commonly seen outcome at the World Cup level).
+    // ET also tied — go to pens.
     const winner = Math.random() < penProbA ? 'A' : 'B';
     penCount++;
     if (winner === 'A') winACount++; else winBCount++;
-    samples[i] = { winner, phase: 'pens', finalA: ga, finalB: gb };
+    samples[i] = { winner, phase: 'pens', finalA: ga + etA, finalB: gb + etB };
   }
 
   return {

@@ -374,6 +374,16 @@ function GameCard({ game, countryCodeMap, bracketSlots, numSims, currentUserKey,
 
   const showDraw = odds && stage === 'group';
 
+  // In knockouts, draws don't exist — a tie at 90' goes to ET/pens, which
+  // PELE doesn't model. Fold the draw mass evenly into both win probabilities
+  // so the cards show the actual chance of advancing.
+  const displayOdds = useMemo<MatchOdds | null>(() => {
+    if (!odds) return null;
+    if (stage !== 'knockout') return odds;
+    const half = odds.draw / 2;
+    return { ...odds, winA: odds.winA + half, draw: 0, winB: odds.winB + half };
+  }, [odds, stage]);
+
   // Lazily compute scoreline distribution only for live games, only on hover.
   const [hoverEl, setHoverEl] = useState<HTMLElement | null>(null);
   const scorelineFreqs = useMemo<ScorelineFreq[] | null>(() => {
@@ -433,7 +443,7 @@ function GameCard({ game, countryCodeMap, bracketSlots, numSims, currentUserKey,
               countryCodeMap={countryCodeMap}
             />
           ) : (
-            <TeamRow name={game.home.name} score={game.home.score} isLive={isLive} countryCode={countryCodeMap[game.home.name]} winPct={odds?.winA} />
+            <TeamRow name={game.home.name} score={game.home.score} isLive={isLive} countryCode={countryCodeMap[game.home.name]} winPct={displayOdds?.winA} />
           )}
           {awayIsTbd ? (
             <TbdTeamRow
@@ -443,7 +453,7 @@ function GameCard({ game, countryCodeMap, bracketSlots, numSims, currentUserKey,
               countryCodeMap={countryCodeMap}
             />
           ) : (
-            <TeamRow name={game.away.name} score={game.away.score} isLive={isLive} countryCode={countryCodeMap[game.away.name]} winPct={odds?.winB} />
+            <TeamRow name={game.away.name} score={game.away.score} isLive={isLive} countryCode={countryCodeMap[game.away.name]} winPct={displayOdds?.winB} />
           )}
           {odds && showDraw && <DrawRow drawPct={odds.draw} />}
           {game.venue && (
@@ -465,7 +475,7 @@ function GameCard({ game, countryCodeMap, bracketSlots, numSims, currentUserKey,
               userExpectedScore={userExpectedScore}
               conditionalScores={conditionalScores}
               groupName={groupName}
-              odds={odds}
+              odds={displayOdds}
             />
           )}
         </CardContent>

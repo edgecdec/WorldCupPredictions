@@ -428,10 +428,12 @@ export function sampleLiveKnockoutMatch(
       samples[i] = { winner, phase: 'regulation', finalA: ga, finalB: gb };
       continue;
     }
-    // Tied at 90'. Always simulate ET first — pens can only happen if ET
-    // also ends level. Use ~40% conversion rate: the half-strength Poisson
-    // produces roughly that fraction of tied-at-90 games settled in ET,
-    // matching observed World Cup history.
+    // Tied at 90'. Always simulate ET first — pens can only happen if the
+    // aggregate after 30 more minutes is still level. ET is NOT golden-goal
+    // at the World Cup (since 2004) — both teams play the full 30' and a
+    // late equalizer in ET still sends it to pens. We model this as two
+    // independent Poisson goal counts over the ET period and compare the
+    // totals: if etA !== etB, ET decided it; otherwise pens.
     const etA = poissonSample(etLambdaA);
     const etB = poissonSample(etLambdaB);
     if (etA !== etB) {

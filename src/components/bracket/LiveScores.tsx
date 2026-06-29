@@ -410,8 +410,8 @@ function GameCard({ game, countryCodeMap, bracketSlots, numSims, currentUserKey,
     if (stage !== 'knockout' || !isLive || minutesPlayed === null) return null;
     // The full breakdown is cheap enough at 1000 samples to run unconditionally;
     // we use it both for the always-visible ET/Pens row and the hover list.
-    return sampleLiveKnockoutMatch(game.home.name, game.away.name, scoreA, scoreB, minutesPlayed, SAMPLES_FOR_HOVER);
-  }, [stage, isLive, minutesPlayed, scoreA, scoreB, game.home.name, game.away.name]);
+    return sampleLiveKnockoutMatch(game.home.name, game.away.name, scoreA, scoreB, minutesPlayed, SAMPLES_FOR_HOVER, { period: game.period });
+  }, [stage, isLive, minutesPlayed, scoreA, scoreB, game.home.name, game.away.name, game.period]);
 
   // displayOdds: percentages shown next to each team name. For live knockouts
   // come straight from the sampled summary; for pre-match knockouts fold draw

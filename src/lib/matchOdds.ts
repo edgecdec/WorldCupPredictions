@@ -396,10 +396,23 @@ export function sampleLiveKnockoutMatch(
   scoreB: number,
   minutesPlayed: number,
   numSamples: number = DEFAULT_SCORELINE_SAMPLES,
-  opts: { matchId?: string | null } = {},
+  opts: { matchId?: string | null; period?: number } = {},
 ): KnockoutSampleSummary | null {
-  const regulation = sampleLiveScores(teamA, teamB, scoreA, scoreB, minutesPlayed, numSamples, { stage: 'knockout', matchId: opts.matchId });
-  if (!regulation) return null;
+  // ESPN's period: 1=1H, 2=2H, 3=ET1, 4=ET2, 5=pens. If period >= 3 we're
+  // already past regulation — regulation phase is fixed at the current score
+  // (no more regulation goals possible). If period >= 5 pens are also done
+  // (the match is in shootout). Treat the present minute as the end of
+  // whichever phase we're in.
+  const period = opts.period ?? 2;
+  const inET = period >= 3;
+  const inPens = period >= 5;
+  const ET_END_MINUTE = 120;
+  // ET is 30' total. If the user is "X minutes into ET", model the remaining
+  // ET as (30 - X) minutes — pro-rated against full-ET lambda. minutesPlayed
+  // already counts elapsed regulation+ET (e.g. 105 = 15' into ET, 122 = 2'
+  // past the end whistle of ET).
+  const etElapsedMin = inET ? Math.max(0, Math.min(30, minutesPlayed - 90)) : 0;
+  const etRemainingMin = inET ? Math.max(0, 30 - etElapsedMin) : 30;
 
   const base = computeBaseLambdas(teamA, teamB, { stage: 'knockout', matchId: opts.matchId });
   if (!base) return null;
@@ -411,16 +424,19 @@ export function sampleLiveKnockoutMatch(
   const probA = peleA / (peleA + peleB);
   const penProbA = 0.5 + (probA - 0.5) * 0.4;
 
-  // ET total expected goals per team. Calibration: matches Kalshi pens
-  // pricing for the live CAN-RSA R32 game (≈48% pens at 0-0 @ 88') and
-  // sits between the all-eras WC/Euros historical share (~33% ET / 67%
-  // pens of overtime games) and the modern-era target (~27%/73%).
-  // Lower multiplier → fewer ET goals → more pens. The "better team wins
-  // ET more often" effect is preserved because each team's ET lambda
-  // remains proportional to their own regulation strength.
   const ET_LAMBDA_MULT = 0.27;
-  const etLambdaA = lambdaA * ET_LAMBDA_MULT;
-  const etLambdaB = lambdaB * ET_LAMBDA_MULT;
+  // For mid-ET states, scale the ET lambda by the share of ET still to
+  // play (so a tied game at 119' has nearly-zero chance of an ET goal).
+  const etLambdaA = lambdaA * ET_LAMBDA_MULT * (etRemainingMin / 30);
+  const etLambdaB = lambdaB * ET_LAMBDA_MULT * (etRemainingMin / 30);
+
+  // Pre-ET (regulation): sample the regulation portion via the normal
+  // trajectory simulator. In-ET: skip regulation sampling entirely — the
+  // current score IS the regulation result.
+  const regulation: Array<[number, number]> | null = inET
+    ? Array.from({ length: numSamples }, () => [scoreA, scoreB] as [number, number])
+    : sampleLiveScores(teamA, teamB, scoreA, scoreB, minutesPlayed, numSamples, { stage: 'knockout', matchId: opts.matchId });
+  if (!regulation) return null;
 
   let regCount = 0, etCount = 0, penCount = 0;
   let winACount = 0, winBCount = 0;
@@ -435,14 +451,14 @@ export function sampleLiveKnockoutMatch(
       samples[i] = { winner, phase: 'regulation', finalA: ga, finalB: gb };
       continue;
     }
-    // Tied at 90'. Always simulate ET first — pens can only happen if the
-    // aggregate after 30 more minutes is still level. ET is NOT golden-goal
-    // at the World Cup (since 2004) — both teams play the full 30' and a
-    // late equalizer in ET still sends it to pens. We model this as two
-    // independent Poisson goal counts over the ET period and compare the
-    // totals: if etA !== etB, ET decided it; otherwise pens.
-    const etA = poissonSample(etLambdaA);
-    const etB = poissonSample(etLambdaB);
+    // Tied at end of regulation. In a normal flow we sample full ET; if we're
+    // already past 120' (period 4 with no time left, or period 5), skip ET
+    // entirely — go straight to pens.
+    let etA = 0, etB = 0;
+    if (!inPens && etRemainingMin > 0) {
+      etA = poissonSample(etLambdaA);
+      etB = poissonSample(etLambdaB);
+    }
     if (etA !== etB) {
       const winner = etA > etB ? 'A' : 'B';
       etCount++;
@@ -450,7 +466,7 @@ export function sampleLiveKnockoutMatch(
       samples[i] = { winner, phase: 'et', finalA: ga + etA, finalB: gb + etB };
       continue;
     }
-    // ET also tied — go to pens.
+    // ET tied (or already over) — pens.
     const winner = Math.random() < penProbA ? 'A' : 'B';
     penCount++;
     if (winner === 'A') winACount++; else winBCount++;
@@ -479,7 +495,7 @@ export function sampleLiveKnockoutWinners(
   scoreB: number,
   minutesPlayed: number,
   numSamples: number = DEFAULT_SCORELINE_SAMPLES,
-  opts: { matchId?: string | null } = {},
+  opts: { matchId?: string | null; period?: number } = {},
 ): string[] | null {
   const summary = sampleLiveKnockoutMatch(teamA, teamB, scoreA, scoreB, minutesPlayed, numSamples, opts);
   if (!summary) return null;

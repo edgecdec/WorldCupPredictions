@@ -676,7 +676,7 @@ export default function SimulatePage() {
             if (minutesPlayed === null) continue;
             const sA = parseInt(g.home.score, 10) || 0;
             const sB = parseInt(g.away.score, 10) || 0;
-            const samples = sampleLiveKnockoutWinners(g.home.name, g.away.name, sA, sB, minutesPlayed, 1000);
+            const samples = sampleLiveKnockoutWinners(g.home.name, g.away.name, sA, sB, minutesPlayed, 1000, { period: g.period });
             if (!samples) continue;
             inProgressKnockouts.push({
               teamA: g.home.name, teamB: g.away.name,

@@ -379,11 +379,56 @@ function AvgScoreCell({
 
 type StandingsSortKey = 'rank' | 'player' | 'avgScore' | 'avgRank' | 'winPct';
 
-function ExpectedStandingsTable({ playerScores, currentUsername, leadOnly }: {
-  playerScores: Array<{ key: string; avgScore: number; avgRank: number; winPct: number; scoreDistribution: Record<number, number> }>;
+type StandingsScope = 'overall' | 'groups' | 'knockout';
+
+interface StandingsRow {
+  key: string;
+  avgScore: number;
+  avgRank: number;
+  winPct: number;
+  scoreDistribution: Record<number, number>;
+}
+
+function ExpectedStandingsTable({ playerScores, currentUsername, leadOnly, scope }: {
+  playerScores: Array<{
+    key: string; avgScore: number; avgRank: number; winPct: number; scoreDistribution: Record<number, number>;
+    avgGroupTotal?: number; avgGroupRank?: number; groupWinPct?: number; groupTotalDistribution?: Record<number, number>;
+    avgKoTotal?: number; avgKoRank?: number; koWinPct?: number; koTotalDistribution?: Record<number, number>;
+  }>;
   currentUsername: string;
   leadOnly: boolean;
+  scope: StandingsScope;
 }) {
+  // Project per-scope fields into the same 4-field shape the table uses, so
+  // the sort/render code below doesn't have to branch on scope everywhere.
+  const projected: StandingsRow[] = useMemo(() => playerScores.map((p) => {
+    if (scope === 'groups') {
+      return {
+        key: p.key,
+        avgScore: p.avgGroupTotal ?? 0,
+        avgRank: p.avgGroupRank ?? 0,
+        winPct: p.groupWinPct ?? 0,
+        scoreDistribution: p.groupTotalDistribution ?? {},
+      };
+    }
+    if (scope === 'knockout') {
+      return {
+        key: p.key,
+        avgScore: p.avgKoTotal ?? 0,
+        avgRank: p.avgKoRank ?? 0,
+        winPct: p.koWinPct ?? 0,
+        scoreDistribution: p.koTotalDistribution ?? {},
+      };
+    }
+    return {
+      key: p.key,
+      avgScore: p.avgScore,
+      avgRank: p.avgRank,
+      winPct: p.winPct,
+      scoreDistribution: p.scoreDistribution,
+    };
+  }), [playerScores, scope]);
+
   const winLabel = leadOnly ? 'Lead %' : 'Win %';
   const STANDINGS_COLUMNS: Array<{ key: StandingsSortKey; label: string; align: 'left' | 'right' }> = [
     { key: 'rank', label: '#', align: 'left' },
@@ -405,10 +450,9 @@ function ExpectedStandingsTable({ playerScores, currentUsername, leadOnly }: {
     }
   };
 
-  // Default ranking by avgScore desc — used for the # column
   const ranked = useMemo(
-    () => [...playerScores].sort((a, b) => b.avgScore - a.avgScore),
-    [playerScores],
+    () => [...projected].sort((a, b) => b.avgScore - a.avgScore),
+    [projected],
   );
   const rankByKey = useMemo(() => {
     const m = new Map<string, number>();
@@ -418,12 +462,12 @@ function ExpectedStandingsTable({ playerScores, currentUsername, leadOnly }: {
 
   const sorted = useMemo(() => {
     const dir = sortDir === 'asc' ? 1 : -1;
-    return [...playerScores].sort((a, b) => {
+    return [...projected].sort((a, b) => {
       if (sortKey === 'rank') return ((rankByKey.get(a.key) ?? 0) - (rankByKey.get(b.key) ?? 0)) * dir;
       if (sortKey === 'player') return a.key.localeCompare(b.key) * dir;
       return (a[sortKey] - b[sortKey]) * dir;
     });
-  }, [playerScores, sortKey, sortDir, rankByKey]);
+  }, [projected, sortKey, sortDir, rankByKey]);
 
   return (
     <TableContainer>
@@ -491,6 +535,18 @@ export default function SimulatePage() {
   const [activeTab, setActiveTab] = useState(TAB_GROUPS);
   const [tournamentStarted, setTournamentStarted] = useState(false);
   const [standingsRevealed, setStandingsRevealed] = useState(false);
+  // Persist the Expected Standings scope across leaderboard-group changes
+  // and page reloads, matching the leaderboard's tab persistence behavior.
+  const [standingsScope, setStandingsScope] = useState<'overall' | 'groups' | 'knockout'>(() => {
+    if (typeof window === 'undefined') return 'overall';
+    const stored = window.localStorage.getItem('simulate.standingsScope');
+    return (stored === 'groups' || stored === 'knockout') ? stored : 'overall';
+  });
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try { window.localStorage.setItem('simulate.standingsScope', standingsScope); } catch { /* quota */ }
+    }
+  }, [standingsScope]);
   const [players, setPlayers] = useState<PlayerEntry[] | undefined>(undefined);
   const [scoring, setScoring] = useState<ScoringSettings>(DEFAULT_SCORING);
   const [groupId, setGroupId] = useSelectedGroup('everyone');
@@ -883,6 +939,20 @@ export default function SimulatePage() {
                     </Select>
                   </FormControl>
                 )}
+                {(tournamentStarted || standingsRevealed) && (
+                  <FormControl size="small" sx={{ minWidth: 140 }}>
+                    <InputLabel>Scope</InputLabel>
+                    <Select
+                      value={standingsScope}
+                      label="Scope"
+                      onChange={(e) => setStandingsScope(e.target.value as 'overall' | 'groups' | 'knockout')}
+                    >
+                      <MenuItem value="overall">Overall</MenuItem>
+                      <MenuItem value="groups">Group Stage</MenuItem>
+                      <MenuItem value="knockout">Knockouts</MenuItem>
+                    </Select>
+                  </FormControl>
+                )}
               </Box>
               {!tournamentStarted && !standingsRevealed ? (
                 <Typography variant="body2" color="text.secondary">
@@ -901,6 +971,7 @@ export default function SimulatePage() {
                         playerScores={results.playerScores}
                         currentUsername={user.username}
                         leadOnly={!anyKnockoutPicks}
+                        scope={standingsScope}
                       />
                     </>
                   );

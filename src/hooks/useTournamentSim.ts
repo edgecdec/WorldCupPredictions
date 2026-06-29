@@ -66,16 +66,22 @@ export interface PlayerScoreResult {
   avgScore: number;
   avgRank: number;
   winPct: number;
-  /** Score → fraction of sims producing exactly that score. Sparse map. */
   scoreDistribution: Record<number, number>;
-  /** Expected points per group ('A'..'L'). */
   avgGroupScores: Record<string, number>;
-  /** Expected points per knockout round ('R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'). */
   avgRoundScores: Record<string, number>;
-  /** Per-group full score distribution (group → score → fraction). */
   groupScoreDistributions: Record<string, Record<number, number>>;
-  /** Per-round full score distribution (round → score → fraction). */
   roundScoreDistributions: Record<string, Record<number, number>>;
+  /** Per-scope rank/win/distribution stats — for the Expected Standings
+   *  scope dropdown so users can see the table re-ranked by group-only
+   *  or knockout-only score. */
+  avgGroupTotal: number;
+  avgGroupRank: number;
+  groupWinPct: number;
+  groupTotalDistribution: Record<number, number>;
+  avgKoTotal: number;
+  avgKoRank: number;
+  koWinPct: number;
+  koTotalDistribution: Record<number, number>;
 }
 
 export interface TournamentSimResults {

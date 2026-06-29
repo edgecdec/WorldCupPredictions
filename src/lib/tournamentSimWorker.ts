@@ -197,17 +197,22 @@ interface PlayerScoreResult {
   avgScore: number;
   avgRank: number;
   winPct: number;
-  /** Score → fraction of sims that produced this exact score. Sums to 1.
-   *  Sparse: only buckets with non-zero probability are present. */
   scoreDistribution: Record<number, number>;
-  /** Expected points per group ('A'..'L') across all sims. */
   avgGroupScores: Record<string, number>;
-  /** Expected points per knockout round ('R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'). */
   avgRoundScores: Record<string, number>;
-  /** Per-group full score distribution: groupName → score → fraction. */
   groupScoreDistributions: Record<string, Record<number, number>>;
-  /** Per-round full score distribution: roundLabel → score → fraction. */
   roundScoreDistributions: Record<string, Record<number, number>>;
+  /** Group-scope stats: rank and win % when players are sorted on group-stage
+   *  score only (each sim). Mirrors the per-tab leaderboard semantics. */
+  avgGroupTotal: number;
+  avgGroupRank: number;
+  groupWinPct: number;
+  groupTotalDistribution: Record<number, number>;
+  /** Knockout-scope stats: same as above but for knockout score only. */
+  avgKoTotal: number;
+  avgKoRank: number;
+  koWinPct: number;
+  koTotalDistribution: Record<number, number>;
 }
 
 interface SimResponse {
@@ -1249,6 +1254,15 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
     groupScoreDist: Record<string, Record<number, number>>;
     /** Round → score-value → count. */
     roundScoreDist: Record<string, Record<number, number>>;
+    /** Per-scope rank/win/distribution accumulators so the Expected Standings
+     *  table can show stats for "groups only" or "knockouts only" — re-ranked
+     *  within each sim by that scope's score, not the overall total. */
+    groupRankSum: number;
+    groupWins: number;
+    groupScoreTotalCounts: Record<number, number>;
+    koRankSum: number;
+    koWins: number;
+    koScoreTotalCounts: Record<number, number>;
   }> = {};
   const hasPlayers = entries && entries.length > 0 && scoring && teamSeeds;
   if (hasPlayers) {
@@ -1257,6 +1271,8 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
         score: 0, rank: 0, wins: 0, scoreCounts: {},
         groupScoreSums: {}, roundScoreSums: {},
         groupScoreDist: {}, roundScoreDist: {},
+        groupRankSum: 0, groupWins: 0, groupScoreTotalCounts: {},
+        koRankSum: 0, koWins: 0, koScoreTotalCounts: {},
       };
     }
   }
@@ -1350,6 +1366,19 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
           }
           roundScoreDistributions[r] = out;
         }
+        // Per-scope total distributions: group-only and knockout-only.
+        const groupTotalDist: Record<number, number> = {};
+        for (const [score, count] of Object.entries(t.groupScoreTotalCounts)) {
+          groupTotalDist[Number(score)] = Math.round((count / simsSoFar) * 100000) / 100000;
+        }
+        const koTotalDist: Record<number, number> = {};
+        for (const [score, count] of Object.entries(t.koScoreTotalCounts)) {
+          koTotalDist[Number(score)] = Math.round((count / simsSoFar) * 100000) / 100000;
+        }
+        // Sum group + ko averages (alternative to t.score / simsSoFar for the
+        // per-scope avg; they're the same up to rounding).
+        const groupAvgScore = Object.values(avgGroupScores).reduce((s, v) => s + v, 0);
+        const koAvgScore = Object.values(avgRoundScores).reduce((s, v) => s + v, 0);
         return {
           key: ent.key,
           avgScore: Math.round((t.score / simsSoFar) * 10) / 10,
@@ -1360,6 +1389,17 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
           avgRoundScores,
           groupScoreDistributions,
           roundScoreDistributions,
+          // Group-scope stats: rank/win/distribution when teams are sorted by
+          // group score only.
+          avgGroupTotal: Math.round(groupAvgScore * 10) / 10,
+          avgGroupRank: Math.round((t.groupRankSum / simsSoFar) * 10) / 10,
+          groupWinPct: Math.round((t.groupWins / simsSoFar) * 1000) / 10,
+          groupTotalDistribution: groupTotalDist,
+          // Knockout-scope stats.
+          avgKoTotal: Math.round(koAvgScore * 10) / 10,
+          avgKoRank: Math.round((t.koRankSum / simsSoFar) * 10) / 10,
+          koWinPct: Math.round((t.koWins / simsSoFar) * 1000) / 10,
+          koTotalDistribution: koTotalDist,
         };
       }).sort((a, b) => b.avgScore - a.avgScore);
     }
@@ -1477,7 +1517,7 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
         }
       }
 
-      const scores: { key: string; score: number; perGroup: Record<string, number>; perRound: Record<string, number> }[] = [];
+      const scores: { key: string; score: number; groupScore: number; koScore: number; perGroup: Record<string, number>; perRound: Record<string, number> }[] = [];
       const EMPTY_PER_ROUND: Record<string, number> = {};
       for (const ent of entries!) {
         const gs = scoreGroupStageEntry(
@@ -1490,9 +1530,13 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
         const ko = includeKnockoutScoring
           ? scoreKnockoutEntry(ent.knockout_picks, koMatchResults, teamRankings ?? {}, scoring!.knockout)
           : { total: 0, perRound: EMPTY_PER_ROUND };
+        const groupScore = gs.total;
+        const koScore = ko.total;
         scores.push({
           key: ent.key,
-          score: gs.total + ko.total,
+          score: groupScore + koScore,
+          groupScore,
+          koScore,
           perGroup: gs.perGroup,
           perRound: ko.perRound,
         });
@@ -1504,9 +1548,7 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
         t.score += s;
         t.rank += i + 1;
         if (i === 0) t.wins++;
-        // Tally score histogram (integer buckets — group + knockout always integer).
         t.scoreCounts[s] = (t.scoreCounts[s] ?? 0) + 1;
-        // Accumulate per-bucket sums + full distributions.
         for (const [g, pts] of Object.entries(scores[i].perGroup)) {
           t.groupScoreSums[g] = (t.groupScoreSums[g] ?? 0) + pts;
           if (!t.groupScoreDist[g]) t.groupScoreDist[g] = {};
@@ -1517,6 +1559,24 @@ ctx.onmessage = (e: MessageEvent<TournamentSimRequest>) => {
           if (!t.roundScoreDist[r]) t.roundScoreDist[r] = {};
           t.roundScoreDist[r][pts] = (t.roundScoreDist[r][pts] ?? 0) + 1;
         }
+      }
+      // Independent rankings by group-only and knockout-only scope so the
+      // Expected Standings dropdown can show Avg Rank / Win % in those scopes.
+      const groupSorted = [...scores].sort((a, b) => b.groupScore - a.groupScore);
+      for (let i = 0; i < groupSorted.length; i++) {
+        const t = playerTotals[groupSorted[i].key];
+        const s = groupSorted[i].groupScore;
+        t.groupRankSum += i + 1;
+        if (i === 0) t.groupWins++;
+        t.groupScoreTotalCounts[s] = (t.groupScoreTotalCounts[s] ?? 0) + 1;
+      }
+      const koSorted = [...scores].sort((a, b) => b.koScore - a.koScore);
+      for (let i = 0; i < koSorted.length; i++) {
+        const t = playerTotals[koSorted[i].key];
+        const s = koSorted[i].koScore;
+        t.koRankSum += i + 1;
+        if (i === 0) t.koWins++;
+        t.koScoreTotalCounts[s] = (t.koScoreTotalCounts[s] ?? 0) + 1;
       }
 
       // Bucket this sim into conditionalScores for every match outcome.

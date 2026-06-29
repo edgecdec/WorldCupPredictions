@@ -314,11 +314,19 @@ export default function BucketScoreTable({
     return entries.map((e) => {
       const key = userKey(e);
       const expectedTotal = expectedScoresByKey[key];
+      const groupExp = expectedGroupScoresByKey[key] ?? {};
+      const roundExp = expectedRoundScoresByKey[key] ?? {};
+      // Tab-scoped expected: sum of per-group or per-round expecteds, fall
+      // back to the locked totals when the worker hasn't produced anything.
+      const expectedGroupTotal = Object.values(groupExp).reduce((s, v) => s + (v ?? 0), 0);
+      const expectedKnockoutTotal = Object.values(roundExp).reduce((s, v) => s + (v ?? 0), 0);
       return {
         entry: e,
         expectedScore: expectedTotal ?? e.totalScore,
-        groupExp: expectedGroupScoresByKey[key] ?? {},
-        roundExp: expectedRoundScoresByKey[key] ?? {},
+        expectedGroupScore: expectedGroupTotal || e.groupStageScore,
+        expectedKnockoutScore: expectedKnockoutTotal || e.knockoutScore,
+        groupExp,
+        roundExp,
       };
     });
   }, [entries, expectedScoresByKey, expectedGroupScoresByKey, expectedRoundScoresByKey]);
@@ -332,13 +340,34 @@ export default function BucketScoreTable({
       // Primary: locked totalScore desc, then expectedScore desc.
       // Sort key overrides this.
       if (sortKey === 'rank' || sortKey === 'totalScore') {
-        // Rank/Pts column: locked points primary, expected as tiebreaker.
-        const dt = b.entry.totalScore - a.entry.totalScore;
+        // Rank / Pts column. The Pts column is now tab-scoped, so the sort
+        // it drives should also be scoped: groups tab → groupStageScore,
+        // knockout tab → knockoutScore, overall tab → totalScore. Expected
+        // breaks ties at the same scope.
+        const aLocked = mode === 'groups' ? a.entry.groupStageScore
+          : mode === 'knockout' ? a.entry.knockoutScore
+          : a.entry.totalScore;
+        const bLocked = mode === 'groups' ? b.entry.groupStageScore
+          : mode === 'knockout' ? b.entry.knockoutScore
+          : b.entry.totalScore;
+        const aExp = mode === 'groups' ? a.expectedGroupScore
+          : mode === 'knockout' ? a.expectedKnockoutScore
+          : a.expectedScore;
+        const bExp = mode === 'groups' ? b.expectedGroupScore
+          : mode === 'knockout' ? b.expectedKnockoutScore
+          : b.expectedScore;
+        const dt = bLocked - aLocked;
         if (dt !== 0) return dt * signMul;
-        return (b.expectedScore - a.expectedScore) * signMul;
+        return (bExp - aExp) * signMul;
       }
       if (sortKey === 'expectedScore') {
-        return (b.expectedScore - a.expectedScore) * signMul;
+        const aExp = mode === 'groups' ? a.expectedGroupScore
+          : mode === 'knockout' ? a.expectedKnockoutScore
+          : a.expectedScore;
+        const bExp = mode === 'groups' ? b.expectedGroupScore
+          : mode === 'knockout' ? b.expectedKnockoutScore
+          : b.expectedScore;
+        return (bExp - aExp) * signMul;
       }
       if (sortKey === 'groupStageScore') {
         return ((b.entry.groupStageScore ?? 0) - (a.entry.groupStageScore ?? 0)) * signMul;
@@ -371,7 +400,7 @@ export default function BucketScoreTable({
       }
       return 0;
     });
-  }, [enriched, sortKey, sortDir, groupsPhaseLocked, knockoutPhaseLocked]);
+  }, [enriched, sortKey, sortDir, groupsPhaseLocked, knockoutPhaseLocked, mode]);
 
   const ranked = useMemo(() => sorted.map((s, i) => ({ ...s, rank: i + 1 })), [sorted]);
 
@@ -551,7 +580,7 @@ export default function BucketScoreTable({
         <Table size="small" sx={{ borderCollapse: 'separate', borderSpacing: 0 }}>
           {renderHeader()}
           <TableBody>
-            {ranked.map(({ entry, expectedScore, groupExp, roundExp, rank }) => {
+            {ranked.map(({ entry, expectedScore, expectedGroupScore, expectedKnockoutScore, groupExp, roundExp, rank }) => {
               const isCurrentUser = entry.username === currentUsername;
               const rowBg = isCurrentUser ? 'action.selected' : 'background.paper';
               const ukey = userKey(entry);
@@ -615,12 +644,16 @@ export default function BucketScoreTable({
                       fontSize: '0.85rem',
                     }}
                   >
-                    {entry.totalScore}
+                    {mode === 'groups' ? entry.groupStageScore
+                      : mode === 'knockout' ? entry.knockoutScore
+                      : entry.totalScore}
                   </TableCell>
                   <ExpPtsCell
                     rowBg={rowBg}
-                    expectedScore={expectedScore}
-                    distribution={totalDist}
+                    expectedScore={mode === 'groups' ? expectedGroupScore
+                      : mode === 'knockout' ? expectedKnockoutScore
+                      : expectedScore}
+                    distribution={mode === 'overall' ? totalDist : undefined}
                     label={`${entry.username}${entry.bracket_name ? ` — ${entry.bracket_name}` : ''}`}
                   />
                   {mode === 'overall' && (

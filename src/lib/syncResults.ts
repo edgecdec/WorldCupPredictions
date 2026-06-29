@@ -226,20 +226,22 @@ function deepEqual(a: unknown, b: unknown): boolean {
 function findKnockoutMatchId(m: CompletedMatch, existing: ResultsWithMeta): string | null {
   const matchups = existing.knockoutBracket;
   if (!matchups) return null;
-  // Round prefix and propagation: find a matchup in the right round whose teamA/teamB
-  // (resolved through prior winners) match these two teams.
   const roundIdxMap: Record<string, number> = { R32: 0, R16: 1, QF: 2, SF: 3, '3RD': 4, FINAL: 5 };
-  const targetRound = roundIdxMap[m.knockoutRound ?? ''] ?? -1;
-  if (targetRound < 0) return null;
+  const targetRound = roundIdxMap[m.knockoutRound ?? ''];
+  // 'KO' (or any unrecognized non-empty token) → scan every knockout round
+  // until we find a matchup whose two resolved teams match this pair. Used
+  // when ESPN doesn't surface a headline that tells us the round.
+  const candidateRounds = targetRound !== undefined ? [targetRound] : [0, 1, 2, 3, 4, 5];
 
-  // Resolve current teamA/teamB for each matchup in the target round, given existing knockout winners
-  for (const matchup of matchups) {
-    if (matchup.round !== targetRound) continue;
-    const [resA, resB] = resolveMatchupTeams(matchup.id, matchups, existing.knockout ?? {});
-    if (!resA || !resB) continue;
-    const sA = new Set([resA, resB]);
-    if (sA.has(m.teamA) && sA.has(m.teamB)) {
-      return matchup.id;
+  for (const round of candidateRounds) {
+    for (const matchup of matchups) {
+      if (matchup.round !== round) continue;
+      const [resA, resB] = resolveMatchupTeams(matchup.id, matchups, existing.knockout ?? {});
+      if (!resA || !resB) continue;
+      const sA = new Set([resA, resB]);
+      if (sA.has(m.teamA) && sA.has(m.teamB)) {
+        return matchup.id;
+      }
     }
   }
   return null;

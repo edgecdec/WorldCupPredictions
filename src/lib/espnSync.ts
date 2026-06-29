@@ -310,13 +310,21 @@ export async function fetchCompletedMatches(
       knockoutRound = 'FINAL';
     } else {
       // Headline is empty or unrecognized (ESPN sometimes returns notes:[]
-      // and no type for early events). Fall back to bracket-data lookup:
-      // if both teams sit in the same group, this is a group match.
+      // and no type for early events). Fall back to bracket-data lookup.
       const groupOfA = bracketData.groups?.find((g) => g.teams.some((t) => t.name === teamA.name))?.name;
       const groupOfB = bracketData.groups?.find((g) => g.teams.some((t) => t.name === teamB.name))?.name;
       if (groupOfA && groupOfA === groupOfB) {
+        // Both teams in same group → group match.
         isGroup = true;
         groupName = groupOfA;
+      } else {
+        // Different groups (or unrecognized teams) → knockout. We don't
+        // know the round from the headline, but the downstream sync logic
+        // (findKnockoutMatchId) scans every round of knockoutBracket for a
+        // matching team pair, so 'R32' is just a sentinel that satisfies
+        // the m.knockoutRound truthy check. The actual round resolution
+        // happens in syncResults via the bracket.
+        knockoutRound = 'KO';
       }
     }
 

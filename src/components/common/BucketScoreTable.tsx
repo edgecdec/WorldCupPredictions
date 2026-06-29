@@ -57,11 +57,59 @@ export interface BucketScoreTableProps {
   onRowClick?: (entry: LeaderboardEntry) => void;
 }
 
-type Mode = 'groups' | 'knockout';
-type SortKey = 'rank' | 'totalScore' | 'expectedScore' | { type: 'group'; name: string } | { type: 'round'; name: string };
+type Mode = 'overall' | 'groups' | 'knockout';
+type SortKey =
+  | 'rank'
+  | 'totalScore'
+  | 'expectedScore'
+  | 'groupStageScore'
+  | 'knockoutScore'
+  | 'thirdPlaceCorrect'
+  | 'groupBonusPoints'
+  | { type: 'group'; name: string }
+  | { type: 'round'; name: string };
 
 function userKey(entry: LeaderboardEntry): string {
   return `${entry.username}|${entry.bracket_name}`;
+}
+
+/** Compact cell showing the user's picked champion + an alive/eliminated chip.
+ *  Falls back to em-dash when the user hasn't picked a final winner yet. */
+function ChampionCell({ entry }: { entry: LeaderboardEntry }) {
+  const champion = entry.prediction?.knockout_picks?.FINAL ?? null;
+  const eliminated = !!entry.championEliminated;
+  return (
+    <TableCell align="center" sx={{ py: 0.5, px: 1, fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+      {!champion ? (
+        <Typography variant="caption" sx={{ color: 'text.disabled' }}>—</Typography>
+      ) : (
+        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.4 }}>
+          <Typography
+            variant="caption"
+            sx={{
+              fontWeight: 600,
+              fontSize: '0.78rem',
+              color: eliminated ? 'text.secondary' : 'text.primary',
+              textDecoration: eliminated ? 'line-through' : 'none',
+            }}
+          >
+            {champion}
+          </Typography>
+          {eliminated ? (
+            <Tooltip title="Champion pick eliminated"><span>💀</span></Tooltip>
+          ) : (
+            <Chip
+              size="small"
+              label="alive"
+              color="success"
+              variant="outlined"
+              sx={{ height: 16, fontSize: '0.6rem', '& .MuiChip-label': { px: 0.6 } }}
+            />
+          )}
+        </Box>
+      )}
+    </TableCell>
+  );
 }
 
 /** Sticky Exp Pts cell with hover histogram of total score distribution. */
@@ -236,7 +284,20 @@ export default function BucketScoreTable({
 }: BucketScoreTableProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const [mode, setMode] = useState<Mode>('groups');
+  // Persist the active tab across leaderboard-group changes (which remount
+  // this component while the new group's data loads) and page reloads.
+  const [mode, setMode] = useState<Mode>(() => {
+    if (typeof window === 'undefined') return 'overall';
+    const stored = window.localStorage.getItem('leaderboard.tab');
+    if (stored === 'overall' || stored === 'groups' || stored === 'knockout') return stored;
+    return 'overall';
+  });
+  const handleModeChange = (v: Mode) => {
+    setMode(v);
+    if (typeof window !== 'undefined') {
+      try { window.localStorage.setItem('leaderboard.tab', v); } catch { /* quota / private mode */ }
+    }
+  };
   const [drawerEntry, setDrawerEntry] = useState<LeaderboardEntry | null>(null);
   // Default sort: Pts if anyone's locked in a point, otherwise Exp Pts.
   // Once the user clicks a column, their choice sticks (we only set this on
@@ -277,11 +338,19 @@ export default function BucketScoreTable({
         return (b.expectedScore - a.expectedScore) * signMul;
       }
       if (sortKey === 'expectedScore') {
-        // Sort purely by expectedScore. Previously we always pre-sorted by
-        // locked totalScore (so "users with real points anchor above expected
-        // ones"), which once Pts was non-zero became a hidden primary sort —
-        // clicking Exp Pts only reordered within Pts buckets. Fixed.
         return (b.expectedScore - a.expectedScore) * signMul;
+      }
+      if (sortKey === 'groupStageScore') {
+        return ((b.entry.groupStageScore ?? 0) - (a.entry.groupStageScore ?? 0)) * signMul;
+      }
+      if (sortKey === 'knockoutScore') {
+        return ((b.entry.knockoutScore ?? 0) - (a.entry.knockoutScore ?? 0)) * signMul;
+      }
+      if (sortKey === 'thirdPlaceCorrect') {
+        return ((b.entry.thirdPlaceCorrect ?? 0) - (a.entry.thirdPlaceCorrect ?? 0)) * signMul;
+      }
+      if (sortKey === 'groupBonusPoints') {
+        return ((b.entry.groupBonusPoints ?? 0) - (a.entry.groupBonusPoints ?? 0)) * signMul;
       }
       if (typeof sortKey === 'object') {
         // Mirror the cell display rule: use locked only when the phase is
@@ -377,6 +446,31 @@ export default function BucketScoreTable({
             Exp Pts
           </TableSortLabel>
         </TableCell>
+        {mode === 'overall' && (
+          <>
+            <TableCell align="center" sx={{ fontWeight: 700, py: 1, px: 1, minWidth: 70 }}>
+              <TableSortLabel
+                active={isSortActive('groupStageScore')}
+                direction={sortDir}
+                onClick={() => handleSort('groupStageScore')}
+              >
+                Group Pts
+              </TableSortLabel>
+            </TableCell>
+            <TableCell align="center" sx={{ fontWeight: 700, py: 1, px: 1, minWidth: 70 }}>
+              <TableSortLabel
+                active={isSortActive('knockoutScore')}
+                direction={sortDir}
+                onClick={() => handleSort('knockoutScore')}
+              >
+                KO Pts
+              </TableSortLabel>
+            </TableCell>
+            <TableCell align="center" sx={{ fontWeight: 700, py: 1, px: 1, minWidth: 110 }}>
+              Champion
+            </TableCell>
+          </>
+        )}
         {mode === 'groups' && GROUP_NAMES.map((g) => (
           <TableCell key={g} align="center" sx={{ fontWeight: 700, minWidth: COL_BUCKET_WIDTH, py: 1, px: 0.25 }}>
             <TableSortLabel
@@ -388,6 +482,28 @@ export default function BucketScoreTable({
             </TableSortLabel>
           </TableCell>
         ))}
+        {mode === 'groups' && (
+          <>
+            <TableCell align="center" sx={{ fontWeight: 700, minWidth: 56, py: 1, px: 0.5 }}>
+              <TableSortLabel
+                active={isSortActive('thirdPlaceCorrect')}
+                direction={sortDir}
+                onClick={() => handleSort('thirdPlaceCorrect')}
+              >
+                3rd
+              </TableSortLabel>
+            </TableCell>
+            <TableCell align="center" sx={{ fontWeight: 700, minWidth: 64, py: 1, px: 0.5 }}>
+              <TableSortLabel
+                active={isSortActive('groupBonusPoints')}
+                direction={sortDir}
+                onClick={() => handleSort('groupBonusPoints')}
+              >
+                Bonus
+              </TableSortLabel>
+            </TableCell>
+          </>
+        )}
         {mode === 'knockout' && knockoutsStarted && ROUND_LABELS.map((r) => (
           <TableCell key={r} align="center" sx={{ fontWeight: 700, minWidth: COL_BUCKET_WIDTH, py: 1, px: 0.25 }}>
             <TableSortLabel
@@ -400,10 +516,13 @@ export default function BucketScoreTable({
           </TableCell>
         ))}
         {mode === 'knockout' && !knockoutsStarted && (
-          // Pre-knockout: single "Picks" column showing X/32 bracket completion.
-          // Per-round columns are pointless before any match plays (all '—').
           <TableCell align="center" sx={{ fontWeight: 700, py: 1, px: 1 }}>
             Picks
+          </TableCell>
+        )}
+        {mode === 'knockout' && (
+          <TableCell align="center" sx={{ fontWeight: 700, py: 1, px: 1, minWidth: 110 }}>
+            Champion
           </TableCell>
         )}
       </TableRow>
@@ -416,9 +535,10 @@ export default function BucketScoreTable({
       <Box sx={{ mb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
         <Tabs
           value={mode}
-          onChange={(_, v) => setMode(v as Mode)}
+          onChange={(_, v) => handleModeChange(v as Mode)}
           sx={{ minHeight: 32, '& .MuiTab-root': { minHeight: 32, py: 0.5 } }}
         >
+          <Tab value="overall" label="Overall" />
           <Tab value="groups" label="Groups" />
           <Tab value="knockout" label="Knockout" />
         </Tabs>
@@ -503,6 +623,17 @@ export default function BucketScoreTable({
                     distribution={totalDist}
                     label={`${entry.username}${entry.bracket_name ? ` — ${entry.bracket_name}` : ''}`}
                   />
+                  {mode === 'overall' && (
+                    <>
+                      <TableCell align="center" sx={{ py: 0.5, px: 1, fontSize: '0.85rem' }}>
+                        {entry.groupStageScore}
+                      </TableCell>
+                      <TableCell align="center" sx={{ py: 0.5, px: 1, fontSize: '0.85rem' }}>
+                        {entry.knockoutScore}
+                      </TableCell>
+                      <ChampionCell entry={entry} />
+                    </>
+                  )}
                   {mode === 'groups' && GROUP_NAMES.map((g) => (
                     <BucketCell
                       key={g}
@@ -513,6 +644,16 @@ export default function BucketScoreTable({
                       phaseFullyLocked={groupsPhaseLocked}
                     />
                   ))}
+                  {mode === 'groups' && (
+                    <>
+                      <TableCell align="center" sx={{ py: 0.5, px: 0.5, fontSize: '0.85rem', fontWeight: groupsPhaseLocked && entry.thirdPlaceCorrect != null ? 700 : 400, fontStyle: groupsPhaseLocked ? 'normal' : 'italic', color: groupsPhaseLocked ? 'text.primary' : 'text.secondary' }}>
+                        {entry.thirdPlaceCorrect != null ? `${entry.thirdPlaceCorrect}/8` : '—'}
+                      </TableCell>
+                      <TableCell align="center" sx={{ py: 0.5, px: 0.5, fontSize: '0.85rem', fontWeight: 700, color: (entry.groupBonusPoints ?? 0) > 0 ? 'text.primary' : 'text.disabled' }}>
+                        {entry.groupBonusPoints ?? 0}
+                      </TableCell>
+                    </>
+                  )}
                   {mode === 'knockout' && knockoutsStarted && ROUND_LABELS.map((r) => (
                     <BucketCell
                       key={r}
@@ -527,6 +668,9 @@ export default function BucketScoreTable({
                     <TableCell align="center" sx={{ py: 0.5, px: 1, fontSize: '0.85rem', fontWeight: 700, color: (entry.completion?.knockoutFilled ?? 0) >= TOTAL_KNOCKOUT_MATCHES ? 'success.main' : 'text.primary' }}>
                       {entry.completion?.knockoutFilled ?? 0}/{TOTAL_KNOCKOUT_MATCHES}
                     </TableCell>
+                  )}
+                  {mode === 'knockout' && (
+                    <ChampionCell entry={entry} />
                   )}
                 </TableRow>
               );

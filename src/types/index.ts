@@ -136,6 +136,13 @@ export interface LeaderboardEntry {
   /** Forecast total expected score (from worker). Used as secondary sort when
    *  totalScore is tied (which it will be early in the tournament). */
   expectedScore?: number;
+  /** How many of the 8 advancing third-place teams the user picked correctly.
+   *  Only meaningful once the group stage is fully decided. */
+  thirdPlaceCorrect?: number;
+  /** Total bonus points across all groups (advancementCorrectBonus +
+   *  perfectOrderBonus + upsetBonusPoints). Surfaced separately for the
+   *  Groups tab so users can see how much came from bonuses vs base. */
+  groupBonusPoints?: number;
   /** Locked actual points per group (only when group is fully complete). */
   groupScoresLocked?: Record<string, number>;
   /** Forecast expected points per group (always available once worker runs). */

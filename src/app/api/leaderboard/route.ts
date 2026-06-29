@@ -213,6 +213,18 @@ export async function GET(req: NextRequest) {
     const groupUpsetBonus = result.groupStageDetail.perGroup.reduce(
       (sum, g) => sum + g.upsetBonusPoints, 0,
     );
+    // Total bonus pool for the Groups tab: upset bonuses + advancement-correct
+    // bonus + perfect-order bonus. Excludes the base advanceCorrect + exact
+    // position points (those are the "base" scoring covered by per-group cells).
+    const groupBonusPoints = result.groupStageDetail.perGroup.reduce(
+      (sum, g) => sum + g.upsetBonusPoints + g.advancementCorrectBonus + g.perfectOrderBonus, 0,
+    );
+    // How many of the 8 advancing 3rd-place teams the user picked correctly
+    // (only meaningful once the group stage is fully decided).
+    const advancing = groupStageResults?.advancingThirdPlace;
+    const thirdPlaceCorrect = (advancing && Array.isArray(thirdPlacePicks))
+      ? thirdPlacePicks.filter((t) => advancing.includes(t)).length
+      : undefined;
     const knockoutUpsetBonus = result.knockoutDetail
       ? result.knockoutDetail.perRound.reduce((sum, r) => sum + r.upsetBonusPoints, 0)
       : 0;
@@ -243,6 +255,8 @@ export async function GET(req: NextRequest) {
       maxPossible: maxResult.maxTotal,
       championEliminated: maxResult.championEliminated,
       bonusPoints: groupUpsetBonus + knockoutUpsetBonus,
+      groupBonusPoints,
+      thirdPlaceCorrect,
       groupScoresLocked,
       roundScoresLocked,
       groupsLocked,

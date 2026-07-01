@@ -17,7 +17,7 @@ const STATE_POST = 'post';
 const ESPN_MATCH_URL = 'https://www.espn.com/soccer/match/_/gameId';
 const ESPN_SCOREBOARD_URL = 'https://www.espn.com/soccer/scoreboard/_/league/fifa.world';
 const TOP_SCORELINES = 6;
-const SAMPLES_FOR_HOVER = 2000;
+const SAMPLES_FOR_HOVER = 5000;
 
 // Clock parsing moved to lib/parseEspnClock for sharing.
 

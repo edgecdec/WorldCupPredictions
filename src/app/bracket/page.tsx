@@ -11,6 +11,10 @@ import GroupPrediction from '@/components/bracket/GroupPrediction';
 import ThirdPlacePicker, { type ThirdPlaceTeamDetail } from '@/components/bracket/ThirdPlacePicker';
 import GroupStandings from '@/components/bracket/GroupStandings';
 import ForecastBracket from '@/components/bracket/ForecastBracket';
+import KnockoutBracket from '@/components/bracket/KnockoutBracket';
+import MobileBracket from '@/components/bracket/MobileBracket';
+import { computeEffectiveMatchups } from '@/lib/bracketUtils';
+import { useMediaQuery, useTheme } from '@mui/material';
 import type { BracketSlotResult } from '@/hooks/useTournamentSim';
 import CountdownTimer from '@/components/common/CountdownTimer';
 import { useAuth } from '@/hooks/useAuth';
@@ -832,16 +836,43 @@ function KnockoutBracketTab({
   // 32 matches total: 16 R32 + 8 R16 + 4 QF + 2 SF + FINAL + 3RD.
   const TOTAL_MATCHES = 32;
 
+  // Post-lock, swap the interactive picker for the same read-only correct/
+  // incorrect bracket that /bracket/[username] renders — so users see how
+  // their picks are performing round-by-round.
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const resultsData = tournament?.results_data as TournamentResults | undefined;
+  const knockoutMatchups = resultsData?.knockoutBracket ?? [];
+  const knockoutResults = resultsData?.knockout ?? {};
+  const effectiveMatchups = useMemo(
+    () => knockoutMatchups.length > 0 ? computeEffectiveMatchups(knockoutMatchups, picks) : [],
+    [knockoutMatchups, picks],
+  );
+  // Count correct picks so far so the header can show "N/M correct" instead
+  // of "N/32 picked" once we're locked in.
+  const correctSoFar = useMemo(() => {
+    let n = 0;
+    for (const [matchId, winner] of Object.entries(knockoutResults)) {
+      if (picks[matchId] === winner) n++;
+    }
+    return n;
+  }, [picks, knockoutResults]);
+  const totalCompleted = Object.keys(knockoutResults).length;
+
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 2, flexWrap: 'wrap' }}>
         <Box>
           <Typography variant="caption" color="text.secondary">
-            Click a side to pick it. Hover any cell for the full ranked possibility list.
-            {running && !results ? ' Simulating remaining group games…' : ''}
+            {knockoutLocked
+              ? 'Knockouts are underway — your picks are locked. ✓ = correct so far, ✗ = eliminated.'
+              : 'Click a side to pick it. Hover any cell for the full ranked possibility list.'}
+            {!knockoutLocked && running && !results ? ' Simulating remaining group games…' : ''}
           </Typography>
           <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
-            Picked: {totalPicked} / {TOTAL_MATCHES} ({r32PickedCount}/16 R32)
+            {knockoutLocked
+              ? `Picks locked in: ${totalPicked} / ${TOTAL_MATCHES}` + (totalCompleted > 0 ? ` · Correct so far: ${correctSoFar} / ${totalCompleted}` : '')
+              : `Picked: ${totalPicked} / ${TOTAL_MATCHES} (${r32PickedCount}/16 R32)`}
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
@@ -851,46 +882,58 @@ function KnockoutBracketTab({
             </Typography>
           )}
           {!knockoutLocked && <AutosaveIndicator status={autosaveStatus} />}
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={() => setStepOpen(true)}
-            disabled={!results || totalPicked === TOTAL_MATCHES}
-            title="Walk through each empty match one at a time"
-          >
-            Step-by-Step
-          </Button>
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={handleSmartFill}
-            disabled={!results || totalPicked === TOTAL_MATCHES}
-            title="Simulate the tournament once and use those winners as your picks"
-          >
-            Smart Fill
-          </Button>
-          <Button
-            variant="outlined"
-            size="small"
-            color="error"
-            onClick={() => setConfirmClearOpen(true)}
-            disabled={totalPicked === 0 || knockoutLocked}
-            title="Clear every knockout pick"
-          >
-            Clear
-          </Button>
-          <Button variant="contained" size="small" onClick={handleSave} disabled={saving || totalPicked === 0}>
-            {saving ? 'Saving…' : 'Save Picks'}
-          </Button>
+          {!knockoutLocked && (
+            <>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => setStepOpen(true)}
+                disabled={!results || totalPicked === TOTAL_MATCHES}
+                title="Walk through each empty match one at a time"
+              >
+                Step-by-Step
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={handleSmartFill}
+                disabled={!results || totalPicked === TOTAL_MATCHES}
+                title="Simulate the tournament once and use those winners as your picks"
+              >
+                Smart Fill
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                color="error"
+                onClick={() => setConfirmClearOpen(true)}
+                disabled={totalPicked === 0}
+                title="Clear every knockout pick"
+              >
+                Clear
+              </Button>
+              <Button variant="contained" size="small" onClick={handleSave} disabled={saving || totalPicked === 0}>
+                {saving ? 'Saving…' : 'Save Picks'}
+              </Button>
+            </>
+          )}
         </Box>
       </Box>
-      <ForecastBracket
-        bracketSlots={bracketSlots}
-        numSims={simsCompleted || numSims}
-        countryCodeMap={countryCodeMap}
-        teamRankings={teamRankings}
-        pickMode={{ picks, onPick: handlePick, slotForSide, teamForSlot }}
-      />
+      {knockoutLocked && knockoutMatchups.length > 0 ? (
+        isMobile ? (
+          <MobileBracket matchups={effectiveMatchups} picks={picks} readOnly results={knockoutResults} countryCodeMap={countryCodeMap} />
+        ) : (
+          <KnockoutBracket matchups={effectiveMatchups} picks={picks} readOnly results={knockoutResults} countryCodeMap={countryCodeMap} />
+        )
+      ) : (
+        <ForecastBracket
+          bracketSlots={bracketSlots}
+          numSims={simsCompleted || numSims}
+          countryCodeMap={countryCodeMap}
+          teamRankings={teamRankings}
+          pickMode={{ picks, onPick: handlePick, slotForSide, teamForSlot }}
+        />
+      )}
       <StepByStepDialog
         open={stepOpen}
         onClose={() => setStepOpen(false)}

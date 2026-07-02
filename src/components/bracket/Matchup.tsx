@@ -6,6 +6,26 @@ import TeamFlag from '@/components/common/TeamFlag';
 
 const PULSE_DURATION_MS = 300;
 
+// Cell width is tight — long official names overflow and push horizontal
+// scroll. Shorten a few notorious ones; other names pass through unchanged.
+const NAME_ALIASES: Record<string, string> = {
+  'Bosnia and Herzegovina': 'Bosnia',
+  'DR Congo': 'DR Congo',
+  'Ivory Coast': 'Ivory Coast',
+  'Cape Verde': 'Cape Verde',
+  'South Africa': 'S. Africa',
+  'New Zealand': 'N. Zealand',
+  'South Korea': 'S. Korea',
+  'Saudi Arabia': 'S. Arabia',
+};
+const NAME_MAX_LEN = 13;
+function shortenTeamName(team: string): string {
+  const alias = NAME_ALIASES[team];
+  if (alias) return alias;
+  if (team.length <= NAME_MAX_LEN) return team;
+  return team.slice(0, NAME_MAX_LEN - 1) + '…';
+}
+
 interface MatchupProps {
   matchup: KnockoutMatchup;
   userPick?: string;
@@ -83,13 +103,14 @@ function TeamSlot({
           <Typography
             variant="body2"
             noWrap
+            title={team}
             sx={{
               fontSize: '0.75rem',
               fontWeight: isPicked ? 700 : 400,
               flexGrow: 1,
             }}
           >
-            {team}
+            {shortenTeamName(team)}
             {rank !== undefined && (
               <Box component="span" sx={{ fontSize: '0.6rem', color: 'text.secondary', ml: 0.4, fontWeight: 500 }}>
                 #{rank}

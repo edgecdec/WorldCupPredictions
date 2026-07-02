@@ -284,7 +284,7 @@ export default function BracketPage() {
   }
 
   return (
-    <Box sx={{ maxWidth: 1400, mx: 'auto', px: 2, py: 3 }}>
+    <Box sx={{ maxWidth: 1500, mx: 'auto', px: 2, py: 3 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
         <Typography variant="h4" fontWeight="bold" sx={{ flex: 1 }}>
           Predictions

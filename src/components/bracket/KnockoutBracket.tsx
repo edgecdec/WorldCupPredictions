@@ -20,8 +20,8 @@ interface KnockoutBracketProps {
 // Column widths mirror ForecastBracket so both surfaces feel consistent and
 // fit the same viewport. R32 gets slightly more room for the team name +
 // rank badge combo; connectors are narrow slack.
-const COL_WIDTH = 140;
-const CONNECTOR_WIDTH = 12;
+const COL_WIDTH = 128;
+const CONNECTOR_WIDTH = 10;
 const BRACKET_HEIGHT = 720;
 
 const CONNECTOR_COLOR = 'divider';
@@ -199,7 +199,7 @@ export default function KnockoutBracket({ matchups, picks, onPick, readOnly, res
 
         {/* Center: Final + 3rd. Vertically-centered column so both sit in the
             middle of the bracket instead of piling at the top. */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minWidth: 180, mx: 1, gap: 3, flexShrink: 0 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minWidth: 150, mx: 0.5, gap: 3, flexShrink: 0 }}>
           {finalMatchup && (
             <Box sx={{ textAlign: 'center', width: '100%' }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'warning.main', mb: 0.5 }}>

@@ -16,6 +16,9 @@ interface MatchupProps {
   countryCodeMap?: Record<string, string>;
   isChampionPick?: boolean;
   probabilities?: Record<string, number>;
+  /** FIFA rank map (team name → integer rank). When present the cell shows
+   *  `#NN` next to each team so users can see the seed context. */
+  teamRankings?: Record<string, number>;
 }
 
 function TeamSlot({
@@ -29,6 +32,7 @@ function TeamSlot({
   countryCode,
   animating,
   probability,
+  rank,
 }: {
   team: string | null;
   isPicked: boolean;
@@ -40,6 +44,7 @@ function TeamSlot({
   countryCode?: string;
   animating: boolean;
   probability?: number;
+  rank?: number;
 }) {
   const bg = isCorrect
     ? 'rgba(76, 175, 80, 0.3)'
@@ -85,6 +90,11 @@ function TeamSlot({
             }}
           >
             {team}
+            {rank !== undefined && (
+              <Box component="span" sx={{ fontSize: '0.6rem', color: 'text.secondary', ml: 0.4, fontWeight: 500 }}>
+                #{rank}
+              </Box>
+            )}
           </Typography>
           {probability !== undefined && (
             <Typography component="span" sx={{ fontSize: '0.6rem', color: 'text.secondary', fontWeight: 600 }}>
@@ -111,7 +121,7 @@ function TeamSlot({
   );
 }
 
-export default function Matchup({ matchup, userPick, onPick, readOnly, disabled, result, countryCodeMap = {}, isChampionPick, probabilities }: MatchupProps) {
+export default function Matchup({ matchup, userPick, onPick, readOnly, disabled, result, countryCodeMap = {}, isChampionPick, probabilities, teamRankings }: MatchupProps) {
   const clickable = !readOnly && !disabled && !!onPick;
   const pickA = userPick === matchup.teamA;
   const pickB = userPick === matchup.teamB;
@@ -155,6 +165,7 @@ export default function Matchup({ matchup, userPick, onPick, readOnly, disabled,
         countryCode={matchup.teamA ? countryCodeMap[matchup.teamA] : undefined}
         animating={animatingSlot === 'A'}
         probability={matchup.teamA && probabilities ? probabilities[matchup.teamA] : undefined}
+        rank={matchup.teamA && teamRankings ? teamRankings[matchup.teamA] : undefined}
       />
       <TeamSlot
         team={matchup.teamB}
@@ -167,6 +178,7 @@ export default function Matchup({ matchup, userPick, onPick, readOnly, disabled,
         countryCode={matchup.teamB ? countryCodeMap[matchup.teamB] : undefined}
         animating={animatingSlot === 'B'}
         probability={matchup.teamB && probabilities ? probabilities[matchup.teamB] : undefined}
+        rank={matchup.teamB && teamRankings ? teamRankings[matchup.teamB] : undefined}
       />
     </Paper>
   );

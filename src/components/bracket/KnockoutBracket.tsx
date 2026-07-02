@@ -14,7 +14,15 @@ interface KnockoutBracketProps {
   results?: Record<string, string>;
   countryCodeMap?: Record<string, string>;
   probabilityMap?: Record<string, Record<string, number>>;
+  teamRankings?: Record<string, number>;
 }
+
+// Column widths mirror ForecastBracket so both surfaces feel consistent and
+// fit the same viewport. R32 gets slightly more room for the team name +
+// rank badge combo; connectors are narrow slack.
+const COL_WIDTH = 140;
+const CONNECTOR_WIDTH = 12;
+const BRACKET_HEIGHT = 720;
 
 const CONNECTOR_COLOR = 'divider';
 
@@ -90,6 +98,7 @@ function RoundColumn({
   readOnly,
   results,
   countryCodeMap,
+  teamRankings,
 }: {
   matchups: KnockoutMatchup[];
   ids: string[];
@@ -98,16 +107,17 @@ function RoundColumn({
   readOnly?: boolean;
   results?: Record<string, string>;
   countryCodeMap?: Record<string, string>;
+  teamRankings?: Record<string, number>;
 }) {
   const matchupMap = new Map(matchups.map((m) => [m.id, m]));
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', minWidth: 160, flexShrink: 0 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', minWidth: COL_WIDTH, flexShrink: 0, flex: 1 }}>
       {ids.map((id) => {
         const m = matchupMap.get(id);
         if (!m) return <Box key={id} sx={{ flex: 1 }} />;
         return (
           <Box key={id} sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <Matchup matchup={m} userPick={picks[id]} onPick={onPick} readOnly={readOnly} result={results?.[id]} countryCodeMap={countryCodeMap} />
+            <Matchup matchup={m} userPick={picks[id]} onPick={onPick} readOnly={readOnly} result={results?.[id]} countryCodeMap={countryCodeMap} teamRankings={teamRankings} />
           </Box>
         );
       })}
@@ -118,7 +128,7 @@ function RoundColumn({
 function ConnectorColumn({ pairCount, direction }: { pairCount: number; direction: 'left' | 'right' }) {
   const isLeft = direction === 'left';
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', width: 16, flexShrink: 0 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', width: CONNECTOR_WIDTH, flexShrink: 0 }}>
       {Array.from({ length: pairCount }, (_, i) => (
         <Box key={i} sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', position: 'relative' }}>
           <Box sx={{ flex: 1, ...(isLeft ? { borderRight: 2, borderBottom: 2, borderColor: CONNECTOR_COLOR } : { borderLeft: 2, borderBottom: 2, borderColor: CONNECTOR_COLOR }) }} />
@@ -140,7 +150,7 @@ function RoundLabel({ label }: { label: string }) {
         color: 'text.secondary',
         mb: 0.5,
         width: '100%',
-        minWidth: 160,
+        minWidth: COL_WIDTH,
       }}
     >
       {label}
@@ -148,7 +158,7 @@ function RoundLabel({ label }: { label: string }) {
   );
 }
 
-export default function KnockoutBracket({ matchups, picks, onPick, readOnly, results, countryCodeMap }: KnockoutBracketProps) {
+export default function KnockoutBracket({ matchups, picks, onPick, readOnly, results, countryCodeMap, teamRankings }: KnockoutBracketProps) {
   const { leftRounds, rightRounds, finalMatchup, thirdMatchup } = useMemo(
     () => deriveBracketStructure(matchups),
     [matchups],
@@ -164,11 +174,11 @@ export default function KnockoutBracket({ matchups, picks, onPick, readOnly, res
 
   return (
     <Box sx={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', pb: 2 }}>
-      <Box sx={{ display: 'flex', alignItems: 'stretch', minWidth: 'fit-content', minHeight: 500 }}>
+      <Box sx={{ display: 'flex', alignItems: 'stretch', minWidth: 'fit-content', height: BRACKET_HEIGHT }}>
         {/* Left half: earliest round → SF */}
         {leftRounds.map(({ round, ids }, i) => (
           <Box key={`left-${round}`} sx={{ display: 'contents' }}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', flexShrink: 0, minWidth: COL_WIDTH }}>
               <RoundLabel label={ROUND_LABELS[round] ?? `Round ${round}`} />
               <RoundColumn
                 matchups={matchups}
@@ -178,6 +188,7 @@ export default function KnockoutBracket({ matchups, picks, onPick, readOnly, res
                 readOnly={readOnly}
                 results={results}
                 countryCodeMap={countryCodeMap}
+                teamRankings={teamRankings}
               />
             </Box>
             {i < leftRounds.length - 1 && (
@@ -186,24 +197,25 @@ export default function KnockoutBracket({ matchups, picks, onPick, readOnly, res
           </Box>
         ))}
 
-        {/* Center: Final + 3rd */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minWidth: 200, mx: 1, gap: 3 }}>
+        {/* Center: Final + 3rd. Vertically-centered column so both sit in the
+            middle of the bracket instead of piling at the top. */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minWidth: 180, mx: 1, gap: 3, flexShrink: 0 }}>
           {finalMatchup && (
-            <Box sx={{ textAlign: 'center' }}>
+            <Box sx={{ textAlign: 'center', width: '100%' }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'warning.main', mb: 0.5 }}>
                 🏆 Final
               </Typography>
               <Box sx={{ border: 2, borderColor: 'warning.main', borderRadius: 1, p: 0.5 }}>
-                <Matchup matchup={finalMatchup} userPick={picks[finalMatchup.id]} onPick={handlePick} readOnly={readOnly} result={results?.[finalMatchup.id]} countryCodeMap={countryCodeMap} isChampionPick />
+                <Matchup matchup={finalMatchup} userPick={picks[finalMatchup.id]} onPick={handlePick} readOnly={readOnly} result={results?.[finalMatchup.id]} countryCodeMap={countryCodeMap} isChampionPick teamRankings={teamRankings} />
               </Box>
             </Box>
           )}
           {thirdMatchup && (
-            <Box sx={{ textAlign: 'center', opacity: 0.85 }}>
+            <Box sx={{ textAlign: 'center', opacity: 0.85, width: '100%' }}>
               <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
                 🥉 3rd Place
               </Typography>
-              <Matchup matchup={thirdMatchup} userPick={picks[thirdMatchup.id]} onPick={handlePick} readOnly={readOnly} result={results?.[thirdMatchup.id]} countryCodeMap={countryCodeMap} />
+              <Matchup matchup={thirdMatchup} userPick={picks[thirdMatchup.id]} onPick={handlePick} readOnly={readOnly} result={results?.[thirdMatchup.id]} countryCodeMap={countryCodeMap} teamRankings={teamRankings} />
             </Box>
           )}
         </Box>
@@ -214,7 +226,7 @@ export default function KnockoutBracket({ matchups, picks, onPick, readOnly, res
             {i > 0 && (
               <ConnectorColumn pairCount={Math.floor(ids.length / 2)} direction="right" />
             )}
-            <Box sx={{ display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', flexShrink: 0, minWidth: COL_WIDTH }}>
               <RoundLabel label={ROUND_LABELS[round] ?? `Round ${round}`} />
               <RoundColumn
                 matchups={matchups}
@@ -224,6 +236,7 @@ export default function KnockoutBracket({ matchups, picks, onPick, readOnly, res
                 readOnly={readOnly}
                 results={results}
                 countryCodeMap={countryCodeMap}
+                teamRankings={teamRankings}
               />
             </Box>
           </Box>

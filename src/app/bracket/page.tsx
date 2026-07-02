@@ -921,9 +921,9 @@ function KnockoutBracketTab({
       </Box>
       {knockoutLocked && knockoutMatchups.length > 0 ? (
         isMobile ? (
-          <MobileBracket matchups={effectiveMatchups} picks={picks} readOnly results={knockoutResults} countryCodeMap={countryCodeMap} />
+          <MobileBracket matchups={effectiveMatchups} picks={picks} readOnly results={knockoutResults} countryCodeMap={countryCodeMap} teamRankings={teamRankings} />
         ) : (
-          <KnockoutBracket matchups={effectiveMatchups} picks={picks} readOnly results={knockoutResults} countryCodeMap={countryCodeMap} />
+          <KnockoutBracket matchups={effectiveMatchups} picks={picks} readOnly results={knockoutResults} countryCodeMap={countryCodeMap} teamRankings={teamRankings} />
         )
       ) : (
         <ForecastBracket

@@ -13,6 +13,7 @@ interface MobileBracketProps {
   readOnly?: boolean;
   results?: Record<string, string>;
   countryCodeMap?: Record<string, string>;
+  teamRankings?: Record<string, number>;
 }
 
 const TAB_LABELS = ['R32 → R16', 'R16 → QF', 'QF → SF', 'SF → Final'] as const;
@@ -84,6 +85,7 @@ function MatchupPair({
   readOnly,
   results,
   countryCodeMap,
+  teamRankings,
 }: {
   rightId: string;
   leftIds: [string, string];
@@ -93,6 +95,7 @@ function MatchupPair({
   readOnly?: boolean;
   results?: Record<string, string>;
   countryCodeMap?: Record<string, string>;
+  teamRankings?: Record<string, number>;
 }) {
   const matchupMap = useMemo(() => new Map(matchups.map((m) => [m.id, m])), [matchups]);
   const left0 = matchupMap.get(leftIds[0]);
@@ -104,10 +107,10 @@ function MatchupPair({
       {/* Left column: 2 feeder matches stacked */}
       <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1, minWidth: 0, gap: 0.5 }}>
         {left0 ? (
-          <Matchup matchup={left0} userPick={picks[left0.id]} onPick={onPick} readOnly={readOnly} result={results?.[left0.id]} countryCodeMap={countryCodeMap} />
+          <Matchup matchup={left0} userPick={picks[left0.id]} onPick={onPick} readOnly={readOnly} result={results?.[left0.id]} countryCodeMap={countryCodeMap} teamRankings={teamRankings} />
         ) : <Box sx={{ flex: 1 }} />}
         {left1 ? (
-          <Matchup matchup={left1} userPick={picks[left1.id]} onPick={onPick} readOnly={readOnly} result={results?.[left1.id]} countryCodeMap={countryCodeMap} />
+          <Matchup matchup={left1} userPick={picks[left1.id]} onPick={onPick} readOnly={readOnly} result={results?.[left1.id]} countryCodeMap={countryCodeMap} teamRankings={teamRankings} />
         ) : <Box sx={{ flex: 1 }} />}
       </Box>
 
@@ -123,7 +126,7 @@ function MatchupPair({
       <Box sx={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
         {right ? (
           <Box sx={{ width: '100%' }}>
-            <Matchup matchup={right} userPick={picks[right.id]} onPick={onPick} readOnly={readOnly} result={results?.[right.id]} countryCodeMap={countryCodeMap} isChampionPick={right.id === 'FINAL'} />
+            <Matchup matchup={right} userPick={picks[right.id]} onPick={onPick} readOnly={readOnly} result={results?.[right.id]} countryCodeMap={countryCodeMap} isChampionPick={right.id === 'FINAL'} teamRankings={teamRankings} />
           </Box>
         ) : null}
       </Box>
@@ -131,7 +134,7 @@ function MatchupPair({
   );
 }
 
-export default function MobileBracket({ matchups, picks, onPick, readOnly, results, countryCodeMap }: MobileBracketProps) {
+export default function MobileBracket({ matchups, picks, onPick, readOnly, results, countryCodeMap, teamRankings }: MobileBracketProps) {
   const [tab, setTab] = useState(0);
   const tabs = useMemo(buildTabConfigs, []);
   const cfg = tabs[tab];
@@ -177,6 +180,7 @@ export default function MobileBracket({ matchups, picks, onPick, readOnly, resul
               readOnly={readOnly}
               results={results}
               countryCodeMap={countryCodeMap}
+              teamRankings={teamRankings}
             />
           );
         })}

@@ -1,9 +1,9 @@
 'use client';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Container, Typography, Box, LinearProgress, Paper, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, TableSortLabel, Grid, Chip,
-  Tabs, Tab, IconButton, Tooltip, Popover,
+  Tabs, Tab, IconButton, Tooltip, Popover, Button,
 } from '@mui/material';
 import ScoreHistogram from '@/components/common/ScoreHistogram';
 import UserLink from '@/components/common/UserLink';
@@ -21,6 +21,7 @@ import { useSelectedGroup } from '@/hooks/useSelectedGroup';
 import AuthForm from '@/components/auth/AuthForm';
 import TeamFlag from '@/components/common/TeamFlag';
 import ForecastBracket from '@/components/bracket/ForecastBracket';
+import { getFeederMatchupIds } from '@/lib/knockoutBracket';
 import LiveScores from '@/components/bracket/LiveScores';
 import { useLiveScores, todayInPacific } from '@/hooks/useLiveScores';
 import { PELE_RATINGS } from '@/lib/peleRatings';
@@ -32,6 +33,31 @@ const GROUP_NAMES = Object.keys(GROUPS);
 const TAB_GROUPS = 0;
 const TAB_BRACKET = 1;
 const TAB_TEAM_OUTLOOK = 2;
+const TAB_WHAT_IF = 3;
+
+// Downstream dependency graph: which matches must be revalidated when a
+// given match changes. Used by the What-If cascade when the user reverses
+// an earlier round pick.
+const DOWNSTREAM_MATCHES: Record<string, string[]> = (() => {
+  const out: Record<string, string[]> = {};
+  // R32 → R16
+  for (let i = 1; i <= 16; i++) out[`R32-${i}`] = [];
+  for (let i = 1; i <= 8; i++) out[`R16-${i}`] = [];
+  for (let i = 1; i <= 4; i++) out[`QF-${i}`] = [];
+  out['SF-1'] = []; out['SF-2'] = []; out['FINAL'] = []; out['3RD'] = [];
+  // Populate: for each match M, look up its two feeders and add M to their
+  // downstream list. Use the same getFeederMatchupIds semantics.
+  const allChildren = ['R16-1','R16-2','R16-3','R16-4','R16-5','R16-6','R16-7','R16-8',
+    'QF-1','QF-2','QF-3','QF-4','SF-1','SF-2','FINAL','3RD'];
+  for (const child of allChildren) {
+    const feeders = getFeederMatchupIds(child);
+    if (feeders) {
+      out[feeders[0]].push(child);
+      out[feeders[1]].push(child);
+    }
+  }
+  return out;
+})();
 
 function getCountryCode(team: string): string | undefined {
   const CODES: Record<string, string> = {
@@ -567,6 +593,14 @@ export default function SimulatePage() {
   const [groupId, setGroupId] = useSelectedGroup('everyone');
   const [userGroups, setUserGroups] = useState<Array<{ id: string; name: string }>>([]);
   const [actualResults, setActualResults] = useState<ActualResults | undefined>(undefined);
+  // What-If picks: matchId → team name. Merged into knockoutWinners before
+  // handing to the sim so those matches always resolve to the user's choice.
+  // Locked (real) results take precedence — they're spread AFTER whatIf.
+  const [whatIfPicks, setWhatIfPicks] = useState<Record<string, string>>({});
+  // R32 teams from the populated bracket (needed to render the What-If
+  // matchups even before any user click). Empty until the knockout
+  // bracket is generated post group-stage.
+  const [knockoutBracketMatchups, setKnockoutBracketMatchups] = useState<Array<{ id: string; teamA: string | null; teamB: string | null }>>([]);
   // True once lock_time_knockout has passed. Until then, the worker scores
   // group-stage only per user (knockout picks aren't yet locked in).
   const [knockoutsLocked, setKnockoutsLocked] = useState(false);
@@ -642,6 +676,11 @@ export default function SimulatePage() {
         }
         if (rd?.knockout && Object.keys(rd.knockout).length > 0) {
           ar.knockoutWinners = rd.knockout;
+        }
+        if (Array.isArray(rd?.knockoutBracket)) {
+          setKnockoutBracketMatchups(rd.knockoutBracket.map((m: { id: string; teamA: string | null; teamB: string | null }) => ({
+            id: m.id, teamA: m.teamA ?? null, teamB: m.teamB ?? null,
+          })));
         }
 
         // Identify in-progress group matches and sample their scorelines,
@@ -781,8 +820,20 @@ export default function SimulatePage() {
       .catch(() => {});
   }, [user, groupId]);
 
+  // Merge whatIfPicks into actualResults.knockoutWinners so the sim treats
+  // them as forced results. Locked (real) results always win: they're
+  // spread LAST so any user override on an already-decided match is
+  // silently discarded. This gives the What-If tab precedence over
+  // fresh sim + live samples but never over reality.
+  const actualResultsWithWhatIf = useMemo<ActualResults | undefined>(() => {
+    if (!actualResults && Object.keys(whatIfPicks).length === 0) return actualResults;
+    const base = actualResults ?? {};
+    const mergedKnockout = { ...whatIfPicks, ...(base.knockoutWinners ?? {}) };
+    return { ...base, knockoutWinners: mergedKnockout };
+  }, [actualResults, whatIfPicks]);
+
   const { results, progress, running, numSims, simsCompleted, rerun } = useTournamentSim(
-    players, scoring, actualResults, { scoreKnockoutPicks: knockoutsLocked },
+    players, scoring, actualResultsWithWhatIf, { scoreKnockoutPicks: knockoutsLocked },
   );
   // While partial results stream in, divide raw counts by simsCompleted (not
   // numSims) so percentages reflect the actual sample size. Falls back to
@@ -811,6 +862,74 @@ export default function SimulatePage() {
     }
     return m;
   }, []);
+
+  // What-If tab: interactive bracket. R32 team names come from
+  // knockoutBracketMatchups; R16+ team names flow from the user's picks
+  // (or the tournament sim's leading team for that slot when the user
+  // hasn't picked yet). Wire into ForecastBracket's pickMode interface.
+  const r32TeamsByMatch = useMemo(() => {
+    const out: Record<string, { teamA: string | null; teamB: string | null }> = {};
+    for (const m of knockoutBracketMatchups) {
+      if (m.id.startsWith('R32-')) out[m.id] = { teamA: m.teamA, teamB: m.teamB };
+    }
+    return out;
+  }, [knockoutBracketMatchups]);
+
+  const whatIfSlotForSide = useCallback((matchId: string, side: 'A' | 'B'): string | null => {
+    if (matchId.startsWith('R32-')) {
+      const r32 = r32TeamsByMatch[matchId];
+      if (!r32) return null;
+      return side === 'A' ? (r32.teamA ?? null) : (r32.teamB ?? null);
+    }
+    if (matchId === '3RD') {
+      // Loser of each SF: the SF-N candidate that isn't the SF-N winner.
+      const sfMatch = side === 'A' ? 'SF-1' : 'SF-2';
+      const sfWinner = whatIfPicks[sfMatch];
+      if (!sfWinner) return null;
+      const feeders = getFeederMatchupIds(sfMatch);
+      if (!feeders) return null;
+      const candA = whatIfPicks[feeders[0]];
+      const candB = whatIfPicks[feeders[1]];
+      if (candA && candA !== sfWinner) return candA;
+      if (candB && candB !== sfWinner) return candB;
+      return null;
+    }
+    const feeders = getFeederMatchupIds(matchId);
+    if (!feeders) return null;
+    const feederMatch = feeders[side === 'A' ? 0 : 1];
+    return whatIfPicks[feederMatch] ?? null;
+  }, [whatIfPicks, r32TeamsByMatch]);
+
+  // teamForSlot passes team names through (post-lock we're always in
+  // team-name mode — the picker on /bracket does the same).
+  const whatIfTeamForSlot = useCallback((slotRef: string): string | null => slotRef, []);
+
+  const handleWhatIfPick = useCallback((matchId: string, team: string) => {
+    setWhatIfPicks((prev) => {
+      const next = { ...prev };
+      if (next[matchId] === team) delete next[matchId];
+      else next[matchId] = team;
+      // Cascade downstream: any pick whose stored team is no longer a
+      // candidate (feeder changed) gets cleared.
+      const revalidate = (m: string) => {
+        const feeders = getFeederMatchupIds(m);
+        if (!feeders) return;
+        const candA = m === '3RD'
+          ? (whatIfSlotForSide('3RD', 'A') ?? undefined)
+          : next[feeders[0]] ?? undefined;
+        const candB = m === '3RD'
+          ? (whatIfSlotForSide('3RD', 'B') ?? undefined)
+          : next[feeders[1]] ?? undefined;
+        const stored = next[m];
+        if (stored && stored !== candA && stored !== candB) {
+          delete next[m];
+          revalidate(m);
+        }
+      };
+      for (const dep of DOWNSTREAM_MATCHES[matchId] ?? []) revalidate(dep);
+      return next;
+    });
+  }, [whatIfSlotForSide]);
 
   // Current user's bracket key + expected total score (for impact panels).
   const currentUserBracketKey = useMemo(() => {
@@ -887,6 +1006,7 @@ export default function SimulatePage() {
             <Tab label="Group Stage" />
             <Tab label="Knockout Bracket" />
             <Tab label="Team Outlook" />
+            {knockoutBracketMatchups.length > 0 && <Tab label="What If" />}
           </Tabs>
 
           {activeTab === TAB_GROUPS && (
@@ -928,6 +1048,39 @@ export default function SimulatePage() {
               championProbs={results.championProbs}
               numSims={effectiveNumSims}
             />
+          )}
+
+          {activeTab === TAB_WHAT_IF && knockoutBracketMatchups.length > 0 && (
+            <Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+                <Typography variant="body2" color="text.secondary" sx={{ flex: 1, minWidth: 240 }}>
+                  Click any team to force them to win that match — the simulation instantly re-runs treating your picks as certainties. Real results always win over your overrides.
+                  {Object.keys(whatIfPicks).length > 0 ? ` · ${Object.keys(whatIfPicks).length} override${Object.keys(whatIfPicks).length === 1 ? '' : 's'} applied.` : ''}
+                </Typography>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  color="error"
+                  onClick={() => setWhatIfPicks({})}
+                  disabled={Object.keys(whatIfPicks).length === 0}
+                >
+                  Clear all
+                </Button>
+              </Box>
+              <ForecastBracket
+                bracketSlots={results.bracketSlots}
+                numSims={effectiveNumSims}
+                countryCodeMap={Object.fromEntries(
+                  Object.keys(PELE_RATINGS).map(t => [t, getCountryCode(t) ?? ''])
+                )}
+                pickMode={{
+                  picks: whatIfPicks,
+                  onPick: handleWhatIfPick,
+                  slotForSide: whatIfSlotForSide,
+                  teamForSlot: whatIfTeamForSlot,
+                }}
+              />
+            </Box>
           )}
 
           {/* Expected Standings — admin only before tournament (hidden by default), all users after */}

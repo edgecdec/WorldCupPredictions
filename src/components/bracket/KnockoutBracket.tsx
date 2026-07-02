@@ -23,6 +23,11 @@ interface KnockoutBracketProps {
 const COL_WIDTH = 128;
 const CONNECTOR_WIDTH = 10;
 const BRACKET_HEIGHT = 720;
+// Round-label height (typography line-height + mb: 0.5 → 4px). Connectors
+// need a matching top spacer so their notches line up with the matchup
+// rows below the label — otherwise the notches sit halfway between the
+// label and the first matchup, off-center by ~one label height.
+const LABEL_ROW_HEIGHT = 22;
 
 const CONNECTOR_COLOR = 'divider';
 
@@ -128,13 +133,18 @@ function RoundColumn({
 function ConnectorColumn({ pairCount, direction }: { pairCount: number; direction: 'left' | 'right' }) {
   const isLeft = direction === 'left';
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', width: CONNECTOR_WIDTH, flexShrink: 0 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', width: CONNECTOR_WIDTH, flexShrink: 0 }}>
+      {/* Spacer matching the round-label row above the neighboring column,
+          so notches align with matchup rows rather than the label. */}
+      <Box sx={{ height: LABEL_ROW_HEIGHT, flexShrink: 0 }} />
+      <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', flex: 1 }}>
       {Array.from({ length: pairCount }, (_, i) => (
         <Box key={i} sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', position: 'relative' }}>
           <Box sx={{ flex: 1, ...(isLeft ? { borderRight: 2, borderBottom: 2, borderColor: CONNECTOR_COLOR } : { borderLeft: 2, borderBottom: 2, borderColor: CONNECTOR_COLOR }) }} />
           <Box sx={{ flex: 1, ...(isLeft ? { borderRight: 2, borderTop: 2, borderColor: CONNECTOR_COLOR } : { borderLeft: 2, borderTop: 2, borderColor: CONNECTOR_COLOR }) }} />
         </Box>
       ))}
+      </Box>
     </Box>
   );
 }

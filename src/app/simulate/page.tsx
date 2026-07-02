@@ -389,7 +389,7 @@ interface StandingsRow {
   scoreDistribution: Record<number, number>;
 }
 
-function ExpectedStandingsTable({ playerScores, currentUsername, leadOnly, scope }: {
+function ExpectedStandingsTable({ playerScores, currentUsername, leadOnly, scope, picksByKey }: {
   playerScores: Array<{
     key: string; avgScore: number; avgRank: number; winPct: number; scoreDistribution: Record<number, number>;
     avgGroupTotal?: number; avgGroupRank?: number; groupWinPct?: number; groupTotalDistribution?: Record<number, number>;
@@ -398,10 +398,25 @@ function ExpectedStandingsTable({ playerScores, currentUsername, leadOnly, scope
   currentUsername: string;
   leadOnly: boolean;
   scope: StandingsScope;
+  /** Map key ('username|bracket') → whether the player has non-empty group /
+   *  knockout picks. Used to hide players from a scope tab when they have
+   *  nothing to score there (would otherwise pile up at the bottom on 0). */
+  picksByKey?: Record<string, { hasGroup: boolean; hasKnockout: boolean }>;
 }) {
+  // Scope-aware filter: on Group Stage tab drop rows with no group picks; on
+  // Knockouts tab drop rows with no knockout picks. Overall keeps everyone.
+  const filteredScores = useMemo(() => {
+    if (!picksByKey || scope === 'overall') return playerScores;
+    return playerScores.filter((p) => {
+      const pk = picksByKey[p.key];
+      if (!pk) return true; // no pick info → show it (shouldn't happen)
+      return scope === 'groups' ? pk.hasGroup : pk.hasKnockout;
+    });
+  }, [playerScores, scope, picksByKey]);
+
   // Project per-scope fields into the same 4-field shape the table uses, so
   // the sort/render code below doesn't have to branch on scope everywhere.
-  const projected: StandingsRow[] = useMemo(() => playerScores.map((p) => {
+  const projected: StandingsRow[] = useMemo(() => filteredScores.map((p) => {
     if (scope === 'groups') {
       return {
         key: p.key,
@@ -427,7 +442,7 @@ function ExpectedStandingsTable({ playerScores, currentUsername, leadOnly, scope
       winPct: p.winPct,
       scoreDistribution: p.scoreDistribution,
     };
-  }), [playerScores, scope]);
+  }), [filteredScores, scope]);
 
   const winLabel = leadOnly ? 'Lead %' : 'Win %';
   const STANDINGS_COLUMNS: Array<{ key: StandingsSortKey; label: string; align: 'left' | 'right' }> = [
@@ -750,7 +765,9 @@ export default function SimulatePage() {
       .then((d) => {
         if (d.entries) {
           const mapped: PlayerEntry[] = (d.entries as SimApiEntry[])
-            .filter((e) => e.group_predictions.length > 0)
+            .filter((e) => e.group_predictions.length > 0
+              || (e.third_place_picks?.length ?? 0) > 0
+              || Object.keys(e.knockout_picks ?? {}).length > 0)
             .map((e) => ({
               key: `${e.username}|${e.bracket_name}`,
               group_predictions: e.group_predictions,
@@ -961,6 +978,16 @@ export default function SimulatePage() {
               ) : (
                 (() => {
                   const anyKnockoutPicks = (players ?? []).some((p) => Object.keys(p.knockout_picks).length > 0);
+                  // Per-player pick availability so the scope tabs can hide
+                  // rows that have nothing to score in that scope (they'd
+                  // otherwise sit at the bottom at 0 pts, cluttering the view).
+                  const picksByKey: Record<string, { hasGroup: boolean; hasKnockout: boolean }> = {};
+                  for (const p of players ?? []) {
+                    picksByKey[p.key] = {
+                      hasGroup: p.group_predictions.length > 0,
+                      hasKnockout: Object.keys(p.knockout_picks).length > 0,
+                    };
+                  }
                   return (
                     <>
                       <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
@@ -972,6 +999,7 @@ export default function SimulatePage() {
                         currentUsername={user.username}
                         leadOnly={!anyKnockoutPicks}
                         scope={standingsScope}
+                        picksByKey={picksByKey}
                       />
                     </>
                   );

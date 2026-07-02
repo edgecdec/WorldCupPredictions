@@ -22,6 +22,10 @@ export function stableActualResultsKey(actualResults: ActualResults | undefined)
     groupMatches: actualResults.groupMatches,
     finalGroupStandings: actualResults.finalGroupStandings,
     finalAdvancing3rd: actualResults.finalAdvancing3rd,
+    // Include knockoutWinners in the dedupe key — otherwise What-If picks
+    // (which merge into knockoutWinners) don't trigger a sim rerun, and
+    // clicking cells in the What-If tab appears to do nothing.
+    knockoutWinners: actualResults.knockoutWinners,
   };
   if (actualResults.inProgressGroupMatches) {
     const m: Record<string, Array<{ teamA: string; teamB: string; scoreA?: number; scoreB?: number; minute?: number }>> = {};

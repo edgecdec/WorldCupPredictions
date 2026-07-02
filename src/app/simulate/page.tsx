@@ -875,6 +875,14 @@ export default function SimulatePage() {
     return out;
   }, [knockoutBracketMatchups]);
 
+  // Effective picks = real locked winners + user overrides (locked wins on
+  // conflict). This is what the What-If bracket resolves teams against, so
+  // R16+ cells pre-populate with the teams that already advanced instead
+  // of showing TBD until the user manually re-picks every finished R32.
+  const effectiveWhatIfPicks = useMemo<Record<string, string>>(() => {
+    return { ...whatIfPicks, ...(actualResults?.knockoutWinners ?? {}) };
+  }, [whatIfPicks, actualResults]);
+
   const whatIfSlotForSide = useCallback((matchId: string, side: 'A' | 'B'): string | null => {
     if (matchId.startsWith('R32-')) {
       const r32 = r32TeamsByMatch[matchId];
@@ -884,12 +892,12 @@ export default function SimulatePage() {
     if (matchId === '3RD') {
       // Loser of each SF: the SF-N candidate that isn't the SF-N winner.
       const sfMatch = side === 'A' ? 'SF-1' : 'SF-2';
-      const sfWinner = whatIfPicks[sfMatch];
+      const sfWinner = effectiveWhatIfPicks[sfMatch];
       if (!sfWinner) return null;
       const feeders = getFeederMatchupIds(sfMatch);
       if (!feeders) return null;
-      const candA = whatIfPicks[feeders[0]];
-      const candB = whatIfPicks[feeders[1]];
+      const candA = effectiveWhatIfPicks[feeders[0]];
+      const candB = effectiveWhatIfPicks[feeders[1]];
       if (candA && candA !== sfWinner) return candA;
       if (candB && candB !== sfWinner) return candB;
       return null;
@@ -897,29 +905,48 @@ export default function SimulatePage() {
     const feeders = getFeederMatchupIds(matchId);
     if (!feeders) return null;
     const feederMatch = feeders[side === 'A' ? 0 : 1];
-    return whatIfPicks[feederMatch] ?? null;
-  }, [whatIfPicks, r32TeamsByMatch]);
+    return effectiveWhatIfPicks[feederMatch] ?? null;
+  }, [effectiveWhatIfPicks, r32TeamsByMatch]);
 
   // teamForSlot passes team names through (post-lock we're always in
   // team-name mode — the picker on /bracket does the same).
   const whatIfTeamForSlot = useCallback((slotRef: string): string | null => slotRef, []);
 
   const handleWhatIfPick = useCallback((matchId: string, team: string) => {
+    // Ignore clicks on already-finalized matches — the real winner is truth
+    // and can't be overridden. This prevents "clicking does nothing"
+    // confusion where the click *did* set whatIfPicks[matchId] but the
+    // effective merge overwrote it with the locked winner.
+    const lockedWinners = actualResults?.knockoutWinners ?? {};
+    if (lockedWinners[matchId]) return;
     setWhatIfPicks((prev) => {
       const next = { ...prev };
       if (next[matchId] === team) delete next[matchId];
       else next[matchId] = team;
       // Cascade downstream: any pick whose stored team is no longer a
-      // candidate (feeder changed) gets cleared.
+      // candidate (feeder changed) gets cleared. Use the merged pick view
+      // so locked upstream results feed the candidate check.
+      const merged = { ...next, ...lockedWinners };
       const revalidate = (m: string) => {
+        if (lockedWinners[m]) return; // never clear a locked pick
         const feeders = getFeederMatchupIds(m);
         if (!feeders) return;
-        const candA = m === '3RD'
-          ? (whatIfSlotForSide('3RD', 'A') ?? undefined)
-          : next[feeders[0]] ?? undefined;
-        const candB = m === '3RD'
-          ? (whatIfSlotForSide('3RD', 'B') ?? undefined)
-          : next[feeders[1]] ?? undefined;
+        let candA: string | undefined;
+        let candB: string | undefined;
+        if (m === '3RD') {
+          // SF losers.
+          for (const sf of ['SF-1', 'SF-2'] as const) {
+            const sfW = merged[sf];
+            const f = getFeederMatchupIds(sf);
+            if (!sfW || !f) continue;
+            const [a, b] = [merged[f[0]], merged[f[1]]];
+            const loser = a && a !== sfW ? a : (b && b !== sfW ? b : undefined);
+            if (sf === 'SF-1') candA = loser; else candB = loser;
+          }
+        } else {
+          candA = merged[feeders[0]];
+          candB = merged[feeders[1]];
+        }
         const stored = next[m];
         if (stored && stored !== candA && stored !== candB) {
           delete next[m];
@@ -929,7 +956,7 @@ export default function SimulatePage() {
       for (const dep of DOWNSTREAM_MATCHES[matchId] ?? []) revalidate(dep);
       return next;
     });
-  }, [whatIfSlotForSide]);
+  }, [actualResults]);
 
   // Current user's bracket key + expected total score (for impact panels).
   const currentUserBracketKey = useMemo(() => {
@@ -1074,7 +1101,9 @@ export default function SimulatePage() {
                   Object.keys(PELE_RATINGS).map(t => [t, getCountryCode(t) ?? ''])
                 )}
                 pickMode={{
-                  picks: whatIfPicks,
+                  // Effective picks (locked + user) drive the "isPicked"
+                  // highlight so already-decided matches render pre-selected.
+                  picks: effectiveWhatIfPicks,
                   onPick: handleWhatIfPick,
                   slotForSide: whatIfSlotForSide,
                   teamForSlot: whatIfTeamForSlot,

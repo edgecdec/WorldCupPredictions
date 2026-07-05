@@ -11,6 +11,7 @@ import {
   KNOCKOUT_ROUNDS,
 } from '@/types';
 import { getTeamSeed, getTeamRanking } from '@/lib/bracketData';
+import { computeEffectiveMatchups } from '@/lib/bracketUtils';
 
 export interface GroupScoreDetail {
   groupName: string;
@@ -196,6 +197,15 @@ export function scoreKnockout(
     roundDetails.set(i, { basePoints: 0, upsetBonusPoints: 0 });
   }
 
+  // Propagate ACTUAL winners forward so R16+ matchup.teamA/teamB are the
+  // real teams that advanced. Without this, the raw knockoutBracket only
+  // has R32 teams populated (round 0), and every R16+ upset-bonus lookup
+  // fell through null to zero — silently underscoring every downstream
+  // upset bonus. Only affects the upset lookup; base points still keyed
+  // on matchup.id/round which are already correct.
+  const effective = computeEffectiveMatchups(matchups, results);
+  const effectiveById = new Map(effective.map((m) => [m.id, m]));
+
   for (const matchup of matchups) {
     const actualWinner = results[matchup.id];
     if (!actualWinner) continue;
@@ -210,8 +220,10 @@ export function scoreKnockout(
     // Base points
     detail.basePoints += settings.pointsPerRound[roundIdx] ?? 0;
 
-    // Upset bonus
-    const loser = matchup.teamA === actualWinner ? matchup.teamB : matchup.teamA;
+    // Upset bonus — use the effective matchup which has teams populated
+    // for R16+ via winner propagation.
+    const eff = effectiveById.get(matchup.id) ?? matchup;
+    const loser = eff.teamA === actualWinner ? eff.teamB : eff.teamA;
     if (loser) {
       const winnerRank = getTeamRanking(bracketData, actualWinner);
       const loserRank = getTeamRanking(bracketData, loser);

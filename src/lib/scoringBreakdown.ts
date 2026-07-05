@@ -3,6 +3,7 @@ import {
   BracketData, GroupStageScoringSettings, KnockoutScoringSettings,
 } from '@/types';
 import { getTeamSeed, getTeamRanking } from '@/lib/bracketData';
+import { computeEffectiveMatchups } from '@/lib/bracketUtils';
 
 export interface GroupTeamDetail {
   groupName: string;
@@ -97,7 +98,14 @@ export function getKnockoutMatchBreakdown(
   bracketData: BracketData,
   settings: KnockoutScoringSettings,
 ): KnockoutMatchDetail[] {
-  return matchups.map((m) => {
+  // Propagate ACTUAL winners forward so R16+ matches show the real teams
+  // instead of '?'. Without this, r.teamA/r.teamB are null past R32 (the
+  // raw knockoutBracket only has R32 teams populated) — the "? vs ?" in
+  // the breakdown UI and, worse, upset-bonus math both fell through null
+  // to zero, silently underscoring upsets in R16+.
+  const effective = computeEffectiveMatchups(matchups, results);
+
+  return effective.map((m) => {
     const userPick = prediction.knockout_picks[m.id] ?? null;
     const winner = results[m.id] ?? null;
     const correct = !!winner && userPick === winner;

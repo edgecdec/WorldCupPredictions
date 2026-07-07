@@ -192,6 +192,7 @@ function GroupStageSection({
             teams={group.teams.map((t) => t.name)}
             predictions={predictions}
             actualOrder={resultMap.get(group.name)}
+            advancingThirdPlace={results?.groupStage?.advancingThirdPlace ?? []}
           />
         ))}
       </Box>
@@ -230,12 +231,13 @@ function buildGroupPickMatrix(
 }
 
 function GroupPickCard({
-  groupName, teams, predictions, actualOrder,
+  groupName, teams, predictions, actualOrder, advancingThirdPlace,
 }: {
   groupName: string;
   teams: string[];
   predictions: PredictionWithUser[];
   actualOrder?: string[];
+  advancingThirdPlace: string[];
 }) {
   const matrix = useMemo(
     () => buildGroupPickMatrix(groupName, teams, predictions),
@@ -297,7 +299,15 @@ function GroupPickCard({
                       users={entry.advance}
                       total={total}
                       label={`${team} — Advances`}
-                      isActual={actualPos !== undefined && actualPos <= 2}
+                      // Actually advanced iff: 1st/2nd OR (3rd AND in the
+                      // tournament's advancingThirdPlace top-8 set). 3rd-
+                      // finishers not in that set did NOT advance, so the
+                      // Adv column shouldn't highlight for them.
+                      isActual={
+                        actualPos !== undefined
+                        && (actualPos <= 1
+                          || (actualPos === 2 && advancingThirdPlace.includes(team)))
+                      }
                       bold
                     />
                   </TableRow>

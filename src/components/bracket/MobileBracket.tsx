@@ -135,8 +135,21 @@ function MatchupPair({
 }
 
 export default function MobileBracket({ matchups, picks, onPick, readOnly, results, countryCodeMap, teamRankings }: MobileBracketProps) {
-  const [tab, setTab] = useState(0);
   const tabs = useMemo(buildTabConfigs, []);
+  // Default tab: the earliest one whose "right round" has any match without
+  // a recorded winner in results. That's the current round of play. If
+  // every round is decided (rare — tournament complete), fall back to tab 0.
+  const initialTab = useMemo(() => {
+    if (!results) return 0;
+    for (let i = 0; i < tabs.length; i++) {
+      const cfg = tabs[i];
+      const rightHasPending = cfg.rightIds.some((id) => !results[id]);
+      if (rightHasPending) return i;
+    }
+    return 0;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabs]); // Only evaluate on mount so the tab doesn't jump when results update mid-view.
+  const [tab, setTab] = useState(initialTab);
   const cfg = tabs[tab];
 
   const handlePrev = () => setTab((t) => Math.max(0, t - 1));

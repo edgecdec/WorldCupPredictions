@@ -5,6 +5,10 @@ import Link from 'next/link';
 interface BracketLinkProps {
   username: string;
   bracketName: string;
+  /** Optional display override. When set, this text is rendered instead
+   *  of bracketName — used for truncation (e.g. '…' after N chars) while
+   *  the link still targets the real bracket. */
+  displayName?: string;
 }
 
 /**
@@ -13,7 +17,7 @@ interface BracketLinkProps {
  * targets the username (we don't have per-bracket routes; users have one
  * bracket on this site).
  */
-export default function BracketLink({ username, bracketName }: BracketLinkProps) {
+export default function BracketLink({ username, bracketName, displayName }: BracketLinkProps) {
   return (
     <Box
       component={Link}
@@ -24,7 +28,7 @@ export default function BracketLink({ username, bracketName }: BracketLinkProps)
         '&:hover': { textDecoration: 'underline' },
       }}
     >
-      {bracketName}
+      {displayName ?? bracketName}
     </Box>
   );
 }

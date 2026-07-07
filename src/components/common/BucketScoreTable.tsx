@@ -286,11 +286,13 @@ export default function BucketScoreTable({
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   // Persist the active tab across leaderboard-group changes (which remount
   // this component while the new group's data loads) and page reloads.
+  // Default: knockout tab once the knockouts start (most interesting phase),
+  // otherwise overall.
   const [mode, setMode] = useState<Mode>(() => {
-    if (typeof window === 'undefined') return 'overall';
+    if (typeof window === 'undefined') return knockoutsStarted ? 'knockout' : 'overall';
     const stored = window.localStorage.getItem('leaderboard.tab');
     if (stored === 'overall' || stored === 'groups' || stored === 'knockout') return stored;
-    return 'overall';
+    return knockoutsStarted ? 'knockout' : 'overall';
   });
   const handleModeChange = (v: Mode) => {
     setMode(v);

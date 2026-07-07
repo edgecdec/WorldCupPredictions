@@ -25,8 +25,9 @@ import { getFeederMatchupIds } from '@/lib/knockoutBracket';
 import LiveScores from '@/components/bracket/LiveScores';
 import { useLiveScores, todayInPacific } from '@/hooks/useLiveScores';
 import { PELE_RATINGS } from '@/lib/peleRatings';
-import type { ScoringSettings, GroupPrediction } from '@/types';
+import type { ScoringSettings, GroupPrediction, GroupStageResults, KnockoutResults, KnockoutMatchup, BracketData } from '@/types';
 import { DEFAULT_SCORING } from '@/types';
+import { scoreTotalPrediction } from '@/lib/scoring';
 import { FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 
 const GROUP_NAMES = Object.keys(GROUPS);
@@ -403,7 +404,7 @@ function AvgScoreCell({
   );
 }
 
-type StandingsSortKey = 'rank' | 'player' | 'avgScore' | 'avgRank' | 'winPct';
+type StandingsSortKey = 'rank' | 'player' | 'avgScore' | 'avgRank' | 'winPct' | 'points';
 
 type StandingsScope = 'overall' | 'groups' | 'knockout';
 
@@ -415,7 +416,11 @@ interface StandingsRow {
   scoreDistribution: Record<number, number>;
 }
 
-function ExpectedStandingsTable({ playerScores, currentUsername, leadOnly, scope, picksByKey }: {
+function ExpectedStandingsTable({
+  playerScores, currentUsername, leadOnly, scope, picksByKey, players,
+  scoringSettings, bracketData, groupStageResults,
+  knockoutMatchups, currentKnockoutResults, baselineKnockoutResults, whatIfCount,
+}: {
   playerScores: Array<{
     key: string; avgScore: number; avgRank: number; winPct: number; scoreDistribution: Record<number, number>;
     avgGroupTotal?: number; avgGroupRank?: number; groupWinPct?: number; groupTotalDistribution?: Record<number, number>;
@@ -428,7 +433,74 @@ function ExpectedStandingsTable({ playerScores, currentUsername, leadOnly, scope
    *  knockout picks. Used to hide players from a scope tab when they have
    *  nothing to score there (would otherwise pile up at the bottom on 0). */
   picksByKey?: Record<string, { hasGroup: boolean; hasKnockout: boolean }>;
+  /** Full player entries for deterministic Pts scoring per row. */
+  players?: PlayerEntry[];
+  scoringSettings?: ScoringSettings;
+  bracketData?: BracketData | null;
+  groupStageResults?: GroupStageResults | null;
+  knockoutMatchups?: KnockoutMatchup[];
+  /** Results with What-If picks merged in. Drives the Pts column. */
+  currentKnockoutResults?: KnockoutResults;
+  /** Results without What-If picks. Drives the rank the movement arrow
+   *  compares against. */
+  baselineKnockoutResults?: KnockoutResults;
+  /** How many What-If overrides are active. When 0 the movement column
+   *  hides itself since baseline == current. */
+  whatIfCount?: number;
 }) {
+  // Deterministic per-player scoring: assuming every locked + What-If pick
+  // resolves as-shown, what does each player total? Pts column reads from
+  // here; movement column compares rank(current) vs rank(baseline).
+  const scoreMap = useMemo<{ current: Record<string, number>; baseline: Record<string, number> }>(() => {
+    const current: Record<string, number> = {};
+    const baseline: Record<string, number> = {};
+    if (!players || !scoringSettings || !bracketData) return { current, baseline };
+    for (const p of players) {
+      const curScore = scoreTotalPrediction(
+        p.group_predictions,
+        p.third_place_picks,
+        p.knockout_picks,
+        groupStageResults ?? undefined,
+        currentKnockoutResults ?? {},
+        knockoutMatchups && knockoutMatchups.length > 0 ? knockoutMatchups : undefined,
+        bracketData,
+        scoringSettings,
+      );
+      current[p.key] = curScore.totalScore + (curScore.knockoutDetail?.championBonus ?? 0);
+      const basScore = scoreTotalPrediction(
+        p.group_predictions,
+        p.third_place_picks,
+        p.knockout_picks,
+        groupStageResults ?? undefined,
+        baselineKnockoutResults ?? {},
+        knockoutMatchups && knockoutMatchups.length > 0 ? knockoutMatchups : undefined,
+        bracketData,
+        scoringSettings,
+      );
+      baseline[p.key] = basScore.totalScore + (basScore.knockoutDetail?.championBonus ?? 0);
+    }
+    return { current, baseline };
+  }, [players, scoringSettings, bracketData, groupStageResults, knockoutMatchups, currentKnockoutResults, baselineKnockoutResults]);
+  const currentPts = scoreMap.current;
+  const baselinePts = scoreMap.baseline;
+
+  // Baseline rank map (higher score → lower rank number). Used only for
+  // the ↑↓ movement column so it doesn't drift with the primary sort.
+  const baselineRankByKey = useMemo(() => {
+    const keys = Object.keys(baselinePts);
+    keys.sort((a, b) => (baselinePts[b] ?? 0) - (baselinePts[a] ?? 0));
+    const m = new Map<string, number>();
+    keys.forEach((k, i) => m.set(k, i + 1));
+    return m;
+  }, [baselinePts]);
+  const currentPtsRankByKey = useMemo(() => {
+    const keys = Object.keys(currentPts);
+    keys.sort((a, b) => (currentPts[b] ?? 0) - (currentPts[a] ?? 0));
+    const m = new Map<string, number>();
+    keys.forEach((k, i) => m.set(k, i + 1));
+    return m;
+  }, [currentPts]);
+  const showMovement = (whatIfCount ?? 0) > 0;
   // Scope-aware filter: on Group Stage tab drop rows with no group picks; on
   // Knockouts tab drop rows with no knockout picks. Overall keeps everyone.
   const filteredScores = useMemo(() => {
@@ -474,8 +546,9 @@ function ExpectedStandingsTable({ playerScores, currentUsername, leadOnly, scope
   const STANDINGS_COLUMNS: Array<{ key: StandingsSortKey; label: string; align: 'left' | 'right' }> = [
     { key: 'rank', label: '#', align: 'left' },
     { key: 'player', label: 'Player', align: 'left' },
-    { key: 'avgScore', label: 'Avg Score', align: 'right' },
-    { key: 'avgRank', label: 'Avg Rank', align: 'right' },
+    { key: 'points', label: 'Pts', align: 'right' },
+    { key: 'avgScore', label: 'Avg', align: 'right' },
+    { key: 'avgRank', label: 'Rank', align: 'right' },
     { key: 'winPct', label: winLabel, align: 'right' },
   ];
   const [sortKey, setSortKey] = useState<StandingsSortKey>('avgScore');
@@ -506,9 +579,12 @@ function ExpectedStandingsTable({ playerScores, currentUsername, leadOnly, scope
     return [...projected].sort((a, b) => {
       if (sortKey === 'rank') return ((rankByKey.get(a.key) ?? 0) - (rankByKey.get(b.key) ?? 0)) * dir;
       if (sortKey === 'player') return a.key.localeCompare(b.key) * dir;
-      return (a[sortKey] - b[sortKey]) * dir;
+      if (sortKey === 'points') return ((currentPts[a.key] ?? 0) - (currentPts[b.key] ?? 0)) * dir;
+      const av = (a as unknown as Record<string, number>)[sortKey] ?? 0;
+      const bv = (b as unknown as Record<string, number>)[sortKey] ?? 0;
+      return (av - bv) * dir;
     });
-  }, [projected, sortKey, sortDir, rankByKey]);
+  }, [projected, sortKey, sortDir, rankByKey, currentPts]);
 
   return (
     <TableContainer>
@@ -533,18 +609,63 @@ function ExpectedStandingsTable({ playerScores, currentUsername, leadOnly, scope
             const [username, bracketName] = p.key.split('|');
             const isCurrentUser = username === currentUsername;
             const rank = rankByKey.get(p.key);
+            const pts = currentPts[p.key] ?? 0;
+            // Movement: baseline rank − current-pts rank. Positive → moved
+            // UP (previously worse rank, now better). Negative → moved down.
+            const baseRank = baselineRankByKey.get(p.key);
+            const curPtsRank = currentPtsRankByKey.get(p.key);
+            const movement = baseRank !== undefined && curPtsRank !== undefined
+              ? baseRank - curPtsRank
+              : 0;
             return (
               <TableRow key={p.key} sx={isCurrentUser ? { bgcolor: 'action.selected' } : undefined}>
-                <TableCell sx={{ py: 0.5, px: 1 }}>{rank}</TableCell>
-                <TableCell sx={{ py: 0.5, px: 1, fontSize: '0.875rem' }}>
-                  <UserLink username={username} isCurrentUser={isCurrentUser} bold={isCurrentUser} />
-                  {bracketName && (
-                    <>
-                      {' — '}
-                      <BracketLink username={username} bracketName={bracketName} />
-                    </>
-                  )}
+                <TableCell sx={{ py: 0.5, px: 1, whiteSpace: 'nowrap' }}>
+                  <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.4 }}>
+                    <span>{rank}</span>
+                    {showMovement && movement !== 0 && (
+                      <Box component="span" sx={{
+                        fontSize: '0.65rem',
+                        color: movement > 0 ? 'success.main' : 'error.main',
+                        fontWeight: 700,
+                      }}>
+                        {movement > 0 ? '↑' : '↓'}{Math.abs(movement)}
+                      </Box>
+                    )}
+                  </Box>
                 </TableCell>
+                <TableCell sx={{ py: 0.5, px: 1, lineHeight: 1.15 }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <Box
+                      sx={{ fontSize: '0.85rem', fontWeight: isCurrentUser ? 700 : 400 }}
+                      title={username.length > 12 ? username : undefined}
+                    >
+                      <Link
+                        href={`/profile/${encodeURIComponent(username)}`}
+                        style={{ color: 'inherit', textDecoration: 'underline dotted' }}
+                      >
+                        {username.length > 12 ? username.slice(0, 11) + '…' : username}
+                      </Link>
+                      {isCurrentUser && (
+                        <Box component="span" sx={{ ml: 0.5, fontSize: '0.6rem', color: 'primary.main', fontWeight: 700 }}>
+                          You
+                        </Box>
+                      )}
+                    </Box>
+                    {bracketName && (
+                      <Box
+                        sx={{ fontSize: '0.65rem', color: 'text.secondary', mt: 0.1 }}
+                        title={bracketName.length > 15 ? bracketName : undefined}
+                      >
+                        <BracketLink
+                          username={username}
+                          bracketName={bracketName}
+                          displayName={bracketName.length > 15 ? bracketName.slice(0, 14) + '…' : bracketName}
+                        />
+                      </Box>
+                    )}
+                  </Box>
+                </TableCell>
+                <TableCell align="right" sx={{ py: 0.5, px: 1, fontWeight: 700 }}>{pts}</TableCell>
                 <AvgScoreCell
                   avgScore={p.avgScore}
                   scoreDistribution={p.scoreDistribution}
@@ -601,6 +722,12 @@ export default function SimulatePage() {
   // matchups even before any user click). Empty until the knockout
   // bracket is generated post group-stage.
   const [knockoutBracketMatchups, setKnockoutBracketMatchups] = useState<Array<{ id: string; teamA: string | null; teamB: string | null }>>([]);
+  // Full tournament results + bracket for deterministic scoring in the
+  // Expected Standings table (Pts column, movement arrows). We already
+  // fetch this via /api/tournaments; store the full structures.
+  const [tournamentBracketData, setTournamentBracketData] = useState<BracketData | null>(null);
+  const [tournamentGroupStage, setTournamentGroupStage] = useState<GroupStageResults | null>(null);
+  const [tournamentKnockoutMatchups, setTournamentKnockoutMatchups] = useState<KnockoutMatchup[]>([]);
   // True once lock_time_knockout has passed. Until then, the worker scores
   // group-stage only per user (knockout picks aren't yet locked in).
   const [knockoutsLocked, setKnockoutsLocked] = useState(false);
@@ -627,7 +754,10 @@ export default function SimulatePage() {
         if (t.lock_time_knockout) {
           setKnockoutsLocked(new Date() >= new Date(t.lock_time_knockout));
         }
+        if (t.bracket_data) setTournamentBracketData(t.bracket_data as BracketData);
         const rd = t.results_data;
+        if (rd?.groupStage) setTournamentGroupStage(rd.groupStage as GroupStageResults);
+        if (Array.isArray(rd?.knockoutBracket)) setTournamentKnockoutMatchups(rd.knockoutBracket as KnockoutMatchup[]);
         const ar: ActualResults = {};
         // ONLY treat groupStage as final standings if all 12 groups are
         // present. A partial groupStage (some groups complete, others still
@@ -1182,6 +1312,14 @@ export default function SimulatePage() {
                         leadOnly={!anyKnockoutPicks}
                         scope={standingsScope}
                         picksByKey={picksByKey}
+                        players={players}
+                        scoringSettings={scoring}
+                        bracketData={tournamentBracketData}
+                        groupStageResults={tournamentGroupStage}
+                        knockoutMatchups={tournamentKnockoutMatchups}
+                        currentKnockoutResults={actualResultsWithWhatIf?.knockoutWinners ?? {}}
+                        baselineKnockoutResults={actualResults?.knockoutWinners ?? {}}
+                        whatIfCount={Object.keys(whatIfPicks).length}
                       />
                     </>
                   );

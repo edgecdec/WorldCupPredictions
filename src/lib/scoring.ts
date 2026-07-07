@@ -97,7 +97,16 @@ export function scoreGroupStage(
       const teamName = result.order[i];
       const actualPosition = i + 1;
       const predictedIndex = prediction.order.indexOf(teamName);
-      if (predictedIndex === -1) continue;
+      if (predictedIndex === -1) {
+        // Team not in user's prediction (empty or malformed pick). Neither
+        // the advance-correct call nor the exact-position call can be
+        // verified — mark both as incorrect so we don't hand out the
+        // "all-correct" bonuses (advancementCorrectBonus + perfectOrderBonus)
+        // for a group the user didn't actually fill in.
+        allAdvanceCorrect = false;
+        allPositionsCorrect = false;
+        continue;
+      }
       const predictedPosition = predictedIndex + 1;
 
       // Advance correct. `actualAdvance === undefined` means we don't yet
@@ -177,7 +186,6 @@ export interface KnockoutRoundDetail {
 export interface KnockoutScoreResult {
   total: number;
   perRound: KnockoutRoundDetail[];
-  championBonus: number;
 }
 
 function getMatchRoundIndex(matchup: KnockoutMatchup): number {
@@ -237,16 +245,6 @@ export function scoreKnockout(
     }
   }
 
-  // Champion bonus: check if user picked the Final winner correctly
-  let championBonus = 0;
-  const finalMatchup = matchups.find((m) => m.round === 5);
-  if (finalMatchup) {
-    const actualChampion = results[finalMatchup.id];
-    if (actualChampion && picks[finalMatchup.id] === actualChampion) {
-      championBonus = settings.championBonus;
-    }
-  }
-
   const perRound: KnockoutRoundDetail[] = [];
   for (let i = 0; i < KNOCKOUT_ROUNDS.length; i++) {
     const detail = roundDetails.get(i)!;
@@ -261,9 +259,8 @@ export function scoreKnockout(
   const roundTotal = perRound.reduce((sum, r) => sum + r.total, 0);
 
   return {
-    total: roundTotal + championBonus,
+    total: roundTotal,
     perRound,
-    championBonus,
   };
 }
 

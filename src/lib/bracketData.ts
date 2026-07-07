@@ -19,8 +19,11 @@ export function getGroupByName(data: BracketData, name: string): Group | undefin
   return data.groups.find((g) => g.name === name);
 }
 
+/** Team's FIFA draw pot (1-4). Used as the "seed" for the group-stage
+ *  upset bonus: bonus = pot − max(predictedPos, actualPos). A pot-4 team
+ *  finishing 1st is a bigger upset than a pot-2 team finishing 1st. */
 export function getTeamSeed(data: BracketData, name: string): number | undefined {
-  return getTeamByName(data, name)?.groupSeed;
+  return getTeamByName(data, name)?.pot;
 }
 
 export function getTeamRanking(data: BracketData, name: string): number | undefined {
@@ -37,6 +40,28 @@ export function getTeamByEspnId(data: BracketData, espnId: number): Team | undef
     if (team) return team;
   }
   return undefined;
+}
+
+/** Derive a { teamName → pot } map from the bracket data. This is the
+ *  "seed" the group-stage upset bonus uses (matches getTeamSeed). Preferred
+ *  over hardcoded maps — those drift out of sync silently and break the
+ *  upset-bonus math for whichever teams got out of sync. */
+export function getTeamSeeds(data: BracketData): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const g of data.groups) {
+    for (const t of g.teams) out[t.name] = t.pot;
+  }
+  return out;
+}
+
+/** Derive a { teamName → fifaRanking } map from the bracket data. Same
+ *  reasoning as getTeamSeeds. */
+export function getTeamRankings(data: BracketData): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const g of data.groups) {
+    for (const t of g.teams) out[t.name] = t.fifaRanking;
+  }
+  return out;
 }
 
 // --- 2026 FIFA World Cup seed data ---

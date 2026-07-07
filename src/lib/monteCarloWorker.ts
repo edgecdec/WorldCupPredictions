@@ -16,7 +16,6 @@ interface SimRequest {
     pointsPerRound: number[];
     upsetMultiplierPerRound: number[];
     upsetModulus: number;
-    championBonus: number;
   };
   totalSims: number;
 }
@@ -120,10 +119,6 @@ function scorePicks(
       }
     }
 
-    // Champion bonus
-    if (matchupId === 'FINAL') {
-      score += scoring.championBonus;
-    }
   }
   return score;
 }

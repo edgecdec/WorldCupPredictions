@@ -1004,7 +1004,13 @@ function scoreGroupStageEntry(
       const team = actualOrder[i];
       const actualPos = i + 1;
       const predIdx = pred.order.indexOf(team);
-      if (predIdx === -1) continue;
+      if (predIdx === -1) {
+        // Same as scoring.ts: unfilled predictions get neither the
+        // advancement-correct nor the perfect-order bonus.
+        allAdvCorrect = false;
+        allPosCorrect = false;
+        continue;
+      }
       const predPos = predIdx + 1;
 
       const predAdvance = predPos <= 2 || (predPos === 3 && thirdPlacePicks.includes(team));
@@ -1017,10 +1023,14 @@ function scoreGroupStageEntry(
 
       // Upset bonus uses max(predPos, actualPos) so a bold call that lands one
       // slot short still earns partial credit. Mirrors src/lib/scoring.ts.
-      const seed = teamSeeds[team] ?? 4;
-      const effectivePos = Math.max(predPos, actualPos);
-      const bonus = Math.max(0, seed - effectivePos);
-      upsetPts += bonus * settings.upsetBonusPerPlace;
+      // If the team isn't in the seed map, skip (matches scoring.ts's
+      // getTeamSeed=undefined guard).
+      const seed = teamSeeds[team];
+      if (seed !== undefined) {
+        const effectivePos = Math.max(predPos, actualPos);
+        const bonus = Math.max(0, seed - effectivePos);
+        upsetPts += bonus * settings.upsetBonusPerPlace;
+      }
     }
 
     const groupTotal = advCorrectPts + exactPts + upsetPts
@@ -1059,9 +1069,13 @@ function scoreKnockoutEntry(
 
     let pts = settings.pointsPerRound[result.round] ?? 0;
 
-    const winnerRank = teamRankings[result.winner] ?? 50;
-    const loserRank = teamRankings[result.loser] ?? 50;
-    const rankDiff = winnerRank - loserRank;
+    // Skip upset bonus when either team's rank is unknown — matches
+    // scoring.ts's guard in scoreKnockout so the two paths agree.
+    const winnerRank = teamRankings[result.winner];
+    const loserRank = teamRankings[result.loser];
+    const rankDiff = (winnerRank !== undefined && loserRank !== undefined)
+      ? winnerRank - loserRank
+      : 0;
     if (rankDiff > 0) {
       const mult = settings.upsetMultiplierPerRound[result.round] ?? 0;
       pts += Math.floor(rankDiff / settings.upsetModulus) * mult;

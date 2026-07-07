@@ -46,7 +46,6 @@ function maxKnockoutPoints(settings: KnockoutScoringSettings): number {
   for (let i = 0; i < KNOCKOUT_ROUNDS.length; i++) {
     total += MATCHES_PER_ROUND[i] * settings.pointsPerRound[i];
   }
-  total += settings.championBonus;
   return total;
 }
 
@@ -163,11 +162,6 @@ export function calculateMaxPossible(
     // Max upset bonus: assume biggest possible upset
     // We can't know the opponent yet for unresolved matchups, so use a generous estimate
     // For simplicity, just add base points (upset bonus is speculative)
-  }
-
-  // Champion bonus if champion pick is still alive
-  if (championPick && !championEliminated && !knockoutResults[finalMatchup!.id]) {
-    remainingKO += settings.knockout.championBonus;
   }
 
   return {

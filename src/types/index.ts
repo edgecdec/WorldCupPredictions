@@ -50,10 +50,9 @@ export interface GroupStageScoringSettings {
 }
 
 export interface KnockoutScoringSettings {
-  pointsPerRound: number[];      // [R32, R16, QF, SF, 3rd, Final]
+  pointsPerRound: number[];      // [R32, R16, QF, SF, 3RD, FINAL]
   upsetMultiplierPerRound: number[];
   upsetModulus: number;
-  championBonus: number;
 }
 
 export interface ScoringSettings {
@@ -73,7 +72,6 @@ export const DEFAULT_SCORING: ScoringSettings = {
     pointsPerRound: [3, 5, 8, 13, 13, 21],
     upsetMultiplierPerRound: [1, 2, 3, 5, 5, 8],
     upsetModulus: 5,
-    championBonus: 0,
   },
 };
 
@@ -206,4 +204,4 @@ export interface LiveGame {
   venue?: string;
 }
 
-export const KNOCKOUT_ROUNDS = ['R32', 'R16', 'QF', 'SF', '3rd', 'Final'] as const;
+export const KNOCKOUT_ROUNDS = ['R32', 'R16', 'QF', 'SF', '3RD', 'FINAL'] as const;

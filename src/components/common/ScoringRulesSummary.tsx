@@ -76,9 +76,6 @@ export default function ScoringRulesSummary({ mode, settings }: ScoringRulesSumm
                 Round multipliers: R32: ×{ko.upsetMultiplierPerRound[0]} • R16: ×{ko.upsetMultiplierPerRound[1]} • QF: ×{ko.upsetMultiplierPerRound[2]} • SF: ×{ko.upsetMultiplierPerRound[3]} • Final: ×{ko.upsetMultiplierPerRound[5]}
                 {' '}(3rd place: ×{ko.upsetMultiplierPerRound[4]})
               </Bullet>
-              {ko.championBonus > 0 && (
-                <Bullet>Champion bonus: +{ko.championBonus}</Bullet>
-              )}
             </Box>
           </Box>
         )}

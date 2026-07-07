@@ -43,10 +43,6 @@ function validateScoringSettings(s: ScoringSettings): string | null {
   if (typeof knockout.upsetModulus !== "number" || knockout.upsetModulus < 1) {
     return "knockout.upsetModulus must be a positive number";
   }
-  if (typeof knockout.championBonus !== "number" || knockout.championBonus > MAX_SCORING_VALUE) {
-    return `knockout.championBonus must be a number <= ${MAX_SCORING_VALUE}`;
-  }
-
   return null;
 }
 

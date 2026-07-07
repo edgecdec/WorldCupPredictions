@@ -3,51 +3,29 @@ import { PELE_RATINGS, AVG_GA } from '@/lib/peleRatings';
 import { THIRD_PLACE_LOOKUP } from '@/lib/thirdPlaceLookup';
 import { KNOCKOUT_HOST } from '@/lib/matchVenues';
 import { stableActualResultsKey } from '@/lib/simInputKey';
+import { WORLD_CUP_2026_DATA, getTeamSeeds, getTeamRankings } from '@/lib/bracketData';
 import type { ScoringSettings, GroupPrediction } from '@/types';
 import { DEFAULT_SCORING } from '@/types';
 
-const FIFA_RANKINGS: Record<string, number> = {
-  Spain: 1, Argentina: 2, France: 3, England: 4, Brazil: 5, Portugal: 6,
-  Netherlands: 7, Belgium: 8, Germany: 9, Croatia: 10, Morocco: 11,
-  Colombia: 13, USA: 14, Mexico: 15, Uruguay: 16, Switzerland: 17,
-  Japan: 18, Senegal: 19, Iran: 20, 'South Korea': 22, Ecuador: 23,
-  Austria: 24, Turkiye: 25, Australia: 26, Canada: 27, Norway: 29,
-  Panama: 30, Paraguay: 39, Egypt: 34, Algeria: 35, Scotland: 36,
-  Tunisia: 40, 'Ivory Coast': 42, Sweden: 43, Czechia: 44,
-  Uzbekistan: 50, Qatar: 51, 'DR Congo': 56, Iraq: 58,
-  'Saudi Arabia': 60, 'South Africa': 61, Jordan: 66,
-  'Cape Verde': 68, 'Bosnia and Herzegovina': 71, Ghana: 72,
-  Curacao: 82, Haiti: 84, 'New Zealand': 86,
-};
+// Team maps derived from the bracket data — single source of truth so
+// TEAM_SEEDS / FIFA_RANKINGS can't drift from the tournament definition
+// (that drift is what previously caused the ±1 discrepancies between
+// actual and expected scoring for Czechia/Tunisia/Algeria/Austria/Panama).
+// Note: server-side scoring reads directly from bracketData via getTeamSeed
+// / getTeamRanking, so as long as these derive from the same source we're
+// guaranteed to match.
+const FIFA_RANKINGS: Record<string, number> = getTeamRankings(WORLD_CUP_2026_DATA);
+const TEAM_SEEDS: Record<string, number> = getTeamSeeds(WORLD_CUP_2026_DATA);
 
-const GROUPS: Record<string, string[]> = {
-  A: ['Mexico', 'South Africa', 'South Korea', 'Czechia'],
-  B: ['Canada', 'Bosnia and Herzegovina', 'Qatar', 'Switzerland'],
-  C: ['Brazil', 'Morocco', 'Haiti', 'Scotland'],
-  D: ['USA', 'Paraguay', 'Australia', 'Turkiye'],
-  E: ['Germany', 'Curacao', 'Ivory Coast', 'Ecuador'],
-  F: ['Netherlands', 'Japan', 'Sweden', 'Tunisia'],
-  G: ['Belgium', 'Egypt', 'Iran', 'New Zealand'],
-  H: ['Spain', 'Cape Verde', 'Saudi Arabia', 'Uruguay'],
-  I: ['France', 'Senegal', 'Norway', 'Iraq'],
-  J: ['Argentina', 'Algeria', 'Austria', 'Jordan'],
-  K: ['Portugal', 'DR Congo', 'Uzbekistan', 'Colombia'],
-  L: ['England', 'Croatia', 'Ghana', 'Panama'],
-};
+const GROUPS: Record<string, string[]> = (() => {
+  const out: Record<string, string[]> = {};
+  for (const g of WORLD_CUP_2026_DATA.groups) {
+    out[g.name] = g.teams.map((t) => t.name);
+  }
+  return out;
+})();
 
 export { GROUPS };
-
-// Pot/seed for all 48 teams (used for group stage upset bonus)
-const TEAM_SEEDS: Record<string, number> = {
-  Spain: 1, Argentina: 1, France: 1, England: 1, Brazil: 1, Portugal: 1,
-  Netherlands: 1, Belgium: 1, Germany: 1, USA: 1, Mexico: 1, Canada: 1,
-  Croatia: 2, Morocco: 2, Colombia: 2, Uruguay: 2, Switzerland: 2,
-  Japan: 2, Senegal: 2, Ecuador: 2, Austria: 2, Australia: 2, 'South Korea': 2, Egypt: 2,
-  Norway: 3, Panama: 3, Scotland: 3, Paraguay: 3, Tunisia: 3, 'Ivory Coast': 3,
-  Uzbekistan: 3, Qatar: 3, 'Saudi Arabia': 3, Algeria: 3, Iran: 3, Ghana: 3, Sweden: 3,
-  Jordan: 4, 'Cape Verde': 4, 'Bosnia and Herzegovina': 4, Turkiye: 4, Curacao: 4,
-  Haiti: 4, 'New Zealand': 4, Iraq: 4, 'South Africa': 4, 'DR Congo': 4,
-};
 
 export interface GroupPositionResult {
   team: string;

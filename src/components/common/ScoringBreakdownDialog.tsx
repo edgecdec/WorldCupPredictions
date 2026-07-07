@@ -49,7 +49,7 @@ export default function ScoringBreakdownDialog({ open, onClose, prediction, resu
       ? getKnockoutMatchBreakdown(prediction, results.knockout, results.knockoutBracket, bracketData, settings.knockout)
       : [];
 
-  const totalScore = (groupResult?.total ?? 0) + (knockoutResult?.total ?? 0) + (knockoutResult?.championBonus ?? 0);
+  const totalScore = (groupResult?.total ?? 0) + (knockoutResult?.total ?? 0);
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
@@ -147,9 +147,6 @@ function KnockoutTab({ matches, result }: { matches: KnockoutMatchDetail[]; resu
         {result.perRound.map((r) => (
           <Typography key={r.round} variant="body2">{r.round}: {r.total}</Typography>
         ))}
-        {result.championBonus > 0 && (
-          <Typography variant="body2" color="warning.main">Champion: +{result.championBonus}</Typography>
-        )}
       </Box>
       <TableContainer sx={{ maxHeight: 500 }}>
         <Table size="small" stickyHeader>

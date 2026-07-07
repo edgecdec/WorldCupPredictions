@@ -466,7 +466,7 @@ function ExpectedStandingsTable({
         bracketData,
         scoringSettings,
       );
-      current[p.key] = curScore.totalScore + (curScore.knockoutDetail?.championBonus ?? 0);
+      current[p.key] = curScore.totalScore;
       const basScore = scoreTotalPrediction(
         p.group_predictions,
         p.third_place_picks,
@@ -477,7 +477,7 @@ function ExpectedStandingsTable({
         bracketData,
         scoringSettings,
       );
-      baseline[p.key] = basScore.totalScore + (basScore.knockoutDetail?.championBonus ?? 0);
+      baseline[p.key] = basScore.totalScore;
     }
     return { current, baseline };
   }, [players, scoringSettings, bracketData, groupStageResults, knockoutMatchups, currentKnockoutResults, baselineKnockoutResults]);

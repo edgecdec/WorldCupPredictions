@@ -34,7 +34,7 @@ export default function ScoringEditor({ value, onChange }: ScoringEditorProps) {
     onChange({ ...settings, knockout: { ...settings.knockout, upsetMultiplierPerRound: arr } });
   };
 
-  const updateKnockout = (key: "upsetModulus" | "championBonus", val: number) => {
+  const updateKnockout = (key: "upsetModulus", val: number) => {
     onChange({ ...settings, knockout: { ...settings.knockout, [key]: val } });
   };
 
@@ -72,7 +72,6 @@ export default function ScoringEditor({ value, onChange }: ScoringEditorProps) {
 
       <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
         {numField("Upset Modulus", settings.knockout.upsetModulus, (v) => updateKnockout("upsetModulus", v))}
-        {numField("Champion Bonus", settings.knockout.championBonus, (v) => updateKnockout("championBonus", v))}
       </Box>
     </Box>
   );

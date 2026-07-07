@@ -71,7 +71,9 @@ describe('scoreGroupStage', () => {
     ];
     const results: GroupStageResults = {
       groupResults: [{ groupName: 'A', order: ['TeamA1', 'TeamA2', 'TeamA3', 'TeamA4'] }],
-      advancingThirdPlace: [], // A3 does NOT advance
+      // The 8 advancing 3rd teams — TeamA3 not among them, so A3 does NOT advance.
+      // Any non-empty array is treated as "known"; scoring resolves against it.
+      advancingThirdPlace: ['TeamB3'],
     };
     const thirdPlacePicks: string[] = []; // User did NOT pick A3 to advance
 
@@ -88,7 +90,7 @@ describe('scoreGroupStage', () => {
     ];
     const results: GroupStageResults = {
       groupResults: [{ groupName: 'A', order: ['TeamA1', 'TeamA2', 'TeamA3', 'TeamA4'] }],
-      advancingThirdPlace: [], // A3 does NOT advance
+      advancingThirdPlace: ['TeamB3'], // A3 NOT in the advancing set → A3 does NOT advance
     };
     const thirdPlacePicks = ['TeamA3']; // User predicted A3 advances — WRONG
 
@@ -215,7 +217,7 @@ describe('scoreGroupStage', () => {
     ];
     const results: GroupStageResults = {
       groupResults: [{ groupName: 'A', order: ['TeamA1', 'TeamA2', 'TeamA3', 'TeamA4'] }],
-      advancingThirdPlace: [],
+      advancingThirdPlace: ['TeamB3'], // A3 not among the 8 → doesn't advance
     };
 
     const score = scoreGroupStage(predictions, [], results, BRACKET_DATA, DEFAULT_GROUP_SETTINGS);
@@ -251,7 +253,9 @@ describe('scoreGroupStage', () => {
         { groupName: 'A', order: ['TeamA1', 'TeamA2', 'TeamA3', 'TeamA4'] },
         { groupName: 'B', order: ['TeamB1', 'TeamB2', 'TeamB3', 'TeamB4'] },
       ],
-      advancingThirdPlace: [],
+      // Neither A3 nor B3 in the advancing set → both 3rd-finishers correctly
+      // predicted not to advance.
+      advancingThirdPlace: ['TeamC3'],
     };
 
     const score = scoreGroupStage(predictions, [], results, BRACKET_DATA, DEFAULT_GROUP_SETTINGS);
@@ -287,7 +291,7 @@ describe('scoreGroupStage', () => {
     ];
     const results: GroupStageResults = {
       groupResults: [{ groupName: 'A', order: ['TeamA1', 'TeamA2', 'TeamA3', 'TeamA4'] }],
-      advancingThirdPlace: [],
+      advancingThirdPlace: ['TeamB3'],
     };
 
     const score = scoreGroupStage(predictions, [], results, BRACKET_DATA, customSettings);
@@ -383,44 +387,27 @@ describe('scoreKnockout', () => {
     expect(score.perRound[0].basePoints).toBe(0);
   });
 
-  it('awards champion bonus for correct Final pick when bonus is enabled', () => {
-    // The default championBonus is 0 (championship pick is already the most
-    // valuable due to 21 base points), but the bonus is configurable per-group.
-    // Verify the code path still pays out when a custom setting turns it on.
-    const settingsWithBonus: KnockoutScoringSettings = { ...DEFAULT_KO_SETTINGS, championBonus: 5 };
-    const matchups = [makeMatchup('FINAL', 5, 'TeamA1', 'TeamB1')];
-    const results: KnockoutResults = { FINAL: 'TeamA1' };
-    const picks = { FINAL: 'TeamA1' };
-
-    const score = scoreKnockout(picks, results, matchups, BRACKET_DATA, settingsWithBonus);
-
-    expect(score.championBonus).toBe(5);
-    expect(score.perRound[5].basePoints).toBe(21);
-    expect(score.total).toBe(26); // 21 base + 5 champion
-  });
-
-  it('does not award champion bonus by default (championBonus = 0)', () => {
-    // With DEFAULT_KO_SETTINGS, championBonus is 0 — picking the champion
-    // already pays 21 base points and that's intentional.
+  it('scores the Final at pointsPerRound[5]', () => {
+    // Champion pick is worth 21 base points and no separate bonus.
+    // (Champion bonus was removed — the base value already captures its
+    // importance.)
     const matchups = [makeMatchup('FINAL', 5, 'TeamA1', 'TeamB1')];
     const results: KnockoutResults = { FINAL: 'TeamA1' };
     const picks = { FINAL: 'TeamA1' };
 
     const score = scoreKnockout(picks, results, matchups, BRACKET_DATA, DEFAULT_KO_SETTINGS);
 
-    expect(score.championBonus).toBe(0);
     expect(score.perRound[5].basePoints).toBe(21);
     expect(score.total).toBe(21);
   });
 
-  it('does not award champion bonus for wrong Final pick', () => {
+  it('scores 0 for wrong Final pick', () => {
     const matchups = [makeMatchup('FINAL', 5, 'TeamA1', 'TeamB1')];
     const results: KnockoutResults = { FINAL: 'TeamA1' };
     const picks = { FINAL: 'TeamB1' };
 
     const score = scoreKnockout(picks, results, matchups, BRACKET_DATA, DEFAULT_KO_SETTINGS);
 
-    expect(score.championBonus).toBe(0);
     expect(score.total).toBe(0);
   });
 
@@ -467,7 +454,6 @@ describe('scoreKnockout', () => {
       pointsPerRound: [10, 20, 30, 40, 40, 50],
       upsetMultiplierPerRound: [2, 2, 4, 4, 2, 6],
       upsetModulus: 5,
-      championBonus: 100,
     };
     // TeamA4 (rank 80) beats TeamA1 (rank 5) in R32
     // rankDiff = 75, floor(75/5) * 2 = 15 * 2 = 30
@@ -490,7 +476,6 @@ describe('scoreKnockout', () => {
     const score = scoreKnockout(picks, results, matchups, BRACKET_DATA, DEFAULT_KO_SETTINGS);
 
     expect(score.perRound[4].basePoints).toBe(13);
-    expect(score.championBonus).toBe(0); // Not the final
   });
 });
 
@@ -504,7 +489,7 @@ describe('scoreTotalPrediction', () => {
     const thirdPlacePicks: string[] = [];
     const groupStageResults: GroupStageResults = {
       groupResults: [{ groupName: 'A', order: ['TeamA1', 'TeamA2', 'TeamA3', 'TeamA4'] }],
-      advancingThirdPlace: [],
+      advancingThirdPlace: ['TeamB3'], // A3 doesn't advance
     };
     const matchups: KnockoutMatchup[] = [
       { id: 'R32-1', round: 0, teamA: 'TeamA1', teamB: 'TeamB4', winner: null },
@@ -537,7 +522,7 @@ describe('scoreTotalPrediction', () => {
     ];
     const groupStageResults: GroupStageResults = {
       groupResults: [{ groupName: 'A', order: ['TeamA1', 'TeamA2', 'TeamA3', 'TeamA4'] }],
-      advancingThirdPlace: [],
+      advancingThirdPlace: ['TeamB3'], // A3 doesn't advance
     };
 
     const result = scoreTotalPrediction(

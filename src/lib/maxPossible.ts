@@ -11,6 +11,7 @@ import {
   KNOCKOUT_ROUNDS,
 } from '@/types';
 import { getTeamSeed } from '@/lib/bracketData';
+import { computeEffectiveMatchups } from '@/lib/bracketUtils';
 
 const MATCHES_PER_ROUND = [16, 8, 4, 2, 1, 1];
 
@@ -55,10 +56,10 @@ function isPickStillAlive(
   results: KnockoutResults,
   matchups: KnockoutMatchup[],
 ): boolean {
-  // Check all resolved matchups that feed into this one.
-  // If the picked team has already been eliminated in a prior round, return false.
-  // Walk backwards: find the matchup, check if the team could still appear there.
-  const matchup = matchups.find((m) => m.id === matchupId);
+  // Propagate winners so R16+ teamA/teamB are the real teams. See
+  // hasBeenEliminated for the same reasoning.
+  const effective = computeEffectiveMatchups(matchups, results);
+  const matchup = effective.find((m) => m.id === matchupId);
   if (!matchup) return false;
 
   // If this matchup already has a result, the pick is "alive" only if it was correct
@@ -70,7 +71,6 @@ function isPickStillAlive(
   }
 
   // Teams not yet determined — check if the team is still alive in feeder matchups
-  // The team is alive if it hasn't been eliminated in any resolved matchup
   return !hasBeenEliminated(pickedTeam, results, matchups);
 }
 
@@ -79,10 +79,14 @@ function hasBeenEliminated(
   results: KnockoutResults,
   matchups: KnockoutMatchup[],
 ): boolean {
-  for (const m of matchups) {
+  // Propagate actual winners forward so R16+ matchup.teamA/teamB are
+  // populated. Without this, Canada winning R32-1 but losing R16-2 gets
+  // missed: R16-2.teamA/teamB in results_data.knockoutBracket are null
+  // until the propagation runs.
+  const effective = computeEffectiveMatchups(matchups, results);
+  for (const m of effective) {
     const winner = results[m.id];
     if (!winner) continue;
-    // Team was in this matchup and lost
     if ((m.teamA === team || m.teamB === team) && winner !== team) {
       return true;
     }

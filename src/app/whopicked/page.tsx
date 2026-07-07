@@ -17,6 +17,7 @@ import type {
   BracketData, TournamentResults, GroupPrediction, KnockoutMatchup,
   UserPrediction,
 } from '@/types';
+import { computeEffectiveMatchups } from '@/lib/bracketUtils';
 
 interface GroupOption { id: string; name: string }
 
@@ -440,15 +441,24 @@ function KnockoutSection({
   knockoutResults?: Record<string, string>;
   search: string;
 }) {
+  // Propagate actual winners forward so R16+ matchups have real teamA/teamB
+  // populated (raw knockoutBracket only has R32 teams filled in). Without
+  // this the Who-Picked cards for R16+ were rendering as null because their
+  // teams were null.
+  const effectiveMatchups = useMemo(
+    () => computeEffectiveMatchups(matchups, knockoutResults ?? {}),
+    [matchups, knockoutResults],
+  );
+
   const byRound = useMemo(() => {
     const map = new Map<number, KnockoutMatchup[]>();
-    for (const m of matchups) {
+    for (const m of effectiveMatchups) {
       const arr = map.get(m.round) ?? [];
       arr.push(m);
       map.set(m.round, arr);
     }
     return map;
-  }, [matchups]);
+  }, [effectiveMatchups]);
 
   const roundOrder = [5, 4, 3, 2, 1, 0]; // Show Final first
 

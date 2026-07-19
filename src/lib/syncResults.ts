@@ -258,8 +258,21 @@ function resolveMatchupTeams(
   if (m.round === 0) return [m.teamA ?? null, m.teamB ?? null];
 
   if (m.id === '3RD') {
-    // 3rd place gets the LOSERS of SF — handled separately by callers
-    return [null, null];
+    // 3rd-place playoff = the two SF LOSERS. Derive from SF winners and
+    // their QF-feeder winners. If either isn't known yet, we can't match.
+    const loserOf = (sf: string): string | null => {
+      const sfWinner = knockoutResults[sf];
+      if (!sfWinner) return null;
+      const feeders = getFeederMatchupIds(sf);
+      if (!feeders) return null;
+      const [qA, qB] = feeders;
+      const candA = knockoutResults[qA];
+      const candB = knockoutResults[qB];
+      if (candA && candA !== sfWinner) return candA;
+      if (candB && candB !== sfWinner) return candB;
+      return null;
+    };
+    return [loserOf('SF-1'), loserOf('SF-2')];
   }
 
   const feeders = getFeederMatchupIds(m.id);

@@ -404,7 +404,36 @@ export default function BucketScoreTable({
     });
   }, [enriched, sortKey, sortDir, groupsPhaseLocked, knockoutPhaseLocked, mode]);
 
-  const ranked = useMemo(() => sorted.map((s, i) => ({ ...s, rank: i + 1 })), [sorted]);
+  // Competition-style ranking: rows with the same locked score (in the
+  // active tab's scope) share a rank; the following rank jumps by the size
+  // of the tied group ("1224"-style). Expected pts don't break ties — we
+  // deliberately don't have an official tiebreaker, so users tied on real
+  // points stay tied on the display.
+  const ranked = useMemo(() => {
+    // Which value determines tie equality per row, given the current mode.
+    const tieKey = (r: typeof sorted[number]) => {
+      if (mode === 'groups') return r.entry.groupStageScore ?? 0;
+      if (mode === 'knockout') return r.entry.knockoutScore ?? 0;
+      return r.entry.totalScore ?? 0;
+    };
+    // Build tie-groups so each row knows if it's part of a shared rank
+    // (used to prefix "T" on the rank cell).
+    const rankCounts = new Map<number, number>();
+    const withRank = sorted.map((s, i) => {
+      const k = tieKey(s);
+      // rank = position in the sorted list for the first row in the group,
+      // then repeat for every subsequent tied row.
+      let rank = i + 1;
+      // Walk back until we find a different tieKey; that group's rank is
+      // the position of the first row.
+      for (let j = i - 1; j >= 0; j--) {
+        if (tieKey(sorted[j]) === k) rank = j + 1; else break;
+      }
+      rankCounts.set(rank, (rankCounts.get(rank) ?? 0) + 1);
+      return { ...s, rank };
+    });
+    return withRank.map((r) => ({ ...r, isTied: (rankCounts.get(r.rank) ?? 1) > 1 }));
+  }, [sorted, mode]);
 
   const handleSort = (key: SortKey) => {
     if (typeof key === typeof sortKey && JSON.stringify(key) === JSON.stringify(sortKey)) {
@@ -582,7 +611,7 @@ export default function BucketScoreTable({
         <Table size="small" sx={{ borderCollapse: 'separate', borderSpacing: 0 }}>
           {renderHeader()}
           <TableBody>
-            {ranked.map(({ entry, expectedScore, expectedGroupScore, expectedKnockoutScore, groupExp, roundExp, rank }) => {
+            {ranked.map(({ entry, expectedScore, expectedGroupScore, expectedKnockoutScore, groupExp, roundExp, rank, isTied }) => {
               const isCurrentUser = entry.username === currentUsername;
               const rowBg = isCurrentUser ? 'action.selected' : 'background.paper';
               const ukey = userKey(entry);
@@ -606,7 +635,11 @@ export default function BucketScoreTable({
                       py: 0.5, px: 0.5, fontSize: '0.8rem',
                     }}
                   >
-                    {rank}
+                    {isTied ? (
+                      <Tooltip title="Tied on points — no official tiebreaker">
+                        <Box component="span">T{rank}</Box>
+                      </Tooltip>
+                    ) : rank}
                   </TableCell>
                   <TableCell
                     sx={{
